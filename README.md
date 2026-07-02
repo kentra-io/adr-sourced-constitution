@@ -25,7 +25,9 @@ pointer.
 ## Status
 
 **DESIGN — pending review.** The buildable design lives in
-[`adr-sourced-constitution.md`](./adr-sourced-constitution.md). No code yet.
+[`adr-sourced-constitution.md`](./adr-sourced-constitution.md); the sequenced
+v1 build plan lives in [`implementation-plan.md`](./implementation-plan.md).
+No code yet.
 
 ## License
 

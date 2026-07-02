@@ -103,8 +103,8 @@ supersedes: ADR-0003             # optional; present only when this ADR supersed
 ## Context and Problem Statement
 <why this decision arose>
 
-## Considered Options            # OPTIONAL — usually empty for principle-style rules; kept for MADR compliance
-<options weighed, if any>
+## Considered Options            # MANDATORY per MADR v4 — may be a single bullet for principle-style rules
+<options weighed>
 
 ## Decision Outcome
 <the rule / choice — what the projection renders>
@@ -113,9 +113,10 @@ supersedes: ADR-0003             # optional; present only when this ADR supersed
 <tradeoffs, follow-ons>          # optional in MADR; we keep it
 ```
 
-- **MADR-derived body** (headings match MADR verbatim): `Context and Problem Statement` (req), `Considered Options` (**optional** — usually empty; present so each file is a legitimate standalone MADR ADR, per the dual-purpose goal), `Decision Outcome` (req), `Consequences`.
+- **MADR-derived body** (headings match MADR verbatim): `Context and Problem Statement` (req), `Considered Options` (**required by MADR v4** — one of its three mandatory body sections; keep it in every ADR, even as a single bullet for principle-style rules), `Decision Outcome` (req), `Consequences` (optional in MADR; we keep it). *(Corrected 2026-07-02 against the MADR v4 templates — an earlier revision mislabeled `Considered Options` as optional.)*
 - **Frontmatter beyond MADR** (all MADR frontmatter is *optional*, so this stays compliant): `id`, `category`, `source`, `supersedes` are our additions; `status` uses MADR's own field. We omit MADR's optional `decision-makers`/`consulted`/`informed` (YAGNI).
 - **`status`** is a first-class field (§5) — restored so each record is a proper ADR. `proposed`/`rejected` never appear in the store (proposals are ephemeral — §5.1).
+- **Deliberate deviations from MADR convention** (content-compliant; stated so they read as decisions, not oversights): (i) we use `status: superseded` + a separate derived `superseded-by:` field, where MADR's own worked example embeds the link in the status string (`status: superseded by ADR-0123`) — chosen for cleaner machine parsing in the event-sourced model; (ii) `date` means **date created** (frozen with the rest of the record), whereas MADR defines it as "last updated" — matches the immutability invariant (§5) without widening the guard's permitted mutations; (iii) filenames are `ADR-NNNN-slug.md` under `constitution/adr/`, not MADR's bare `NNNN-slug.md` in `docs/decisions/` — chosen for readability; stock MADR-ecosystem tools glob `^\d{4}-` and won't auto-discover our files without custom configuration (a known, accepted interop gap).
 
 ### 4.2 Category vocabulary
 `category` is drawn from a **per-project vocabulary the author defines**. `constitution init` **proposes a reference starter list** (TBD — e.g. `architecture`, `code-style`, `process`, `testing`, `security`, `data`) as a *suggestion only*; the author supplies their own. Once set, the vocabulary is governed — a new category is introduced by an ADR.
