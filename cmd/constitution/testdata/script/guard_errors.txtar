@@ -1,0 +1,58 @@
+# Exit-code 2 ("guard could not run"), told apart from 1 ("violations"):
+#   (a) git mode explicitly requested (--base) outside any git repo;
+#   (b) manifest-only mode (--no-git) with ADRs present but no manifest.
+# In both, stdout stays empty (a JSON consumer sees a clean pipe, not a
+# malformed payload) and the reason goes to stderr.
+
+env GIT_CONFIG_NOSYSTEM=1
+
+# (a) not a git repo + explicit git mode -> exit 2, empty stdout.
+cd norepo
+exitcode 2 constitution guard --base HEAD
+! stdout .
+stderr 'not a usable git repository'
+
+# a BARE guard here instead degrades to manifest-only and is vacuously clean
+# (no ADRs, no manifest) -> exit 0, not an error.
+exitcode 0 constitution guard
+stdout 'manifest-only'
+
+# (b) --no-git with an ADR present but no manifest -> exit 2, empty stdout.
+cd ../missing
+exitcode 2 constitution guard --no-git
+! stdout .
+stderr 'not found \(run .constitution regen. to create it\)'
+
+-- norepo/.keep --
+placeholder so the directory exists
+
+-- missing/constitution.yml --
+schemaVersion: 1
+consent:
+  policy: off
+sourceTracking:
+  type: none
+categories:
+  - architecture
+
+-- missing/constitution/adr/ADR-0001-first-rule.md --
+---
+id: ADR-0001
+title: First rule
+category: architecture
+date: 2026-07-01
+status: accepted
+---
+
+## Context and Problem Statement
+
+We need a governing rule.
+
+## Considered Options
+
+- Do nothing
+- Adopt the rule
+
+## Decision Outcome
+
+Adopt the rule.

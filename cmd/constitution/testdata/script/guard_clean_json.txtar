@@ -1,0 +1,54 @@
+# guard on a clean, committed ADR log: exit 0 in git mode, and the
+# --format json payload is bare on stdout (pipeable) and reports clean.
+# Also asserts the manifest-only path (--no-git) agrees.
+
+env CONSTITUTION_TODAY=2026-07-01
+env GIT_AUTHOR_NAME=guard-test
+env GIT_AUTHOR_EMAIL=guard-test@example.com
+env GIT_COMMITTER_NAME=guard-test
+env GIT_COMMITTER_EMAIL=guard-test@example.com
+env GIT_CONFIG_NOSYSTEM=1
+
+exec git init -q -b main
+exec constitution adr new --title 'First rule' --category architecture --body-file body.md
+exec constitution adr new --title 'Second rule' --category process --body-file body.md
+exec git add -A
+exec git commit -q -m init
+
+# git mode, clean
+exitcode 0 constitution guard
+stdout 'clean \(2 ADR\(s\) checked, git mode vs HEAD\)'
+
+# JSON on a clean result: first byte is '{', violations is [], summary.clean true
+exitcode 0 constitution guard --format json
+stdout '^\{'
+stdout '"violations": \[\]'
+stdout '"clean": true'
+
+# manifest-only mode also clean
+exitcode 0 constitution guard --no-git
+stdout 'manifest-only mode'
+
+-- constitution.yml --
+schemaVersion: 1
+consent:
+  policy: off
+sourceTracking:
+  type: none
+categories:
+  - architecture
+  - process
+
+-- body.md --
+## Context and Problem Statement
+
+We need a governing rule.
+
+## Considered Options
+
+- Do nothing
+- Adopt the rule
+
+## Decision Outcome
+
+Adopt the rule.

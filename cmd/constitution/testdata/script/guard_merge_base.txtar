@@ -1,0 +1,86 @@
+# Merge-base mode with a real branch topology where HEAD-diff and
+# merge-base-diff DISAGREE. On a feature branch, an illegal status change is
+# COMMITTED out-of-band (accepted -> deprecated but carrying a superseded-by,
+# which is illegal). Because it is committed, `guard` (base=HEAD, working
+# tree == HEAD) sees no diff and passes. Because status/superseded-by are
+# excluded from the manifest hash, --no-git also passes. Only
+# `guard --merge-base main` — diffing the whole branch against the fork
+# point, exactly what CI does — catches it. This is why CI must use
+# merge-base and compute it locally (plan §2.7), not trust HEAD.
+
+env CONSTITUTION_TODAY=2026-07-01
+env GIT_AUTHOR_NAME=guard-test
+env GIT_AUTHOR_EMAIL=guard-test@example.com
+env GIT_COMMITTER_NAME=guard-test
+env GIT_COMMITTER_EMAIL=guard-test@example.com
+env GIT_CONFIG_NOSYSTEM=1
+
+exec git init -q -b main
+exec constitution adr new --title 'First rule' --category architecture --body-file body.md
+exec git add -A
+exec git commit -q -m init
+
+exec git checkout -q -b feature
+cp illegal.md constitution/adr/ADR-0001-first-rule.md
+exec git add -A
+exec git commit -q -m 'illegal status edit on feature'
+
+# HEAD-mode: committed, so no working-tree diff -> git mode clean.
+exitcode 0 constitution guard
+stdout 'clean'
+
+# manifest-only: status is excluded from the hash -> also clean.
+exitcode 0 constitution guard --no-git
+stdout 'clean'
+
+# merge-base mode: diffs the branch against the fork point and catches the
+# committed illegal transition.
+exitcode 1 constitution guard --merge-base main
+stdout '\[frozen_field_changed\] ADR-0001'
+stdout 'illegal status transition accepted -> deprecated'
+
+-- constitution.yml --
+schemaVersion: 1
+consent:
+  policy: off
+sourceTracking:
+  type: none
+categories:
+  - architecture
+
+-- body.md --
+## Context and Problem Statement
+
+We need a governing rule.
+
+## Considered Options
+
+- Do nothing
+- Adopt the rule
+
+## Decision Outcome
+
+Adopt the rule.
+
+-- illegal.md --
+---
+id: ADR-0001
+title: First rule
+category: architecture
+date: 2026-07-01
+status: deprecated
+superseded-by: ADR-9999
+---
+
+## Context and Problem Statement
+
+We need a governing rule.
+
+## Considered Options
+
+- Do nothing
+- Adopt the rule
+
+## Decision Outcome
+
+Adopt the rule.

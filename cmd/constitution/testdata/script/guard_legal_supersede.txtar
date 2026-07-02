@@ -1,0 +1,53 @@
+# A legal status transition (accepted -> superseded, produced by the real
+# `constitution supersede`) is NOT a violation: status and its derived
+# superseded-by are the only fields allowed to change on an existing ADR
+# (spec §5.2). guard stays clean, exit 0 — in both git and manifest modes.
+
+env GIT_AUTHOR_NAME=guard-test
+env GIT_AUTHOR_EMAIL=guard-test@example.com
+env GIT_COMMITTER_NAME=guard-test
+env GIT_COMMITTER_EMAIL=guard-test@example.com
+env GIT_CONFIG_NOSYSTEM=1
+
+exec git init -q -b main
+env CONSTITUTION_TODAY=2026-07-01
+exec constitution adr new --title 'First rule' --category architecture --body-file body.md
+exec git add -A
+exec git commit -q -m init
+
+# supersede via the real CLI: ADR-0001 -> superseded, new ADR-0002 created,
+# manifest regenerated.
+env CONSTITUTION_TODAY=2026-07-02
+exec constitution supersede ADR-0001 --title 'Refined rule' --body-file body.md
+grep 'status: superseded' constitution/adr/ADR-0001-first-rule.md
+grep 'superseded-by: ADR-0002' constitution/adr/ADR-0001-first-rule.md
+exec git add -A
+exec git commit -q -m supersede
+
+exitcode 0 constitution guard
+stdout 'clean'
+exitcode 0 constitution guard --no-git
+stdout 'manifest-only'
+
+-- constitution.yml --
+schemaVersion: 1
+consent:
+  policy: off
+sourceTracking:
+  type: none
+categories:
+  - architecture
+
+-- body.md --
+## Context and Problem Statement
+
+We need a governing rule.
+
+## Considered Options
+
+- Do nothing
+- Adopt the rule
+
+## Decision Outcome
+
+Adopt the rule.

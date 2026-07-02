@@ -1,0 +1,75 @@
+# The DoD's honest "out-of-band edit + rewritten git history" case: the
+# tampering edit is folded into HEAD via `git commit --amend`, so a git diff
+# vs HEAD sees NOTHING (base == HEAD == working tree). Only the manifest —
+# which nothing re-derived after the edit — still disagrees, so the
+# manifest cross-check is the one that catches it. Exactly one
+# manifest_mismatch, no body_changed. Exit 1.
+
+env CONSTITUTION_TODAY=2026-07-01
+env GIT_AUTHOR_NAME=guard-test
+env GIT_AUTHOR_EMAIL=guard-test@example.com
+env GIT_COMMITTER_NAME=guard-test
+env GIT_COMMITTER_EMAIL=guard-test@example.com
+env GIT_CONFIG_NOSYSTEM=1
+
+exec git init -q -b main
+exec constitution adr new --title 'First rule' --category architecture --body-file body.md
+exec git add -A
+exec git commit -q -m init
+
+# tamper, then rewrite history so the tamper is indistinguishable from the
+# original commit to a git-diff-vs-HEAD check.
+cp tampered.md constitution/adr/ADR-0001-first-rule.md
+exec git add -A
+exec git commit -q -m tamper
+exec git commit --amend -q -m 'tamper (history rewritten)'
+
+exitcode 1 constitution guard
+stdout '\[manifest_mismatch\] ADR-0001'
+! stdout 'body_changed'
+! stdout 'frozen_field_changed'
+
+-- constitution.yml --
+schemaVersion: 1
+consent:
+  policy: off
+sourceTracking:
+  type: none
+categories:
+  - architecture
+
+-- body.md --
+## Context and Problem Statement
+
+We need a governing rule.
+
+## Considered Options
+
+- Do nothing
+- Adopt the rule
+
+## Decision Outcome
+
+Adopt the rule.
+
+-- tampered.md --
+---
+id: ADR-0001
+title: First rule
+category: architecture
+date: 2026-07-01
+status: accepted
+---
+
+## Context and Problem Statement
+
+We need a governing rule.
+
+## Considered Options
+
+- Do nothing
+- Adopt the rule
+
+## Decision Outcome
+
+Quietly reverse the rule.
