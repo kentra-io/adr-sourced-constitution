@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kentra.io/adr-sourced-constitution/guard.schema.json",
+  "title": "constitution guard --format json output",
+  "description": "The machine payload `constitution guard --format json` writes to stdout (implementation-plan.md §2.7). It is the only thing on stdout in JSON mode: a violations array plus a summary roll-up. Warnings and human text go to stderr.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["violations", "summary"],
+  "properties": {
+    "violations": {
+      "type": "array",
+      "description": "Every detected illegal mutation, sorted deterministically. Empty (never null) on a clean result.",
+      "items": {"$ref": "#/$defs/violation"}
+    },
+    "summary": {"$ref": "#/$defs/summary"}
+  },
+  "$defs": {
+    "violation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "id", "file", "message"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "description": "The exact violation type (implementation-plan.md §2.7 enum). There is no catch-all.",
+          "enum": [
+            "frozen_field_changed",
+            "body_changed",
+            "file_deleted",
+            "file_renamed",
+            "manifest_mismatch",
+            "id_collision"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "description": "The ADR id the violation cites (e.g. ADR-0007). Falls back to the bare filename only when a deleted file's id cannot be parsed."
+        },
+        "file": {
+          "type": "string",
+          "description": "The repo-root-relative, forward-slash path of the file in violation (e.g. constitution/adr/ADR-0007-x.md)."
+        },
+        "oldFile": {
+          "type": "string",
+          "description": "Set only for kind=file_renamed: the base-ref path the file was renamed from."
+        },
+        "files": {
+          "type": "array",
+          "description": "Set only for kind=id_collision: every file sharing the colliding id (>= 2 entries).",
+          "items": {"type": "string"},
+          "minItems": 2
+        },
+        "field": {
+          "type": "string",
+          "description": "Set only for kind=frozen_field_changed: the frontmatter field that changed (e.g. title, category, status)."
+        },
+        "message": {
+          "type": "string",
+          "description": "A human-readable, single-line explanation of the violation."
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["checked", "violations", "clean"],
+      "properties": {
+        "checked": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of ADRs scanned on disk."
+        },
+        "violations": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Length of the violations array."
+        },
+        "clean": {
+          "type": "boolean",
+          "description": "True iff violations is empty; the exit code is 0 when true, 1 when false."
+        }
+      }
+    }
+  }
+}
