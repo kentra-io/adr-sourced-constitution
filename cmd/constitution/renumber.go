@@ -100,12 +100,15 @@ func runRenumber(cmd *cli.Command) error {
 	}
 
 	// Write the renamed file first, then remove the old one. A crash between
-	// the two leaves two well-formed files with distinct ids (no duplicate);
-	// regen converges and the operator can re-run.
+	// the two leaves two well-formed files with DISTINCT ids (no duplicate
+	// id, so the log still parses and regen converges). Recovery from that
+	// half-done state is manual: a re-run of renumber refuses (<new> is now
+	// taken), so the operator deletes the stale old file and regens —
+	// crash_renumber_mid.txtar documents and asserts exactly this.
 	if err := atomicwrite.WriteFile(newPath, patched, 0o644); err != nil {
 		return err
 	}
-	crashCheckpoint("after-new-adr")
+	crashCheckpoint("after-renumbered-file")
 	if err := os.Remove(oldPath); err != nil {
 		return err
 	}
