@@ -5,6 +5,8 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/kentra-io/adr-sourced-constitution/internal/adr"
 )
 
 const sampleADR = `---
@@ -198,6 +200,69 @@ func TestPreservesMissingTrailingNewline(t *testing.T) {
 	}
 	if !strings.HasSuffix(string(out), "body with no trailing newline") {
 		t.Errorf("final line not preserved:\n%q", out)
+	}
+}
+
+// quotedContinuationADR is the review-found corruption repro: a
+// double-quoted status scalar with a backslash line continuation. yaml
+// folds it to "accepted" (verified empirically against go.yaml.in), the
+// on-line value `"accep\` is non-empty and not a comment — so the friendly
+// heuristic cannot see it — and a naive single-line edit orphans `ted"`,
+// producing a file that no longer parses. The full ADR is valid, so the
+// post-edit verification (ErrUnsafeEdit) must engage and refuse.
+const quotedContinuationADR = "---\n" +
+	"id: ADR-0001\n" +
+	"title: Quoted continuation\n" +
+	"category: architecture\n" +
+	"date: 2026-06-01\n" +
+	"status: \"accep\\\nted\"\n" +
+	"---\n" +
+	"\n" +
+	"## Context and Problem Statement\n\nx\n\n" +
+	"## Considered Options\n\n- a\n\n" +
+	"## Decision Outcome\n\ny\n"
+
+func TestQuotedContinuationRefused(t *testing.T) {
+	// Precondition: the fixture really is a valid accepted ADR.
+	a, err := adr.ParseBytesUnnamed([]byte(quotedContinuationADR), "fixture")
+	if err != nil {
+		t.Fatalf("fixture broken, does not parse: %v", err)
+	}
+	if a.Status != adr.StatusAccepted {
+		t.Fatalf("fixture broken: status = %q, want accepted", a.Status)
+	}
+
+	// Supersede and SetStatus target the status field and must refuse with
+	// ErrUnsafeEdit — the mechanical backstop; the heuristic cannot catch
+	// this form.
+	if _, err := Supersede([]byte(quotedContinuationADR), "ADR-0002"); !errors.Is(err, ErrUnsafeEdit) {
+		t.Errorf("Supersede error = %v, want ErrUnsafeEdit", err)
+	}
+	if _, err := SetStatus([]byte(quotedContinuationADR), "deprecated"); !errors.Is(err, ErrUnsafeEdit) {
+		t.Errorf("SetStatus error = %v, want ErrUnsafeEdit", err)
+	}
+	// SetID edits only the (single-line) id line here and leaves the status
+	// line untouched, so it must succeed — pinning the guard's precision:
+	// it refuses corruption, not the file per se.
+	if _, err := SetID([]byte(quotedContinuationADR), "ADR-0042"); err != nil {
+		t.Errorf("SetID error = %v, want nil (the id line itself is single-line)", err)
+	}
+}
+
+func TestQuotedContinuationIDRefused(t *testing.T) {
+	// The same construct on the id field must make SetID refuse.
+	in := "---\n" +
+		"id: \"ADR-\\\n0001\"\n" +
+		"title: T\n" +
+		"category: c\n" +
+		"date: 2026-06-01\n" +
+		"status: accepted\n" +
+		"---\n\n## Decision Outcome\n\ny\n"
+	if a, err := adr.ParseBytesUnnamed([]byte(in), "fixture"); err != nil || a.ID != "ADR-0001" {
+		t.Fatalf("fixture broken: a=%+v err=%v", a, err)
+	}
+	if _, err := SetID([]byte(in), "ADR-0042"); !errors.Is(err, ErrUnsafeEdit) {
+		t.Errorf("SetID error = %v, want ErrUnsafeEdit", err)
 	}
 }
 

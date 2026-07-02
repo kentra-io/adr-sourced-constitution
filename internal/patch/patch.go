@@ -19,6 +19,7 @@ package patch
 
 import (
 	"errors"
+	"reflect"
 	"strings"
 
 	"github.com/kentra-io/adr-sourced-constitution/internal/adr"
@@ -43,7 +44,20 @@ var (
 	// Normalizing the field to one-line "key: value" form by hand is a
 	// legal edit: it changes neither the parsed model nor the manifest
 	// hash, and the status line is the mutable line.
+	//
+	// This is the FRIENDLY pre-edit heuristic for the common multi-line
+	// forms; ErrUnsafeEdit below is the mechanical backstop that closes
+	// the whole class.
 	ErrValueNotOnKeyLine = errors.New("patch: field value does not start on the key line; normalize the field to single-line \"key: value\" form first")
+	// ErrUnsafeEdit means post-edit verification failed: the patched bytes
+	// either no longer parse, or re-parse to a model differing from the
+	// original in more than the intended field change. This closes the
+	// multi-line-value class MECHANICALLY, whatever yaml construct caused
+	// it — found by review with a double-quoted scalar using a backslash
+	// line continuation (`status: "accep\` + newline + `ted"` parses as
+	// accepted, slips past the on-line-value heuristic, and a naive edit
+	// orphans the continuation). Nothing is written when this is returned.
+	ErrUnsafeEdit = errors.New("patch: refusing edit: patched content does not re-parse to the same ADR with only the intended change (the field value likely spans multiple lines via a yaml construct; normalize it to single-line \"key: value\" form first)")
 )
 
 // bom is the UTF-8 byte-order mark; preserved verbatim as a prefix so a
@@ -63,7 +77,19 @@ type line struct {
 // every other byte untouched. It is the whole of `deprecate` and the
 // old-ADR half of `supersede`'s status flip.
 func SetStatus(data []byte, status string) ([]byte, error) {
-	return editField(data, "status", status, "")
+	out, err := editField(data, "status", status, "")
+	if err != nil {
+		return nil, err
+	}
+	if err := verify(data, out, func(o, p *adr.ADR) bool {
+		return p.Status == adr.Status(status) &&
+			p.SupersededBy == o.SupersededBy &&
+			p.ID == o.ID &&
+			sameFrozen(o, p)
+	}); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 // Supersede sets `status: superseded` and inserts a `superseded-by:
@@ -71,7 +97,19 @@ func SetStatus(data []byte, status string) ([]byte, error) {
 // status line's indentation and terminator. This is the only edit that
 // adds a line; it adds exactly one.
 func Supersede(data []byte, supersededBy string) ([]byte, error) {
-	return editField(data, "status", "superseded", "superseded-by: "+supersededBy)
+	out, err := editField(data, "status", "superseded", "superseded-by: "+supersededBy)
+	if err != nil {
+		return nil, err
+	}
+	if err := verify(data, out, func(o, p *adr.ADR) bool {
+		return p.Status == adr.StatusSuperseded &&
+			p.SupersededBy == supersededBy &&
+			p.ID == o.ID &&
+			sameFrozen(o, p)
+	}); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 // SetID replaces the value of the frontmatter `id:` field. This is the one
@@ -79,7 +117,62 @@ func Supersede(data []byte, supersededBy string) ([]byte, error) {
 // reason it lives here rather than being forbidden outright is that it must
 // preserve the rest of the file exactly like any other status transition.
 func SetID(data []byte, id string) ([]byte, error) {
-	return editField(data, "id", id, "")
+	out, err := editField(data, "id", id, "")
+	if err != nil {
+		return nil, err
+	}
+	if err := verify(data, out, func(o, p *adr.ADR) bool {
+		return p.ID == id &&
+			p.Status == o.Status &&
+			p.SupersededBy == o.SupersededBy &&
+			sameFrozen(o, p)
+	}); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// verify is the single post-edit choke point every exported edit passes
+// through BEFORE its result can reach a caller (and therefore before any
+// verb writes anything): re-parse the patched bytes and require the model
+// to equal the pre-patch model except exactly the intended change, per the
+// op-specific `intended` predicate. A byte editor cannot see every yaml
+// construct that lets a value span lines (block scalars, quoted
+// continuations, tags, ...); this guard makes them all refuse identically
+// instead of corrupting the log.
+//
+// When the ORIGINAL bytes are not a valid ADR, verification is skipped:
+// there is no model to protect, and the mutating verbs never reach patch
+// with an unparsed file (they Parse first). This keeps the package usable
+// on minimal fixtures and keeps the fuzz contract ("never panic, any
+// error is fine") unchanged.
+func verify(orig, patched []byte, intended func(o, p *adr.ADR) bool) error {
+	o, err := adr.ParseBytesUnnamed(orig, "patch-input")
+	if err != nil {
+		return nil
+	}
+	p, err := adr.ParseBytesUnnamed(patched, "patch-output")
+	if err != nil {
+		return ErrUnsafeEdit
+	}
+	if !intended(o, p) {
+		return ErrUnsafeEdit
+	}
+	return nil
+}
+
+// sameFrozen reports whether the frozen (immutable, spec §5.2) parts of
+// two parsed ADRs are identical: all frontmatter except status and
+// superseded-by (id equality is asserted per-op, since SetID legitimately
+// changes it), and the entire body.
+func sameFrozen(o, p *adr.ADR) bool {
+	return o.Title == p.Title &&
+		o.Category == p.Category &&
+		o.Date == p.Date &&
+		o.Source == p.Source &&
+		o.Supersedes == p.Supersedes &&
+		reflect.DeepEqual(o.Sections, p.Sections) &&
+		reflect.DeepEqual(o.SectionOrder, p.SectionOrder)
 }
 
 // editField finds the first top-level `<field>:` line inside the

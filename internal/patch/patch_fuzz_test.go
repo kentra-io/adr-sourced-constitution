@@ -34,6 +34,11 @@ func FuzzSupersede(f *testing.F) {
 		// (testdata/fuzz corpus entry fbf36b2d47bfee47).
 		"---\nid: ADR-0001\ntitle: T\ncategory: c\ndate: 2026-07-01\nstatus:\n accepted\n---\n\n## Decision Outcome\n\ny\n",
 		"---\nid: ADR-0001\ntitle: T\ncategory: c\ndate: 2026-07-01\nstatus: # note\n accepted\n---\n\n## Decision Outcome\n\ny\n",
+		// Review-found corruption repro: double-quoted scalar with a
+		// backslash line continuation folds to "accepted"; the on-line
+		// value is non-empty, so only the post-edit verification
+		// (ErrUnsafeEdit) catches it.
+		quotedContinuationADR,
 	}
 	for _, s := range seeds {
 		f.Add([]byte(s))
