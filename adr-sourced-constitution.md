@@ -2,7 +2,7 @@
 
 *Generated: 2026-07-01. Reframed 2026-07-02 as a **standalone, general-purpose SDD primitive** (was: a Spec-Kit-bound harness module). Status: **DESIGN — pending user review.** Companion to [planning.md](./planning.md) (§6b, §7, §8), [mvp-plan.md](./mvp-plan.md) (Phase 1), [observability.md](./observability.md).*
 
-> **What this document is.** The buildable design of **`adr-sourced-constitution`** — a standalone primitive that models a project's governing "constitution" (its principles + accumulated architectural decisions — the *HOW* of the project) as an **event-sourced projection of an immutable ADR log**, deterministically rendered to a plain `constitution.md` that **any** SDD tool can consume. It ships as a **Go CLI + agent-agnostic skills/commands + thin per-framework adapters**, integrating by default via a dedicated folder + an agent-instructions pointer. Produced through a structured grill/brainstorm + a cross-framework deep-research run (2026-07-01/02). Every decision carries its rationale; deferred items are flagged, not dropped.
+> **What this document is.** The buildable design of **`adr-sourced-constitution`** — a standalone primitive that models a project's governing "constitution" (its principles + accumulated architectural decisions — the *HOW* of the project) as an **event-sourced projection of an immutable ADR log**, deterministically rendered to a plain `constitution.md` that **any** SDD tool can consume. It ships as a **Go CLI + agent-agnostic skills + thin per-framework adapters**, integrating by default via a dedicated folder + an agent-instructions pointer. Produced through a structured grill/brainstorm + a cross-framework deep-research run (2026-07-01/02). Every decision carries its rationale; deferred items are flagged, not dropped.
 
 ---
 
@@ -67,7 +67,7 @@ The primitive is deliberately layered so the core is reusable and the framework 
  Layer 1 — CORE (Go single binary `constitution`)         deterministic engine; no LLM, no framework
    constitution init | adr new | supersede | deprecate | regen | guard
         ▲
- Layer 2 — AGENT SURFACE (agent-agnostic skills + commands)   conversational + semantic; wraps the CLI
+ Layer 2 — AGENT SURFACE (agent-agnostic skills)               conversational + semantic; wraps the CLI
    constitution-init interview · propose/draft ADR · the plan-validation gate (emits deviation.json)
         ▲
  Layer 3 — INTEGRATIONS
@@ -78,7 +78,7 @@ The primitive is deliberately layered so the core is reusable and the framework 
 ```
 
 - **Layer 1 (Go CLI)** owns everything deterministic: parse ADR frontmatter/body, resolve the supersede/deprecate graph, render `constitution.md`, run the immutability guard. Chosen Go for a **single static zero-dependency binary** (best cross-framework adoption; bakes into claudebox via `COPY`) distributed by **GoReleaser → Homebrew tap + GitHub Releases** (+ `go install`). See §10.
-- **Layer 2 (skills/commands)** owns the conversational and *semantic* work the CLI can't: the `constitution-init` interview, drafting an ADR from conversation, and the **plan-validation gate** (which reasons about a plan vs the constitution and writes `deviation.json`). Shipped agent-agnostic (skills *and* slash commands).
+- **Layer 2 (skills)** owns the conversational and *semantic* work the CLI can't: the `constitution-init` interview, drafting an ADR from conversation, and the **plan-validation gate** (which reasons about a plan vs the constitution and writes `deviation.json`). Shipped agent-agnostic as **skills only** — no duplicate slash-command files. *(Errata, 2026-07-02: Claude Code merged slash commands into skills, `.claude/commands/` is legacy; Codex deprecated `~/.codex/prompts/` likewise; Gemini CLI natively supports `SKILL.md`. A skill *is* the command.)*
 - **Layer 3 (integrations)** — the default is framework-free (§7.1); framework adapters (§9) are thin glue on top.
 
 ---
@@ -152,7 +152,7 @@ Because the only legal change to an existing file is its status line, the immuta
 ### 5.4 Enforcement placement (phased)
 Local git hooks are **not** enforcement — same trust domain as the editing agent (bypassable, not installed in fresh boxes). Real enforcement sits **outside the agent**:
 - **Phase 1 (no engine):** `constitution guard` runs in a skill/CI and **surfaces** a violation; human honors it.
-- **Phase 2 (engine/CI):** the same `constitution guard` runs as a **Conductor gate step / required CI check** and **hard-blocks**. Optional hardening: a committed SHA-256 content manifest + branch protection on `constitution/adr/`.
+- **Phase 2 (engine/CI):** the same `constitution guard` runs as a **Conductor gate step / required CI check** and **hard-blocks**. Optional hardening: a committed SHA-256 content manifest + branch protection on `constitution/adr/`. *(Errata, 2026-07-02: the manifest's write-path and an advisory cross-check are pulled forward into v1 — cheap, and the only guard mode that works without git; branch-protection wiring and tamper-evidence remain Phase 2. See implementation-plan §2.7.)*
 
 ---
 
@@ -237,7 +237,7 @@ Domain logic (ADR log, supersede/deprecate, deterministic projection, guard, `de
 
 - **One primitive, one repo** — `adr-sourced-constitution` (public). The ADR log is the core's storage, **not** a separate product. (Supersedes the earlier two-extension `kentra-adr` + `…-constitution` split.)
 - **Layer 1: a Go single static binary** (`constitution`), `CGO_ENABLED=0`, cross-compiled linux/macos/windows × amd64/arm64. Distributed via **GoReleaser → Homebrew tap + GitHub Releases** (+ `go install`); **baked into claudebox** via `COPY` (no runtime). Version-pinned (no Docker wrapper — a containerized CLI would add nested-container + bind-mount friction for a hot-path tool).
-- **Layer 2:** agent-agnostic skills + slash commands shipped in the same repo.
+- **Layer 2:** agent-agnostic skills (no separate slash-command files — a skill *is* the command, §3) shipped in the same repo.
 - **Layer 3:** the default folder/pointer integration + per-framework adapters (each thin).
 - **License: MIT** — matches the broad-adoption goal and MADR/Spec-Kit precedent.
 - **Standalone-first rollout:** ship the primitive; prove value harness-internal (Spec-Kit adapter first); then offer the OpenSpec + superpowers adapters as thin glue. Consider proposing a MADR-v4 + projection **convention** upstream before OpenSpec ships native ADRs (§13).
@@ -248,7 +248,7 @@ Domain logic (ADR log, supersede/deprecate, deterministic projection, guard, `de
 
 | Component | Layer | Role |
 |---|---|---|
-| `constitution` CLI | 1 (Go) | deterministic engine: `init`, `adr new`, `supersede`, `deprecate`, `regen`, `guard` |
+| `constitution` CLI | 1 (Go) | deterministic engine: `init`, `adr new`, `supersede`, `deprecate`, `adr renumber`, `regen`, `guard` |
 | ADR record + schema | 1 | minimal-MADR-compliant; mutable `status`; derived `superseded-by` |
 | immutability guard | 1 | field-scoped check (new-file OK; existing files status-line-only) |
 | projection (`regen`) | 1 | deterministic render of the active set → `constitution.md` |
@@ -259,6 +259,8 @@ Domain logic (ADR log, supersede/deprecate, deterministic projection, guard, `de
 | default folder + pointer | 3 | `constitution/` + managed AGENTS.md/CLAUDE.md block |
 | Spec-Kit / OpenSpec / superpowers adapters | 3 | thin per-framework glue (§9.2) |
 | spec-tracking + consent seams | 3 | configured at `init` (§7) |
+
+*(Errata, 2026-07-02: `adr renumber` added — the id-collision escape hatch: a colliding id is by definition not yet merged into the shared log, so renumbering is a safe rename + frontmatter id edit. See implementation-plan §2.6.)*
 
 ---
 
@@ -277,7 +279,7 @@ Domain logic (ADR log, supersede/deprecate, deterministic projection, guard, `de
 
 ## 13. Open items — build-time spikes (not blockers)
 
-1. **Pointer reliability** — do agents reliably *follow* an AGENTS.md/CLAUDE.md pointer to `constitution.md`, or must it be *inlined*? (Load-bearing for universal planning support.)
+1. **Pointer reliability** — do agents reliably *follow* an AGENTS.md/CLAUDE.md pointer to `constitution.md`, or must it be *inlined*? *(Errata, 2026-07-02: softened per implementation-plan §1.5 — pointer reliability is load-bearing for the **UX quality** of use (a), not a correctness guarantee; Anthropic's own docs state CLAUDE.md content is context, not enforcement. The correctness backstop is the plan-validation gate (§8b), which re-reads `constitution.md` regardless of whether the agent followed the pointer.)*
 2. **Spec-Kit `after_constitution` overwrite** — can the hook deterministically overwrite `constitution.md` without the agent re-injecting placeholder tokens, given the overwrite bugs (#1541/#1229)?
 3. **source-ref pluggable contract** — concrete schema mapping across Spec-Kit specs / OpenSpec changes / GitHub issues / none.
 4. **OpenSpec native-ADR collision** — #557/#721 may land native ADRs; first-mover case to propose a MADR-v4 + projection convention upstream?
