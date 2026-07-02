@@ -62,11 +62,10 @@ func runNew(cmd *cli.Command) error {
 		return err
 	}
 
-	num, id, err := adr.NextID(m.adrDir)
+	_, id, err := adr.NextID(m.adrDir)
 	if err != nil {
 		return err
 	}
-	_ = num
 	file := adr.Compose(adr.NewADR{
 		ID:       id,
 		Title:    title,
