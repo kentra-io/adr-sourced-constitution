@@ -24,6 +24,9 @@ func run(ctx context.Context, args []string) error {
 		Name:    "constitution",
 		Usage:   "maintain an ADR log and its constitution.md projection",
 		Version: buildVersion(),
+		Commands: []*cli.Command{
+			regenCommand(),
+		},
 	}
 	return cmd.Run(ctx, args)
 }
