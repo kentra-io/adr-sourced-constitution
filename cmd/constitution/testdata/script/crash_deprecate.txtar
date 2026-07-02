@@ -1,0 +1,74 @@
+# Crash-injection DoD, deprecate's single seam: kill the real process AFTER
+# the status patch is written but BEFORE the regen. The log is fully
+# transitioned (status: deprecated on disk); only the projection and
+# manifest are stale. Recovery is a plain regen, which parses the log,
+# drops the deprecated ADR from the projection, and converges.
+
+env CONSTITUTION_TODAY=2026-07-02
+env CONSTITUTION_CRASH_AFTER=after-old-patch
+
+# The process is killed mid-sequence (exit 137, non-zero); the status flip
+# itself already landed atomically.
+! exec constitution deprecate ADR-0001
+grep 'status: deprecated' constitution/adr/ADR-0001-original.md
+
+# The stale projection still shows the rule — proof the crash landed between
+# the patch and the regen.
+grep 'ADR-0001' constitution/constitution.md
+
+# Recovery: regen converges (deprecated ADR leaves the projection) and is
+# idempotent.
+env CONSTITUTION_CRASH_AFTER=
+exec constitution regen
+stdout 'wrote'
+! grep 'ADR-0001' constitution/constitution.md
+cp constitution/constitution.md first.md
+exec constitution regen
+cmp constitution/constitution.md first.md
+
+-- constitution.yml --
+schemaVersion: 1
+consent:
+  policy: off
+sourceTracking:
+  type: none
+categories:
+  - architecture
+
+-- constitution/adr/ADR-0001-original.md --
+---
+id: ADR-0001
+title: Original
+category: architecture
+date: 2026-06-01
+status: accepted
+---
+
+## Context and Problem Statement
+
+x
+
+## Considered Options
+
+- a
+
+## Decision Outcome
+
+y
+
+-- constitution/constitution.md --
+<!--
+  GENERATED FILE -- projection of the ADR log in constitution/adr/.
+  Do not hand-edit; changes will be overwritten by the next "constitution
+  regen". To change a rule, add, supersede, or deprecate an ADR instead.
+-->
+
+# Constitution
+
+## architecture
+
+### Original
+
+y
+
+ADR-0001 · 2026-06-01

@@ -1,0 +1,71 @@
+# Crash-injection DoD, renumber seam 1 of 2: kill the real process BETWEEN
+# renumber's two file operations — after the renumbered copy is written,
+# before the old file is removed. The intermediate state is two well-formed
+# files with DISTINCT ids (ADR-0001 and ADR-0050), so the log parses and
+# regen converges deterministically (both render, since both are accepted —
+# structurally valid, semantically a duplicate rule the operator resolves).
+#
+# Recovery story (asserted below, documented in renumber.go): a re-run of
+# renumber does NOT complete the half-done operation — it refuses because
+# <new> is now taken. The operator finishes by hand: delete the stale old
+# file, then regen.
+
+env CONSTITUTION_TODAY=2026-07-02
+env CONSTITUTION_CRASH_AFTER=after-renumbered-file
+
+# The process is killed mid-sequence (exit 137, non-zero).
+! exec constitution adr renumber ADR-0001 ADR-0050
+exists constitution/adr/ADR-0001-original.md
+exists constitution/adr/ADR-0050-original.md
+grep 'id: ADR-0001' constitution/adr/ADR-0001-original.md
+grep 'id: ADR-0050' constitution/adr/ADR-0050-original.md
+
+# The log parses: regen succeeds and is idempotent over the half-done state.
+env CONSTITUTION_CRASH_AFTER=
+exec constitution regen
+stdout 'wrote'
+cp constitution/constitution.md first.md
+exec constitution regen
+cmp constitution/constitution.md first.md
+
+# A re-run of the interrupted renumber refuses — it cannot complete the
+# half-done operation because the target id is now taken.
+! exec constitution adr renumber ADR-0001 ADR-0050
+stderr 'id "ADR-0050" is already taken'
+
+# Manual recovery: remove the stale old file; regen converges to the
+# fully-renumbered state.
+rm constitution/adr/ADR-0001-original.md
+exec constitution regen
+grep 'ADR-0050' constitution/constitution.md
+! grep 'ADR-0001' constitution/constitution.md
+
+-- constitution.yml --
+schemaVersion: 1
+consent:
+  policy: off
+sourceTracking:
+  type: none
+categories:
+  - architecture
+
+-- constitution/adr/ADR-0001-original.md --
+---
+id: ADR-0001
+title: Original
+category: architecture
+date: 2026-06-01
+status: accepted
+---
+
+## Context and Problem Statement
+
+x
+
+## Considered Options
+
+- a
+
+## Decision Outcome
+
+y

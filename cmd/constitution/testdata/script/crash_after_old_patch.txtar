@@ -1,0 +1,64 @@
+# Crash-injection DoD (plan §7/§8): kill the real process at the seam AFTER
+# both ADR writes of a supersede (new ADR written, old ADR status patched)
+# but BEFORE the regen. The log is fully transitioned; a following regen must
+# parse it and converge — "the log is truth, regen self-heals".
+
+env CONSTITUTION_TODAY=2026-07-02
+env CONSTITUTION_CRASH_AFTER=after-old-patch
+
+# The process is killed mid-sequence (exit 137, non-zero).
+! exec constitution supersede ADR-0001 --title 'Replacement' --body-file body.md
+
+# At this seam the new ADR exists but the old one is still accepted — a log
+# that parses. Recovery is a plain regen, which must succeed (proving the log
+# parses) and be idempotent.
+env CONSTITUTION_CRASH_AFTER=
+exec constitution regen
+stdout 'wrote'
+cp constitution/constitution.md first.md
+exec constitution regen
+cmp constitution/constitution.md first.md
+
+-- constitution.yml --
+schemaVersion: 1
+consent:
+  policy: off
+sourceTracking:
+  type: none
+categories:
+  - architecture
+
+-- constitution/adr/ADR-0001-original.md --
+---
+id: ADR-0001
+title: Original
+category: architecture
+date: 2026-06-01
+status: accepted
+---
+
+## Context and Problem Statement
+
+x
+
+## Considered Options
+
+- a
+
+## Decision Outcome
+
+y
+
+-- body.md --
+## Context and Problem Statement
+
+Replacement.
+
+## Considered Options
+
+- Keep
+- Replace
+
+## Decision Outcome
+
+Replace it.

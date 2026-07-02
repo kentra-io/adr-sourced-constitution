@@ -1,0 +1,53 @@
+# Crash-injection DoD, renumber seam 2 of 2: kill the real process AFTER
+# both file operations (renumbered copy written, old file removed) but
+# BEFORE the regen. The rename itself is complete; only the projection and
+# manifest are stale. Recovery is a plain regen, which parses the log and
+# converges — no manual step needed at this seam.
+
+env CONSTITUTION_TODAY=2026-07-02
+env CONSTITUTION_CRASH_AFTER=after-old-removed
+
+# The process is killed mid-sequence (exit 137, non-zero).
+! exec constitution adr renumber ADR-0001 ADR-0050
+! exists constitution/adr/ADR-0001-original.md
+exists constitution/adr/ADR-0050-original.md
+grep 'id: ADR-0050' constitution/adr/ADR-0050-original.md
+
+# Recovery: regen converges and is idempotent.
+env CONSTITUTION_CRASH_AFTER=
+exec constitution regen
+stdout 'wrote'
+grep 'ADR-0050' constitution/constitution.md
+cp constitution/constitution.md first.md
+exec constitution regen
+cmp constitution/constitution.md first.md
+
+-- constitution.yml --
+schemaVersion: 1
+consent:
+  policy: off
+sourceTracking:
+  type: none
+categories:
+  - architecture
+
+-- constitution/adr/ADR-0001-original.md --
+---
+id: ADR-0001
+title: Original
+category: architecture
+date: 2026-06-01
+status: accepted
+---
+
+## Context and Problem Statement
+
+x
+
+## Considered Options
+
+- a
+
+## Decision Outcome
+
+y

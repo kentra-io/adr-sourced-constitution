@@ -48,24 +48,8 @@ func Parse(path string) (*ADR, error) {
 // read, so callers can parse content from any source (M3's guard parses
 // git blobs, not working-tree files).
 func ParseBytes(data []byte, path string) (*ADR, error) {
-	data = normalize(data)
-
-	fm, body, err := SplitFrontmatter(data)
+	a, fm, err := parseBytesCore(data, path)
 	if err != nil {
-		msg := "file must start with a \"---\" frontmatter delimiter line"
-		if errors.Is(err, errNoClosingDelimiter) {
-			msg = "frontmatter is not terminated: no closing \"---\" delimiter line found"
-		}
-		return nil, &ParseError{File: path, Line: 1, Msg: msg}
-	}
-
-	m, err := parseMeta(fm, path)
-	if err != nil {
-		return nil, err
-	}
-
-	sections, order := ExtractSections(body)
-	if err := validateSections(sections, requiredForRegen, path); err != nil {
 		return nil, err
 	}
 
@@ -77,11 +61,50 @@ func ParseBytes(data []byte, path string) (*ADR, error) {
 			Msg:  fmt.Sprintf("filename %q does not match the required \"ADR-NNNN-slug.md\" pattern", base),
 		}
 	}
-	if fnID != m.ID {
+	if fnID != a.ID {
 		return nil, &ParseError{
 			File: path, Field: "id", Line: fieldLine(fm, "id"),
-			Msg: fmt.Sprintf("frontmatter id %q does not match filename-derived id %q", m.ID, fnID),
+			Msg: fmt.Sprintf("frontmatter id %q does not match filename-derived id %q", a.ID, fnID),
 		}
+	}
+	return a, nil
+}
+
+// ParseBytesUnnamed validates ADR content that exists only in memory and
+// has no meaningful filename: the filename<->id cross-check is skipped,
+// every other check applies. Its caller class is internal/patch's
+// post-edit verification, which must re-validate patched bytes before
+// anything is written; on-disk content must always go through
+// ParseBytes/Parse. pathForErrors only labels error messages.
+func ParseBytesUnnamed(data []byte, pathForErrors string) (*ADR, error) {
+	a, _, err := parseBytesCore(data, pathForErrors)
+	return a, err
+}
+
+// parseBytesCore is the shared parse pipeline: normalize, frontmatter
+// split, schema validation, section extraction. It also returns the raw
+// frontmatter block so ParseBytes can report a precise line number for its
+// filename<->id cross-check.
+func parseBytesCore(data []byte, path string) (*ADR, []byte, error) {
+	data = normalize(data)
+
+	fm, body, err := SplitFrontmatter(data)
+	if err != nil {
+		msg := "file must start with a \"---\" frontmatter delimiter line"
+		if errors.Is(err, errNoClosingDelimiter) {
+			msg = "frontmatter is not terminated: no closing \"---\" delimiter line found"
+		}
+		return nil, nil, &ParseError{File: path, Line: 1, Msg: msg}
+	}
+
+	m, err := parseMeta(fm, path)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	sections, order := ExtractSections(body)
+	if err := validateSections(sections, requiredForRegen, path); err != nil {
+		return nil, nil, err
 	}
 
 	num, _ := parseID(m.ID) // format already validated in parseMeta
@@ -99,7 +122,7 @@ func ParseBytes(data []byte, path string) (*ADR, error) {
 		Sections:     sections,
 		SectionOrder: order,
 		Path:         path,
-	}, nil
+	}, fm, nil
 }
 
 // ParseDir parses every "*.md" file directly under dir (constitution/adr/,

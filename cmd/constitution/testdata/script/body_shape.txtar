@@ -1,0 +1,45 @@
+# Body-shape validation (plan §2.3, §1 errata #1): adr new enforces the full
+# MADR mandatory-section set; a body missing one is rejected before any write.
+
+env CONSTITUTION_TODAY=2026-07-02
+
+# --- missing "## Considered Options": refuse with a precise error ---
+! exec constitution adr new --title 'Incomplete' --category architecture --body-file missing-options.md
+stderr 'field "Considered Options": required section "## Considered Options" is missing'
+! exists constitution/adr/ADR-0001-incomplete.md
+! exists constitution/constitution.md
+
+# --- a complete body is accepted ---
+exec constitution adr new --title 'Complete' --category architecture --body-file complete.md
+stdout 'created .*ADR-0001-complete\.md'
+
+-- constitution.yml --
+schemaVersion: 1
+consent:
+  policy: off
+sourceTracking:
+  type: none
+categories:
+  - architecture
+
+-- missing-options.md --
+## Context and Problem Statement
+
+x
+
+## Decision Outcome
+
+y
+
+-- complete.md --
+## Context and Problem Statement
+
+x
+
+## Considered Options
+
+- a
+
+## Decision Outcome
+
+y

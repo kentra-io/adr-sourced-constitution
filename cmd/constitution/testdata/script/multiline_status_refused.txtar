@@ -1,0 +1,97 @@
+# Multi-line yaml value refusal (review finding): a double-quoted status
+# scalar with a backslash line continuation parses as accepted (yaml folds
+# `"accep\` + newline + `ted"` to "accepted"), but a single-line edit would
+# orphan the continuation and write an ADR that no longer parses — killing
+# regen permanently. The patch package's post-edit verification must refuse
+# BEFORE the consent gate and before any write: the old file stays
+# byte-untouched, no orphan new ADR is created, and the log stays healthy.
+
+env CONSTITUTION_TODAY=2026-07-02
+
+# The parser accepts the file (regen works on the untouched log).
+exec constitution regen
+stdout 'wrote'
+
+# supersede refuses cleanly with the normalize hint...
+! exec constitution supersede ADR-0001 --title 'Replacement' --body-file body.md
+stderr 'does not re-parse to the same ADR with only the intended change'
+stderr 'normalize it to single-line'
+
+# ...the old ADR is byte-for-byte untouched, and no orphan new ADR exists.
+cmp constitution/adr/ADR-0001-quoted.md orig-copy.md
+! exists constitution/adr/ADR-0002-replacement.md
+
+# deprecate refuses identically; still untouched.
+! exec constitution deprecate ADR-0001
+stderr 'does not re-parse to the same ADR with only the intended change'
+cmp constitution/adr/ADR-0001-quoted.md orig-copy.md
+
+# The log is still healthy: regen keeps working.
+exec constitution regen
+stdout 'wrote'
+
+-- constitution.yml --
+schemaVersion: 1
+consent:
+  policy: off
+sourceTracking:
+  type: none
+categories:
+  - architecture
+
+-- constitution/adr/ADR-0001-quoted.md --
+---
+id: ADR-0001
+title: Quoted continuation
+category: architecture
+date: 2026-06-01
+status: "accep\
+ted"
+---
+
+## Context and Problem Statement
+
+x
+
+## Considered Options
+
+- a
+
+## Decision Outcome
+
+y
+
+-- orig-copy.md --
+---
+id: ADR-0001
+title: Quoted continuation
+category: architecture
+date: 2026-06-01
+status: "accep\
+ted"
+---
+
+## Context and Problem Statement
+
+x
+
+## Considered Options
+
+- a
+
+## Decision Outcome
+
+y
+
+-- body.md --
+## Context and Problem Statement
+
+r
+
+## Considered Options
+
+- b
+
+## Decision Outcome
+
+z

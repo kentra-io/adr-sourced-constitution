@@ -20,6 +20,16 @@ var (
 // line 2 — SplitFrontmatter only ever succeeds when that holds.
 const frontmatterStartLine = 2
 
+// IsFrontmatterDelimiter reports whether a physical line (without its "\n"
+// terminator, possibly still carrying a trailing "\r") is a frontmatter
+// "---" delimiter line. This is THE boundary rule: both the parser
+// (SplitFrontmatter) and the write-path editor (internal/patch) call it,
+// so the two hand-rolled scanners can never drift on what counts as a
+// delimiter.
+func IsFrontmatterDelimiter(line string) bool {
+	return strings.TrimRight(line, "\r") == "---"
+}
+
 // SplitFrontmatter splits raw ADR file content on the manual "---"
 // delimiter convention (implementation-plan.md §3: no frontmatter library
 // is used for parsing beyond this split — yaml.Unmarshal runs on the
@@ -34,11 +44,11 @@ const frontmatterStartLine = 2
 // split result for malformed input.
 func SplitFrontmatter(data []byte) (frontmatter, body []byte, err error) {
 	lines := strings.Split(string(data), "\n")
-	if len(lines) == 0 || strings.TrimRight(lines[0], "\r") != "---" {
+	if len(lines) == 0 || !IsFrontmatterDelimiter(lines[0]) {
 		return nil, nil, errNoOpeningDelimiter
 	}
 	for i := 1; i < len(lines); i++ {
-		if strings.TrimRight(lines[i], "\r") == "---" {
+		if IsFrontmatterDelimiter(lines[i]) {
 			fm := strings.Join(lines[1:i], "\n")
 			b := strings.Join(lines[i+1:], "\n")
 			return []byte(fm), []byte(b), nil
