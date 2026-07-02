@@ -1,0 +1,17 @@
+# Build output
+/constitution
+/constitution.exe
+/dist/
+
+# Go test/coverage artifacts
+*.test
+*.out
+coverage.txt
+coverage.html
+
+# testscript scratch dirs (created under $WORK, but guard against accidents)
+/testdata/*.tmp
+
+# Editors / OS
+.DS_Store
+*.swp

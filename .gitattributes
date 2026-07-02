@@ -1,0 +1,4 @@
+# Normalize line endings to LF everywhere. M1 commits golden fixtures whose
+# byte-identity across OSes is a DoD item; Windows autocrlf would silently
+# mangle them.
+* text=auto eol=lf
