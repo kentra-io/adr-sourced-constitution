@@ -9,6 +9,23 @@
 // the obvious off-the-shelf choice — exports nothing on Windows and is
 // therefore disqualified here (plan §3).
 //
+// Guarantees, stated precisely:
+//
+//   - Atomicity against PROCESS DEATH, on every platform: at any kill
+//     point the target path holds either the complete old content or the
+//     complete new content, never a mixture. This is the property the
+//     crash-injection tests exercise.
+//   - Durability against POWER LOSS: on unix, the file data is fsynced
+//     before the rename and the parent directory is fsynced after it, so
+//     both the content and the new directory entry are durable when
+//     WriteFile returns. On Windows, MoveFileEx WRITE_THROUGH "does not
+//     return until the file is actually moved on the disk", but its
+//     documented flush guarantee covers only moves performed as
+//     copy+delete (cross-volume) — directory-entry durability for our
+//     same-volume rename is not explicitly documented; see
+//     rename_windows.go. The backstop there is the domain's recovery
+//     story: re-run + regen self-heals.
+//
 // This is the write primitive for every mutating command's file
 // operations (the ADR files, constitution.md, the manifest): a torn write
 // is the one failure the "log is truth, regen self-heals" recovery story
