@@ -1,8 +1,10 @@
 // Package manifest maintains constitution/adr/.manifest.sha256 — a
 // per-ADR content hash over each record's *frozen* content, rewritten by
-// every mutating command (plan §2.7). In v1 this is write-path only; the
-// guard-side cross-check that turns it into tamper-evidence is M3, which
-// finalizes the design note around Canonicalize. The file format is
+// every mutating command (plan §2.7) and cross-checked by `constitution
+// guard`. The canonicalization rule this package implements is finalized,
+// with its injection-proofing and advisory-only rationale, in the design
+// note docs/manifest-canonicalization.md — read that for the authoritative
+// account; the summary below is the in-code companion. The file format is
 // sha256sum-style ("<hex>  <filename>" lines, sorted by filename) so it is
 // human-diffable and reproducible.
 //
