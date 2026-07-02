@@ -5,6 +5,7 @@ go 1.25.0
 require (
 	github.com/rogpeppe/go-internal v1.15.0
 	github.com/urfave/cli/v3 v3.10.1
+	go.yaml.in/yaml/v3 v3.0.4
 )
 
 require (
