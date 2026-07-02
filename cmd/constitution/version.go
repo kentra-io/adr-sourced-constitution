@@ -17,6 +17,10 @@ var (
 	date    = ""
 )
 
+// readBuildInfo is swappable in tests to exercise the not-ok branch, which
+// is unreachable in a test binary (the toolchain always embeds build info).
+var readBuildInfo = debug.ReadBuildInfo
+
 // buildVersion returns a human-readable version string for `--version`.
 // It prefers the ldflags-injected values (release builds); when those are
 // absent it derives an equivalent string from the Go module build info
@@ -33,11 +37,17 @@ func buildVersion() string {
 		return v
 	}
 
-	info, ok := debug.ReadBuildInfo()
+	info, ok := readBuildInfo()
 	if !ok {
 		return "unknown"
 	}
+	return buildInfoVersion(info)
+}
 
+// buildInfoVersion formats a version string from Go module build info:
+// the module (pseudo-)version, plus the VCS revision (truncated to 12
+// chars, "-dirty" suffix when the working tree was modified) when present.
+func buildInfoVersion(info *debug.BuildInfo) string {
 	v := info.Main.Version // e.g. "(devel)" or a pseudo-version
 	if v == "" {
 		v = "unknown"
