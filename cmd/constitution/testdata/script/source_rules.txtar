@@ -1,0 +1,66 @@
+# Source-ref contract (plan §2.8): forbidden when sourceTracking.type is
+# none; required and pattern-checked otherwise; the reserved bootstrap
+# source always passes.
+
+env CONSTITUTION_TODAY=2026-07-02
+
+# --- type none: a --source is forbidden ---
+! exec constitution adr new --title 'A' --category architecture --source '#5' --body-file body.md
+stderr 'not allowed when sourceTracking.type is "none"'
+! exists constitution/adr/ADR-0001-a.md
+
+# --- type none: no source is fine ---
+exec constitution adr new --title 'A' --category architecture --body-file body.md
+stdout 'created .*ADR-0001-a\.md'
+
+# Switch the project to github-issue tracking for the required/shape cases.
+cp cfg-github.yml constitution.yml
+
+# --- required but missing ---
+! exec constitution adr new --title 'B' --category architecture --body-file body.md
+stderr 'is required when sourceTracking.type is "github-issue"'
+
+# --- present but wrong shape ---
+! exec constitution adr new --title 'B' --category architecture --source 'JIRA-1' --body-file body.md
+stderr 'does not match the required pattern'
+
+# --- correct shape ---
+exec constitution adr new --title 'B' --category architecture --source '#42' --body-file body.md
+stdout 'created .*ADR-0002-b\.md'
+# The value is YAML-quoted because a leading '#' would otherwise be a comment.
+grep 'source: "#42"' constitution/adr/ADR-0002-b.md
+
+# --- reserved bootstrap source bypasses the pattern ---
+exec constitution adr new --title 'C' --category architecture --source bootstrap --body-file body.md
+grep 'source: bootstrap' constitution/adr/ADR-0003-c.md
+
+-- constitution.yml --
+schemaVersion: 1
+consent:
+  policy: off
+sourceTracking:
+  type: none
+categories:
+  - architecture
+
+-- cfg-github.yml --
+schemaVersion: 1
+consent:
+  policy: off
+sourceTracking:
+  type: github-issue
+categories:
+  - architecture
+
+-- body.md --
+## Context and Problem Statement
+
+x
+
+## Considered Options
+
+- a
+
+## Decision Outcome
+
+y

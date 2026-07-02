@@ -1,0 +1,51 @@
+# Consent gate under the strict policy (plan §2.4).
+# Non-interactive (testscript stdin is not a terminal) without --approve is a
+# hard refusal that writes nothing; --approve proceeds.
+
+env CONSTITUTION_TODAY=2026-07-02
+
+# --- refuse: strict, non-tty, no --approve. Nothing is written. ---
+! exec constitution adr new --title 'A rule' --category architecture --body-file body.md
+stderr 'requires confirmation under the "strict" policy'
+stderr 'not a terminal'
+! stdout .
+! exists constitution/adr/ADR-0001-a-rule.md
+! exists constitution/constitution.md
+
+# --- proceed: same command with --approve ---
+exec constitution adr new --title 'A rule' --category architecture --body-file body.md --approve
+stdout 'created .*ADR-0001-a-rule\.md'
+exists constitution/adr/ADR-0001-a-rule.md
+exists constitution/constitution.md
+
+# --- supersede and deprecate are gated the same way ---
+! exec constitution supersede ADR-0001 --title 'Replacement' --body-file body.md
+stderr 'not a terminal'
+! exists constitution/adr/ADR-0002-replacement.md
+grep 'status: accepted' constitution/adr/ADR-0001-a-rule.md
+
+! exec constitution deprecate ADR-0001
+stderr 'not a terminal'
+grep 'status: accepted' constitution/adr/ADR-0001-a-rule.md
+
+-- constitution.yml --
+schemaVersion: 1
+consent:
+  policy: strict
+sourceTracking:
+  type: none
+categories:
+  - architecture
+
+-- body.md --
+## Context and Problem Statement
+
+x
+
+## Considered Options
+
+- a
+
+## Decision Outcome
+
+y

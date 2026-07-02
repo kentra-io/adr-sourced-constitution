@@ -1,0 +1,83 @@
+# Byte-preservation DoD (plan §5.3 / M2): after supersede, the OLD ADR
+# differs from its original bytes in ONLY the status line (accepted ->
+# superseded) and a single inserted superseded-by line. Asserted mechanically
+# by comparing the whole file against a want-fixture that is byte-identical
+# except for those two lines — the body, all other frontmatter, blank lines,
+# and even the trailing newline must be preserved exactly.
+
+env CONSTITUTION_TODAY=2026-07-02
+
+exec constitution supersede ADR-0001 --title 'Replacement rule' --body-file body.md
+stdout 'superseded ADR-0001'
+
+# The whole old file, byte-for-byte, equals the original with only the two
+# intended line changes.
+cmp constitution/adr/ADR-0001-original-rule.md want-old-adr.md
+
+-- constitution.yml --
+schemaVersion: 1
+consent:
+  policy: off
+sourceTracking:
+  type: none
+categories:
+  - architecture
+
+-- constitution/adr/ADR-0001-original-rule.md --
+---
+id: ADR-0001
+title: Original rule
+category: architecture
+date: 2026-06-01
+status: accepted
+---
+
+## Context and Problem Statement
+
+The original context, with specific   spacing   and punctuation: kept!
+
+## Considered Options
+
+- Option A
+- Option B
+
+## Decision Outcome
+
+The original decision, frozen forever.
+
+-- want-old-adr.md --
+---
+id: ADR-0001
+title: Original rule
+category: architecture
+date: 2026-06-01
+status: superseded
+superseded-by: ADR-0002
+---
+
+## Context and Problem Statement
+
+The original context, with specific   spacing   and punctuation: kept!
+
+## Considered Options
+
+- Option A
+- Option B
+
+## Decision Outcome
+
+The original decision, frozen forever.
+
+-- body.md --
+## Context and Problem Statement
+
+Replacement context.
+
+## Considered Options
+
+- Keep
+- Replace
+
+## Decision Outcome
+
+Replace the original rule.

@@ -1,0 +1,113 @@
+# Full M2 write-path lifecycle on an init-less fixture:
+# adr new -> supersede -> deprecate -> renumber -> regen idempotent.
+# The whole DoD sequence exercised end-to-end against the real binary.
+
+env CONSTITUTION_TODAY=2026-07-02
+
+# --- adr new (off policy: no consent gate) ---
+exec constitution adr new --title 'Model as an event-sourced log' --category architecture --body-file body-a.md
+stdout 'created .*ADR-0001-model-as-an-event-sourced-log\.md'
+exists constitution/adr/ADR-0001-model-as-an-event-sourced-log.md
+exists constitution/adr/.manifest.sha256
+
+# --- a second, unrelated ADR ---
+exec constitution adr new --title 'Use trunk based development' --category process --body-file body-b.md
+stdout 'created .*ADR-0002-use-trunk-based-development\.md'
+
+# --- supersede ADR-0001 (new ADR gets supersedes:, old flips to superseded) ---
+exec constitution supersede ADR-0001 --title 'Refined event sourcing' --body-file body-c.md
+stdout 'superseded ADR-0001'
+exists constitution/adr/ADR-0003-refined-event-sourcing.md
+grep 'status: superseded' constitution/adr/ADR-0001-model-as-an-event-sourced-log.md
+grep 'superseded-by: ADR-0003' constitution/adr/ADR-0001-model-as-an-event-sourced-log.md
+grep 'supersedes: ADR-0001' constitution/adr/ADR-0003-refined-event-sourcing.md
+
+# --- deprecate the process ADR ---
+exec constitution deprecate ADR-0002
+stdout 'deprecated ADR-0002'
+grep 'status: deprecated' constitution/adr/ADR-0002-use-trunk-based-development.md
+
+# --- renumber the deprecated (unreferenced) ADR ---
+exec constitution adr renumber ADR-0002 ADR-0020
+stdout 'renumbered ADR-0002 -> ADR-0020'
+! exists constitution/adr/ADR-0002-use-trunk-based-development.md
+exists constitution/adr/ADR-0020-use-trunk-based-development.md
+grep 'id: ADR-0020' constitution/adr/ADR-0020-use-trunk-based-development.md
+grep 'status: deprecated' constitution/adr/ADR-0020-use-trunk-based-development.md
+
+# --- projection reflects only the one active ADR (0003) ---
+cmp constitution/constitution.md want-constitution.md
+
+# --- regen is idempotent: a second run reproduces byte-identical output ---
+cp constitution/constitution.md first.md
+exec constitution regen
+cmp constitution/constitution.md first.md
+
+-- constitution.yml --
+schemaVersion: 1
+consent:
+  policy: off
+sourceTracking:
+  type: none
+categories:
+  - architecture
+  - process
+
+-- body-a.md --
+## Context and Problem Statement
+
+Need a source of truth with supersede semantics.
+
+## Considered Options
+
+- Hand-edit constitution.md
+- Event-sourced ADR log
+
+## Decision Outcome
+
+Model the constitution as a projection of an append-only ADR log.
+
+-- body-b.md --
+## Context and Problem Statement
+
+Branching model.
+
+## Considered Options
+
+- GitFlow
+- Trunk
+
+## Decision Outcome
+
+Use trunk-based development.
+
+-- body-c.md --
+## Context and Problem Statement
+
+The first rule needs refinement.
+
+## Considered Options
+
+- Keep
+- Replace
+
+## Decision Outcome
+
+Use a refined event-sourced log.
+
+-- want-constitution.md --
+<!--
+  GENERATED FILE -- projection of the ADR log in constitution/adr/.
+  Do not hand-edit; changes will be overwritten by the next "constitution
+  regen". To change a rule, add, supersede, or deprecate an ADR instead.
+-->
+
+# Constitution
+
+## architecture
+
+### Refined event sourcing
+
+Use a refined event-sourced log.
+
+ADR-0003 · 2026-07-02

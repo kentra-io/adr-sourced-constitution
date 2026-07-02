@@ -1,0 +1,54 @@
+# renumber refusal cases (plan §2.6): refuse when <new> is already taken,
+# and refuse when any other ADR references <old>.
+
+env CONSTITUTION_TODAY=2026-07-02
+
+exec constitution adr new --title 'First' --category architecture --body-file body.md
+exec constitution adr new --title 'Second' --category architecture --body-file body.md
+exec constitution supersede ADR-0001 --title 'Third supersedes first' --body-file body.md
+# Now: ADR-0001 superseded-by ADR-0003; ADR-0003 supersedes ADR-0001.
+
+# --- refuse: <new> already taken ---
+! exec constitution adr renumber ADR-0002 ADR-0003
+stderr 'id "ADR-0003" is already taken'
+exists constitution/adr/ADR-0002-second.md
+
+# --- refuse: <old> is referenced (ADR-0003 is referenced by ADR-0001) ---
+! exec constitution adr renumber ADR-0003 ADR-0050
+stderr 'ADR-0003 is referenced by ADR-0001'
+exists constitution/adr/ADR-0003-third-supersedes-first.md
+
+# --- refuse: <old> does not exist ---
+! exec constitution adr renumber ADR-0099 ADR-0050
+stderr 'no ADR with id "ADR-0099"'
+
+# --- refuse: malformed new id ---
+! exec constitution adr renumber ADR-0002 nope
+stderr 'not a valid ADR id'
+
+# --- success: renumber an unreferenced ADR ---
+exec constitution adr renumber ADR-0002 ADR-0050
+stdout 'renumbered ADR-0002 -> ADR-0050'
+exists constitution/adr/ADR-0050-second.md
+
+-- constitution.yml --
+schemaVersion: 1
+consent:
+  policy: off
+sourceTracking:
+  type: none
+categories:
+  - architecture
+
+-- body.md --
+## Context and Problem Statement
+
+x
+
+## Considered Options
+
+- a
+
+## Decision Outcome
+
+y

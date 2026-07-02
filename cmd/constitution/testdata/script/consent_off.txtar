@@ -1,0 +1,31 @@
+# Under the off policy there is no consent gate: mutations proceed without
+# --approve and without a prompt (plan §2.4).
+
+env CONSTITUTION_TODAY=2026-07-02
+
+exec constitution adr new --title 'No gate here' --category architecture --body-file body.md
+stdout 'created .*ADR-0001-no-gate-here\.md'
+! stderr .
+exists constitution/adr/ADR-0001-no-gate-here.md
+
+-- constitution.yml --
+schemaVersion: 1
+consent:
+  policy: off
+sourceTracking:
+  type: none
+categories:
+  - architecture
+
+-- body.md --
+## Context and Problem Statement
+
+x
+
+## Considered Options
+
+- a
+
+## Decision Outcome
+
+y
