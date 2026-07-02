@@ -1,0 +1,4 @@
+# `constitution --version` reports a version-shaped string (M0 DoD).
+exec constitution --version
+stdout '^constitution version \S+'
+! stderr .
