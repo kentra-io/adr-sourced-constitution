@@ -20,6 +20,8 @@ package patch
 import (
 	"errors"
 	"strings"
+
+	"github.com/kentra-io/adr-sourced-constitution/internal/adr"
 )
 
 // Errors returned when the raw bytes don't contain the structure an edit
@@ -32,6 +34,16 @@ var (
 	ErrNoFrontmatter = errors.New("patch: no frontmatter block found")
 	// ErrFieldNotFound means the targeted frontmatter field is absent.
 	ErrFieldNotFound = errors.New("patch: frontmatter field not found")
+	// ErrValueNotOnKeyLine means the field's value does not start on the
+	// key's own line — yaml permits "status:\n accepted" (a multi-line
+	// plain scalar) and "status: # comment\n accepted", where the real
+	// value lives on a continuation line. A single-line editor cannot
+	// rewrite such a value without corrupting the file (found by
+	// FuzzSupersede), so it refuses instead; the file is left untouched.
+	// Normalizing the field to one-line "key: value" form by hand is a
+	// legal edit: it changes neither the parsed model nor the manifest
+	// hash, and the status line is the mutable line.
+	ErrValueNotOnKeyLine = errors.New("patch: field value does not start on the key line; normalize the field to single-line \"key: value\" form first")
 )
 
 // bom is the UTF-8 byte-order mark; preserved verbatim as a prefix so a
@@ -93,9 +105,17 @@ func editField(data []byte, field, newValue, insertAfter string) ([]byte, error)
 	// Fields live strictly between the opening delimiter (line 0) and the
 	// closing one at closeIdx.
 	for i := 1; i < closeIdx; i++ {
-		indent, key, sep, _, ok := splitField(lines[i].text)
+		indent, key, sep, ok := splitField(lines[i].text)
 		if !ok || indent != "" || key != field {
 			continue
+		}
+		// The value is whatever follows indent+key+sep on this line. If it
+		// is empty or a comment, the real value lives on a yaml
+		// continuation line, which a single-line edit would corrupt —
+		// refuse (see ErrValueNotOnKeyLine).
+		value := lines[i].text[len(indent)+len(key)+len(sep):]
+		if value == "" || strings.HasPrefix(value, "#") {
+			return nil, ErrValueNotOnKeyLine
 		}
 		// Rebuild only the value portion; key + separator + terminator stay.
 		lines[i].text = indent + field + sep + newValue
@@ -114,24 +134,36 @@ func editField(data []byte, field, newValue, insertAfter string) ([]byte, error)
 // frontmatterBounds returns the index of the closing "---" delimiter line,
 // given that the opening one is always line 0. A field line lives strictly
 // between line 0 and closeAt. ok is false when there is no well-formed
-// frontmatter block (no opening or no closing delimiter).
+// frontmatter block (no opening or no closing delimiter). Delimiter
+// recognition is delegated to adr.IsFrontmatterDelimiter — the single
+// boundary rule shared with the parser, so the two scanners cannot drift.
 func frontmatterBounds(lines []line) (closeAt int, ok bool) {
-	if len(lines) == 0 || lines[0].text != "---" {
+	if len(lines) == 0 || !adr.IsFrontmatterDelimiter(lines[0].text) {
 		return 0, false
 	}
 	for i := 1; i < len(lines); i++ {
-		if lines[i].text == "---" {
+		if adr.IsFrontmatterDelimiter(lines[i].text) {
 			return i, true
 		}
 	}
 	return 0, false
 }
 
-// splitField parses "  key: value" into its parts. sep is the exact text
-// between the key and the value (the colon plus following spaces), so it
-// can be reproduced verbatim. ok is false when the line has no "key:"
-// shape.
-func splitField(text string) (indent, key, sep, value string, ok bool) {
+// splitField parses "  key: value" into its parts, mirroring what the yaml
+// parser accepts for a block-mapping entry (verified empirically against
+// go.yaml.in/yaml/v3): whitespace is permitted BEFORE the colon ("status :
+// accepted", "status\t: accepted" both parse as key "status"), so the key
+// is right-trimmed before comparison — otherwise an ADR the parser accepts
+// could never be superseded/deprecated. A key with interior whitespace
+// ("sta tus:") parses in yaml as the literal key "sta tus", which is never
+// one of our schema fields, so it is rejected here as a non-target line.
+//
+// sep is the exact text between the trimmed key and the value (any
+// whitespace before the colon, the colon, and any following whitespace), so
+// reconstruction (indent + key + sep + newValue) reproduces the original
+// spacing verbatim; the old value is whatever followed sep and is simply
+// replaced. ok is false when the line has no "key:" shape.
+func splitField(text string) (indent, key, sep string, ok bool) {
 	i := 0
 	for i < len(text) && (text[i] == ' ' || text[i] == '\t') {
 		i++
@@ -140,20 +172,19 @@ func splitField(text string) (indent, key, sep, value string, ok bool) {
 	rest := text[i:]
 	colon := strings.IndexByte(rest, ':')
 	if colon <= 0 {
-		return "", "", "", "", false
+		return "", "", "", false
 	}
-	key = rest[:colon]
-	if strings.ContainsAny(key, " \t") {
-		return "", "", "", "", false
+	key = strings.TrimRight(rest[:colon], " \t")
+	if key == "" || strings.ContainsAny(key, " \t") {
+		return "", "", "", false
 	}
 	afterColon := rest[colon+1:]
 	j := 0
 	for j < len(afterColon) && (afterColon[j] == ' ' || afterColon[j] == '\t') {
 		j++
 	}
-	sep = rest[colon : colon+1+j]
-	value = afterColon[j:]
-	return indent, key, sep, value, true
+	sep = rest[len(key) : colon+1+j]
+	return indent, key, sep, true
 }
 
 // splitKeepEnds splits s into lines that retain their terminators, such

@@ -2,7 +2,6 @@ package patch
 
 import (
 	"reflect"
-	"strings"
 	"testing"
 
 	"github.com/kentra-io/adr-sourced-constitution/internal/adr"
@@ -13,9 +12,10 @@ import (
 // input happens to be a valid *accepted* ADR, it additionally asserts the
 // two properties the byte-preservation guarantee rests on:
 //
-//	(b) patch minimality — the output differs from the input by exactly one
-//	    removed line (the old status) and two added lines (the new status
-//	    and the superseded-by back-link); every other byte is untouched.
+//	(b) positional patch minimality — exactly one line (the status field)
+//	    changed in place and exactly one line (the back-link) was inserted
+//	    right after it; reverting those two edits reconstructs the input
+//	    byte-for-byte, so every other byte is provably untouched.
 //	(c) parse↔render agreement — the patched bytes re-parse to the same
 //	    model as the original, changed only in Status and SupersededBy.
 const fuzzPath = "ADR-0001-fuzz.md"
@@ -28,6 +28,12 @@ func FuzzSupersede(f *testing.F) {
 		"",
 		"---\n---\n",
 		"not an adr\n",
+		// Multi-line plain-scalar status forms (value on a continuation
+		// line): the editor must refuse these rather than corrupt them.
+		// The empty-value variant is the original FuzzSupersede find
+		// (testdata/fuzz corpus entry fbf36b2d47bfee47).
+		"---\nid: ADR-0001\ntitle: T\ncategory: c\ndate: 2026-07-01\nstatus:\n accepted\n---\n\n## Decision Outcome\n\ny\n",
+		"---\nid: ADR-0001\ntitle: T\ncategory: c\ndate: 2026-07-01\nstatus: # note\n accepted\n---\n\n## Decision Outcome\n\ny\n",
 	}
 	for _, s := range seeds {
 		f.Add([]byte(s))
@@ -46,17 +52,39 @@ func FuzzSupersede(f *testing.F) {
 			return // output produced, but input wasn't a valid accepted ADR
 		}
 
-		// (b) minimality on the raw bytes.
-		o, p := lines(string(data)), lines(string(out))
-		if len(p) != len(o)+1 {
-			t.Fatalf("line count changed by %d, want +1", len(p)-len(o))
+		// (b) POSITIONAL minimality: exactly one line changed in place and
+		// exactly one line was inserted right after it. Proven by
+		// reconstruction — revert the changed line to the original and
+		// delete the inserted line; the result must be byte-identical to
+		// the input. This is strictly stronger than a multiset line-diff:
+		// it pins WHERE the edit happened, not just which line values
+		// appeared/disappeared.
+		oLines := splitKeepEnds(string(data))
+		pLines := splitKeepEnds(string(out))
+		if len(pLines) != len(oLines)+1 {
+			t.Fatalf("line count changed by %d, want +1", len(pLines)-len(oLines))
 		}
-		removed, added := multisetDiff(o, p)
-		if len(removed) != 1 || len(added) != 2 {
-			t.Fatalf("diff not minimal: removed=%q added=%q", removed, added)
+		i := 0
+		for i < len(oLines) && oLines[i] == pLines[i] {
+			i++
 		}
-		if !strings.HasPrefix(strings.TrimSpace(removed[0]), "status:") {
-			t.Fatalf("removed line is not the status line: %q", removed[0])
+		if i == len(oLines) {
+			t.Fatalf("no divergent line found; status line was not changed:\n%s", out)
+		}
+		// The changed line must be the frontmatter status field, and the
+		// inserted line the derived back-link.
+		if _, key, _, fieldOK := splitField(pLines[i].text); !fieldOK || key != "status" {
+			t.Fatalf("changed line is not the status field: %q", pLines[i].text)
+		}
+		if pLines[i+1].text != "superseded-by: ADR-0002" {
+			t.Fatalf("line after the status field is not the inserted back-link: %q", pLines[i+1].text)
+		}
+		rec := make([]line, 0, len(oLines))
+		rec = append(rec, pLines[:i]...)
+		rec = append(rec, oLines[i])
+		rec = append(rec, pLines[i+2:]...)
+		if join(rec) != string(data) {
+			t.Fatalf("reverting the status line and deleting the inserted line does not reconstruct the input:\ninput:  %q\nrebuilt: %q", data, join(rec))
 		}
 
 		// (c) parse↔render agreement.

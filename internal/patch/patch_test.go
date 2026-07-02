@@ -125,6 +125,49 @@ func TestDoesNotTouchBodyStatusLine(t *testing.T) {
 	}
 }
 
+func TestAcceptsYamlKeySpacing(t *testing.T) {
+	// The yaml parser (go.yaml.in/yaml/v3, verified empirically) accepts
+	// whitespace BEFORE the colon: "status :", "status  :", and "status\t:"
+	// all parse as key "status". The patch grammar must accept exactly the
+	// same lines, or an ADR the parser accepts could never be superseded or
+	// deprecated. The original spacing is preserved verbatim in the output.
+	tests := []struct {
+		name       string
+		statusLine string // the raw status line in the input
+		wantLine   string // the expected patched line
+	}{
+		{"space before colon", "status : accepted", "status : deprecated"},
+		{"two spaces before colon", "status  : accepted", "status  : deprecated"},
+		{"tab before colon", "status\t: accepted", "status\t: deprecated"},
+		{"tab after colon", "status :\taccepted", "status :\tdeprecated"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			in := "---\nid: ADR-0003\n" + tt.statusLine + "\n---\n\nbody\n"
+			out, err := SetStatus([]byte(in), "deprecated")
+			if err != nil {
+				t.Fatalf("SetStatus(%q): %v", tt.statusLine, err)
+			}
+			if !strings.Contains(string(out), tt.wantLine+"\n") {
+				t.Errorf("patched line not found; want %q in:\n%s", tt.wantLine, out)
+			}
+			// Minimality still holds: only the status line changed.
+			removed, added := multisetDiff(lines(in), lines(string(out)))
+			assertEqual(t, "removed lines", removed, []string{tt.statusLine})
+			assertEqual(t, "added lines", added, []string{tt.wantLine})
+		})
+	}
+}
+
+func TestInteriorWhitespaceKeyIsNotTheField(t *testing.T) {
+	// "sta tus:" parses in yaml as the literal key "sta tus" — a different
+	// key — so patch must not treat it as the status field.
+	in := "---\nid: ADR-0003\nsta tus: accepted\n---\n\nbody\n"
+	if _, err := SetStatus([]byte(in), "deprecated"); !errors.Is(err, ErrFieldNotFound) {
+		t.Errorf("SetStatus error = %v, want ErrFieldNotFound", err)
+	}
+}
+
 func TestSkipsNonFieldFrontmatterLines(t *testing.T) {
 	// A blank line and a comment-like line inside the frontmatter must be
 	// skipped, not mistaken for the target field.
@@ -167,6 +210,15 @@ func TestErrors(t *testing.T) {
 		{"no frontmatter", "just a body, no delimiters\n", ErrNoFrontmatter},
 		{"unterminated frontmatter", "---\nid: ADR-0003\nstatus: accepted\n", ErrNoFrontmatter},
 		{"missing field", "---\nid: ADR-0003\n---\n\nbody\n", ErrFieldNotFound},
+		// yaml multi-line plain scalar: "status:\n accepted" parses as
+		// status=accepted, but the value is on a continuation line a
+		// single-line edit would corrupt (found by FuzzSupersede). The
+		// editor must refuse, leaving the file untouched.
+		{"value on continuation line", "---\nid: ADR-0003\nstatus:\n accepted\n---\n\nbody\n", ErrValueNotOnKeyLine},
+		{"empty value with trailing space", "---\nid: ADR-0003\nstatus: \n accepted\n---\n\nbody\n", ErrValueNotOnKeyLine},
+		// Same shape hidden behind a comment: yaml strips "# note", so the
+		// real value again lives on the continuation line.
+		{"comment then continuation", "---\nid: ADR-0003\nstatus: # note\n accepted\n---\n\nbody\n", ErrValueNotOnKeyLine},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
