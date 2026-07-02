@@ -103,6 +103,52 @@ func TestWrite(t *testing.T) {
 	}
 }
 
+// TestCanonicalizeInjection hardens the canonical encoding against framing
+// injection (M3 pre-req): yaml quoted scalars permit embedded newlines, so
+// under the earlier naive "name:value\n" scheme these two DIFFERENT ADRs
+// produced byte-identical canonical forms —
+//
+//	A: title = "T\ncategory:X", category = "c"
+//	B: title = "T",             category = "X\ncategory:c"
+//
+// both flattening to "title:T\ncategory:X\ncategory:c\n". The
+// length-prefixed encoding pins each value's extent, so they must now
+// canonicalize (and hash) differently.
+func TestCanonicalizeInjection(t *testing.T) {
+	adrA := parse(t, "---\n"+
+		"id: ADR-0001\n"+
+		"title: \"T\\ncategory:X\"\n"+
+		"category: c\n"+
+		"date: 2026-07-01\n"+
+		"status: accepted\n"+
+		"---\n\n## Decision Outcome\n\nx\n", "ADR-0001-x.md")
+	adrB := parse(t, "---\n"+
+		"id: ADR-0001\n"+
+		"title: T\n"+
+		"category: \"X\\ncategory:c\"\n"+
+		"date: 2026-07-01\n"+
+		"status: accepted\n"+
+		"---\n\n## Decision Outcome\n\nx\n", "ADR-0001-x.md")
+
+	// Preconditions: the two parse to genuinely different models whose
+	// naive flattenings collide.
+	if adrA.Title == adrB.Title {
+		t.Fatal("fixture broken: titles should differ")
+	}
+	naiveA := "title:" + adrA.Title + "\ncategory:" + adrA.Category + "\n"
+	naiveB := "title:" + adrB.Title + "\ncategory:" + adrB.Category + "\n"
+	if naiveA != naiveB {
+		t.Fatalf("fixture broken: naive forms should collide:\n%q\n%q", naiveA, naiveB)
+	}
+
+	if string(Canonicalize(adrA)) == string(Canonicalize(adrB)) {
+		t.Error("canonical forms collide; encoding is not injection-proof")
+	}
+	if Hash(adrA) == Hash(adrB) {
+		t.Error("hashes collide; encoding is not injection-proof")
+	}
+}
+
 func TestRenderFormatAndOrder(t *testing.T) {
 	a1 := parse(t, strings.ReplaceAll(acceptedADR, "ADR-0001", "ADR-0002"), "ADR-0002-b.md")
 	a2 := parse(t, acceptedADR, "ADR-0001-a.md")

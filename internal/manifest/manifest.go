@@ -45,21 +45,36 @@ const FileName = ".manifest.sha256"
 // behind which fields are included. The format is internal — never written
 // to disk — so it optimizes purely for being unambiguous and stable across
 // runs and platforms.
+//
+// Every value is length-prefixed (netstring-style "name <len>:<bytes>\n").
+// This makes the encoding injection-proof: a value containing embedded
+// newlines or text that mimics the framing (yaml block/quoted scalars allow
+// both) cannot shift a boundary, so two distinct field/section tuples can
+// never produce the same canonical bytes — the length pins each value's
+// exact extent. A naive "name:value\n" scheme is forgeable: title
+// "T\ncategory:X" with category "c" and title "T" with category
+// "X\ncategory:c" would collide (asserted in TestCanonicalizeInjection).
 func Canonicalize(a adr.ADR) []byte {
 	var b bytes.Buffer
-	// Frozen frontmatter fields, fixed order, one per line. status and
-	// superseded-by are intentionally absent (see package doc).
-	fmt.Fprintf(&b, "id:%s\n", a.ID)
-	fmt.Fprintf(&b, "title:%s\n", a.Title)
-	fmt.Fprintf(&b, "category:%s\n", a.Category)
-	fmt.Fprintf(&b, "date:%s\n", a.Date)
-	fmt.Fprintf(&b, "source:%s\n", a.Source)
-	fmt.Fprintf(&b, "supersedes:%s\n", a.Supersedes)
-	b.WriteString("---body---\n")
+	field := func(name, value string) {
+		fmt.Fprintf(&b, "%s %d:%s\n", name, len(value), value)
+	}
+	// Frozen frontmatter fields, fixed order. status and superseded-by are
+	// intentionally absent (see package doc).
+	field("id", a.ID)
+	field("title", a.Title)
+	field("category", a.Category)
+	field("date", a.Date)
+	field("source", a.Source)
+	field("supersedes", a.Supersedes)
 	// Body sections in the order they appeared in the file, normalized to
-	// heading + trimmed content (exactly the model the parser exposes).
+	// heading + trimmed content (exactly the model the parser exposes). The
+	// section count pins the structure; each heading/content pair is
+	// length-prefixed like the fields above.
+	fmt.Fprintf(&b, "sections %d\n", len(a.SectionOrder))
 	for _, h := range a.SectionOrder {
-		fmt.Fprintf(&b, "## %s\n%s\n", h, a.Sections[h])
+		field("heading", h)
+		field("content", a.Sections[h])
 	}
 	return b.Bytes()
 }
