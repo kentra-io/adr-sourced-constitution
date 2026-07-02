@@ -1,0 +1,56 @@
+# `constitution regen` fails when two ADR files share an id: the log's
+# ids must be unique (spec §4.3 monotonic ids; plan §2.6 treats collisions
+# as a hard problem with `renumber` as the escape hatch). The error names
+# both files.
+
+! exec constitution regen
+stderr 'ADR-0001-second-claimant\.md: field "id": duplicate id "ADR-0001" \(already used by .*ADR-0001-first-claimant\.md\)'
+! stdout .
+! exists constitution/constitution.md
+
+-- constitution.yml --
+schemaVersion: 1
+categories:
+  - architecture
+
+-- constitution/adr/ADR-0001-first-claimant.md --
+---
+id: ADR-0001
+title: First claimant of the id
+category: architecture
+date: 2026-07-01
+status: accepted
+---
+
+## Context and Problem Statement
+
+Context.
+
+## Considered Options
+
+- Option
+
+## Decision Outcome
+
+First outcome.
+
+-- constitution/adr/ADR-0001-second-claimant.md --
+---
+id: ADR-0001
+title: Second claimant of the id
+category: architecture
+date: 2026-07-01
+status: accepted
+---
+
+## Context and Problem Statement
+
+Context.
+
+## Considered Options
+
+- Option
+
+## Decision Outcome
+
+Second outcome.

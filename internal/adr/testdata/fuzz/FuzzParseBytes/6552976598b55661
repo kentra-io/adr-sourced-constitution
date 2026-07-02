@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("---\nid\x10 ADR-0001\n---\n\na# Decision O\x03\xe8come\n\nBody.\n")
