@@ -1,0 +1,19 @@
+schemaVersion: 1
+
+agentInstructions:
+  targets: [claude-md, agents-md]
+
+consent:
+  policy: strict
+
+sourceTracking:
+  type: generic
+  pattern: '^FS-[0-9]+$'
+
+categories:
+  - architecture
+  - code-style
+  - process
+  - testing
+  - security
+  - data
