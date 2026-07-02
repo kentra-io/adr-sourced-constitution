@@ -1,6 +1,9 @@
 package adr
 
-import "regexp"
+import (
+	"regexp"
+	"strconv"
+)
 
 // yamlLineRe extracts the 1-based line number go.yaml.in/yaml/v3 reports
 // in scanner/parser error messages (e.g. "yaml: line 3: did not find
@@ -21,9 +24,9 @@ func yamlErrorLine(err error) int {
 	if m == nil {
 		return 0
 	}
-	n := 0
-	for _, c := range m[1] {
-		n = n*10 + int(c-'0')
+	n, err2 := strconv.Atoi(m[1])
+	if err2 != nil {
+		return 0 // \d+ overflow — treat as not determinable
 	}
 	return n + 1
 }

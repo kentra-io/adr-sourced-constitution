@@ -82,7 +82,14 @@ func TestParseMalformed(t *testing.T) {
 		name     string
 		filename string
 		content  string
-		wantErr  string // exact Error() string, with {file} substituted for the temp path
+		// wantErr is the exact Error() string ({file} is substituted for
+		// the temp path). If wantErrPrefix is set instead, the error is
+		// asserted as prefix + substring — used only where part of the
+		// message is sourced from the yaml library, whose exact wording a
+		// patch bump may change; our own wrapper text stays exact.
+		wantErr         string
+		wantErrPrefix   string
+		wantErrContains string
 	}{
 		{
 			name:     "missing frontmatter",
@@ -111,10 +118,11 @@ status: accepted
 
 Body.
 `,
-			// Verified once against go.yaml.in/yaml/v3 v3.0.4's actual
-			// error text; the message CONTRACT is ours (see yamlerr.go),
-			// only the wrapped %s is library-sourced.
-			wantErr: `{file}:2: frontmatter is not valid YAML: yaml: line 1: did not find expected ',' or ']'`,
+			// Our wrapper prefix (file:line + "frontmatter is not valid
+			// YAML:") is the exact contract; the trailing detail is
+			// library-sourced, so only a stable substring is pinned.
+			wantErrPrefix:   `{file}:2: frontmatter is not valid YAML: `,
+			wantErrContains: `yaml:`,
 		},
 		{
 			name:     "missing required field",
@@ -230,7 +238,18 @@ Body.
 
 			_, err := Parse(path)
 			if err == nil {
-				t.Fatalf("Parse() error = nil, want error matching %q", tt.wantErr)
+				t.Fatalf("Parse() error = nil, want error matching %q%q", tt.wantErr, tt.wantErrPrefix)
+			}
+
+			if tt.wantErrPrefix != "" {
+				prefix := strings.ReplaceAll(tt.wantErrPrefix, "{file}", path)
+				if !strings.HasPrefix(err.Error(), prefix) {
+					t.Errorf("Parse() error = %q, want prefix %q", err.Error(), prefix)
+				}
+				if !strings.Contains(err.Error(), tt.wantErrContains) {
+					t.Errorf("Parse() error = %q, want it to contain %q", err.Error(), tt.wantErrContains)
+				}
+				return
 			}
 
 			want := strings.ReplaceAll(tt.wantErr, "{file}", path)
@@ -238,5 +257,86 @@ Body.
 				t.Errorf("Parse() error = %q, want %q", err.Error(), want)
 			}
 		})
+	}
+}
+
+// TestParseCRLF proves parsing is line-ending-independent: a CRLF-authored
+// ADR yields the same model as its LF twin, with no \r bytes surviving
+// into any section content (which would otherwise leak into the rendered
+// constitution.md and make the projection author-line-ending-dependent).
+func TestParseCRLF(t *testing.T) {
+	lf := `---
+id: ADR-0001
+title: CRLF handling
+category: architecture
+date: 2026-07-01
+status: accepted
+---
+
+## Context and Problem Statement
+
+Why.
+
+## Considered Options
+
+- Option
+
+## Decision Outcome
+
+First line.
+Second line.
+`
+	crlf := strings.ReplaceAll(lf, "\n", "\r\n")
+	dir := t.TempDir()
+	lfPath := writeFile(t, dir, "ADR-0001-crlf-handling.md", lf)
+
+	fromLF, err := Parse(lfPath)
+	if err != nil {
+		t.Fatalf("Parse(LF) error = %v", err)
+	}
+	fromCRLF, err := ParseBytes([]byte(crlf), lfPath)
+	if err != nil {
+		t.Fatalf("ParseBytes(CRLF) error = %v", err)
+	}
+
+	for name, content := range fromCRLF.Sections {
+		if strings.Contains(content, "\r") {
+			t.Errorf("section %q from CRLF input contains a \\r byte: %q", name, content)
+		}
+		if content != fromLF.Sections[name] {
+			t.Errorf("section %q differs between CRLF and LF input:\nCRLF: %q\nLF:   %q",
+				name, content, fromLF.Sections[name])
+		}
+	}
+	if fromCRLF.ID != fromLF.ID || fromCRLF.Title != fromLF.Title || fromCRLF.Status != fromLF.Status {
+		t.Errorf("CRLF and LF inputs parsed to different metadata: %+v vs %+v", fromCRLF, fromLF)
+	}
+}
+
+// TestParseBOM proves a leading UTF-8 byte-order mark is stripped before
+// parsing rather than breaking the frontmatter delimiter match.
+func TestParseBOM(t *testing.T) {
+	content := "\xef\xbb\xbf" + `---
+id: ADR-0001
+title: BOM handling
+category: architecture
+date: 2026-07-01
+status: accepted
+---
+
+## Decision Outcome
+
+Outcome.
+`
+	dir := t.TempDir()
+	path := writeFile(t, dir, "ADR-0001-bom-handling.md", content)
+
+	got, err := Parse(path)
+	if err != nil {
+		t.Fatalf("Parse() error = %v, want nil (BOM should be stripped)", err)
+	}
+	if got.ID != "ADR-0001" || got.Sections[DecisionOutcomeSection] != "Outcome." {
+		t.Errorf("BOM'd ADR parsed incorrectly: ID=%q, Decision Outcome=%q",
+			got.ID, got.Sections[DecisionOutcomeSection])
 	}
 }

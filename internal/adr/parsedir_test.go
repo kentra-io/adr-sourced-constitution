@@ -74,6 +74,41 @@ Fine.
 	}
 }
 
+// TestParseDirDuplicateID proves ids are unique across the log: two
+// files sharing an id (both filename-encoded and in frontmatter, so the
+// per-file filename<->id cross-check passes) must hard-error, with a
+// precise ParseError naming BOTH files.
+func TestParseDirDuplicateID(t *testing.T) {
+	dir := t.TempDir()
+	adrContent := func(title string) string {
+		return `---
+id: ADR-0001
+title: ` + title + `
+category: architecture
+date: 2026-07-01
+status: accepted
+---
+
+## Decision Outcome
+
+Outcome.
+`
+	}
+	writeFile(t, dir, "ADR-0001-first-claimant.md", adrContent("First claimant"))
+	writeFile(t, dir, "ADR-0001-second-claimant.md", adrContent("Second claimant"))
+
+	_, err := ParseDir(dir)
+	if err == nil {
+		t.Fatal("ParseDir() error = nil, want a duplicate-id error")
+	}
+	want := filepath.Join(dir, "ADR-0001-second-claimant.md") +
+		`: field "id": duplicate id "ADR-0001" (already used by ` +
+		filepath.Join(dir, "ADR-0001-first-claimant.md") + `)`
+	if err.Error() != want {
+		t.Errorf("ParseDir() error = %q, want %q", err.Error(), want)
+	}
+}
+
 func TestParseDirMissingDirectory(t *testing.T) {
 	_, err := ParseDir(filepath.Join(t.TempDir(), "does-not-exist"))
 	if err == nil {

@@ -116,6 +116,51 @@ func TestRenderOmitsSourceWhenAbsent(t *testing.T) {
 	}
 }
 
+// TestRenderCRLFInputIsLFOnly runs the full ParseBytes -> Render path on
+// a CRLF-authored ADR and asserts the rendered constitution.md contains
+// no \r bytes: the projection's bytes must not depend on the line
+// endings an ADR author's editor happened to write.
+func TestRenderCRLFInputIsLFOnly(t *testing.T) {
+	crlf := strings.ReplaceAll(`---
+id: ADR-0001
+title: CRLF-authored rule
+category: architecture
+date: 2026-07-01
+status: accepted
+---
+
+## Context and Problem Statement
+
+Why.
+
+## Considered Options
+
+- Option
+
+## Decision Outcome
+
+First line of the rule.
+Second line of the rule.
+`, "\n", "\r\n")
+
+	a, err := adr.ParseBytes([]byte(crlf), "constitution/adr/ADR-0001-crlf-authored-rule.md")
+	if err != nil {
+		t.Fatalf("ParseBytes() error = %v", err)
+	}
+
+	cfg := &config.Config{Categories: []string{"architecture"}}
+	out, err := render.Render(cfg, []adr.ADR{*a})
+	if err != nil {
+		t.Fatalf("Render() error = %v", err)
+	}
+	if strings.Contains(string(out), "\r") {
+		t.Errorf("rendered constitution.md contains \\r bytes from CRLF input:\n%q", out)
+	}
+	if !strings.Contains(string(out), "First line of the rule.\nSecond line of the rule.") {
+		t.Errorf("rendered output missing the LF-normalized Decision Outcome body:\n%s", out)
+	}
+}
+
 func TestRenderIncludesSourceWhenPresent(t *testing.T) {
 	cfg := &config.Config{Categories: []string{"architecture"}}
 	a := newADR("ADR-0001", 1, "architecture", adr.StatusAccepted)
