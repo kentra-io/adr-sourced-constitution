@@ -73,8 +73,12 @@ func statePath(root string) string {
 }
 
 // LoadState reads constitution/.state under root. A missing file yields a
-// fresh empty State (a repo that has never been init'd has no state yet). An
-// unrecognized schemaVersion is refused.
+// fresh empty State (a repo that has never been init'd has no state yet).
+// Corrupt YAML or an unrecognized schemaVersion is returned as an error whose
+// message names the .state path and the parse problem; the Refresh engine
+// degrades that error to an empty state (loadStateOrEmpty) so a poisoned
+// bookkeeping file can never block a refresh, while callers that want to
+// surface the problem directly still can.
 func LoadState(root string) (*State, error) {
 	data, err := os.ReadFile(statePath(root))
 	if err != nil {

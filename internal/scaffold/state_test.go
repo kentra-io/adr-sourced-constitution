@@ -3,6 +3,7 @@ package scaffold
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -88,5 +89,35 @@ func TestState_BadSchemaVersionRefused(t *testing.T) {
 	}
 	if _, err := LoadState(root); err == nil {
 		t.Fatal("expected an error for an unsupported schemaVersion")
+	}
+}
+
+func TestLoadStateOrEmpty_DegradesOnCorrupt(t *testing.T) {
+	for _, tc := range []struct {
+		name, content string
+	}{
+		{"unparseable YAML", "schemaVersion: [1\n"},
+		{"unknown schemaVersion", "schemaVersion: 99\nmanaged: []\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			dir := filepath.Join(root, "constitution")
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, ".state"), []byte(tc.content), 0o644); err != nil {
+				t.Fatal(err)
+			}
+
+			var stderr strings.Builder
+			st := loadStateOrEmpty(root, &stderr)
+			if st == nil || !st.empty() {
+				t.Fatalf("expected a fresh empty state, got %+v", st)
+			}
+			warn := stderr.String()
+			if !strings.Contains(warn, "warning") || !strings.Contains(warn, statePath(root)) {
+				t.Fatalf("warning must name the .state path; got %q", warn)
+			}
+		})
 	}
 }

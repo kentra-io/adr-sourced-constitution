@@ -55,10 +55,7 @@ type Options struct {
 // only what the config selects: a config with no targets and no skill trees
 // (the pre-M4 shape) is a no-op that never creates a .state file.
 func Refresh(o Options) error {
-	st, err := LoadState(o.Root)
-	if err != nil {
-		return err
-	}
+	st := loadStateOrEmpty(o.Root, o.Stderr)
 
 	for _, t := range blockTargets(o.Cfg) {
 		if err := o.refreshBlock(st, t); err != nil {
@@ -83,6 +80,26 @@ func Refresh(o Options) error {
 		return nil
 	}
 	return st.Save(o.Root)
+}
+
+// loadStateOrEmpty loads constitution/.state, degrading to a fresh empty
+// state (with a prominent stderr warning) when the file is corrupt or its
+// schemaVersion is unrecognized. This upholds the binding invariant that
+// auto-regen — and the mutating verbs that trigger it — can never be blocked
+// by the state of CLI-owned bookkeeping (plan §2.2, §6): a hard error here
+// would propagate out of Refresh and make `adr new` exit non-zero AFTER the
+// ADR already landed, lying via the exit code. Degrading is safe because
+// drift detection is content-hash based: against an empty state a matching
+// interior is still a no-op, and a drifted one still triggers the
+// refuse/--force path (init) or the warn path (regen). The .state is rebuilt
+// on the next successful write.
+func loadStateOrEmpty(root string, stderr io.Writer) *State {
+	st, err := LoadState(root)
+	if err != nil {
+		warnf(stderr, "warning: %s; ignoring it and proceeding with an empty drift state (managed files will be reconciled on the next `constitution init`)", err.Error())
+		return newState()
+	}
+	return st
 }
 
 // PreflightBlocks checks every managed block target for a malformed marker
