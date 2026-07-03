@@ -31,6 +31,7 @@ func run(ctx context.Context, args []string) error {
 			deprecateCommand(),
 			regenCommand(),
 			guardCommand(),
+			deviationCommand(),
 		},
 	}
 	return cmd.Run(ctx, args)

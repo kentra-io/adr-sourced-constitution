@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kentra.io/adr-sourced-constitution/deviation.schema.json",
+  "title": "constitution plan-gate deviation report (deviation.json)",
+  "description": "The per-plan report the plan-gate skill writes and `constitution deviation validate` checks (adr-sourced-constitution.md §8b, implementation-plan.md §2.9). SARIF-shaped, using Spec-Kit's severity vocabulary so a future GitHub code-scanning / Spec-Kit adapter is a thin mapping. Every deviation cites the ADR id it would violate — the citation is the governance primitive. This schema is the structural contract only; the CLI additionally checks that each adrId matches an ADR in the live log, that the summary counts tally, and (advisory) that constitutionHash still matches constitution/constitution.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["generatedAt", "constitutionHash", "plan", "deviations", "summary"],
+  "properties": {
+    "generatedAt": {
+      "type": "string",
+      "description": "When the gate ran (ISO-8601 recommended, e.g. 2026-07-03T14:02:00Z). Free-form string; not machine-parsed in v1."
+    },
+    "constitutionHash": {
+      "type": "string",
+      "description": "The sha256 of constitution/constitution.md the gate reasoned over, as \"sha256:<64-hex>\" (a bare 64-hex digest is also accepted). Lets a consumer detect a stale report: if it no longer matches the on-disk projection, the constitution changed since the gate ran. May be empty in a draft; the validator then reports the expected value as an advisory."
+    },
+    "plan": {
+      "type": "string",
+      "description": "The plan the gate evaluated: a file path or an opaque reference."
+    },
+    "deviations": {
+      "type": "array",
+      "description": "Every place the plan conflicts with an active rule (empty when the plan conforms). Includes deviations folded in from `constitution guard` violations.",
+      "items": {"$ref": "#/$defs/deviation"}
+    },
+    "summary": {"$ref": "#/$defs/summary"}
+  },
+  "$defs": {
+    "deviation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "adrId", "severity", "rule", "location", "summary", "recommendation"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^D-[0-9]{3,}$",
+          "description": "A within-report identifier for this deviation, e.g. D-001. Unique within the report."
+        },
+        "adrId": {
+          "type": "string",
+          "pattern": "^ADR-[0-9]{4,}$",
+          "description": "The id of the active ADR this deviation cites, e.g. ADR-0007. Required on every deviation and must match an ADR in the live log."
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["CRITICAL", "HIGH", "MEDIUM", "LOW"],
+          "description": "Spec-Kit severity vocabulary."
+        },
+        "rule": {
+          "type": "string",
+          "description": "The cited ADR's title (the rule heading as rendered in constitution.md), for human readability."
+        },
+        "location": {"$ref": "#/$defs/location"},
+        "summary": {
+          "type": "string",
+          "description": "One-line explanation of how the plan conflicts with the cited rule."
+        },
+        "recommendation": {
+          "type": "string",
+          "enum": ["conform", "amend"],
+          "description": "conform = change the plan to obey the rule; amend = the rule is wrong for this case, propose an ADR to change it (under the consent policy)."
+        },
+        "recommendationDetail": {
+          "type": "string",
+          "description": "Optional prose expanding on the recommendation."
+        }
+      }
+    },
+    "location": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file"],
+      "properties": {
+        "file": {
+          "type": "string",
+          "description": "The plan file (or artifact) the deviation was found in."
+        },
+        "lines": {
+          "type": "string",
+          "description": "Optional line span within the file, e.g. \"12-40\" or \"27\"."
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["critical", "high", "medium", "low"],
+      "properties": {
+        "critical": {"type": "integer", "minimum": 0, "description": "Count of CRITICAL deviations."},
+        "high": {"type": "integer", "minimum": 0, "description": "Count of HIGH deviations."},
+        "medium": {"type": "integer", "minimum": 0, "description": "Count of MEDIUM deviations."},
+        "low": {"type": "integer", "minimum": 0, "description": "Count of LOW deviations."}
+      }
+    }
+  }
+}

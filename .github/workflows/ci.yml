@@ -47,3 +47,33 @@ jobs:
       - uses: golangci/golangci-lint-action@v9
         with:
           version: v2.12.2
+
+  # This repo governs itself (dogfood, implementation-plan.md §2.11): its own
+  # constitution/ log is guarded here. ADVISORY (continue-on-error) exactly as
+  # docs/ci-guard-example.yml prescribes — surfaces out-of-band mutation of the
+  # log for a human to honor; not a required check in v1 (spec §5.4 Phase 1).
+  guard:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # merge-base needs full history (see docs/ci-guard-example.yml)
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.26.x"
+      # Build the CLI from this repo's own source to a temp path. It must NOT be
+      # named "constitution": that would collide with the constitution/ directory.
+      - name: build constitution
+        run: go build -o "$RUNNER_TEMP/constitution" ./cmd/constitution
+      - name: guard the ADR log
+        shell: bash
+        run: |
+          bin="$RUNNER_TEMP/constitution"
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            # Diff the PR against the fork point, computed locally — never trust
+            # the PR-supplied base SHA (docs/ci-guard-example.yml note 2).
+            "$bin" guard --merge-base "origin/${{ github.base_ref }}" --format text
+          else
+            "$bin" guard --format text
+          fi

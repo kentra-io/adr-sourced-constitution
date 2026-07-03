@@ -1,0 +1,27 @@
+{
+  "generatedAt": "2026-07-03T14:02:00Z",
+  "constitutionHash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "plan": "tasks/plan.md",
+  "deviations": [
+    {
+      "id": "D-001",
+      "adrId": "ADR-0007",
+      "severity": "HIGH",
+      "rule": "Guard modes and advisory manifest",
+      "location": {"file": "tasks/plan.md", "lines": "12-40"},
+      "summary": "The plan proposes a required merge gate on guard, but the rule pins guard as advisory in v1.",
+      "recommendation": "amend",
+      "recommendationDetail": "If a hard gate is genuinely needed, propose an ADR to supersede the advisory decision rather than contradicting it in a plan."
+    },
+    {
+      "id": "D-002",
+      "adrId": "ADR-0003",
+      "severity": "MEDIUM",
+      "location": {"file": "tasks/plan.md"},
+      "rule": "CLI-mediated ADR writes",
+      "summary": "Step 4 writes directly into constitution/adr/ instead of going through `constitution adr new`.",
+      "recommendation": "conform"
+    }
+  ],
+  "summary": {"critical": 0, "high": 1, "medium": 1, "low": 0}
+}

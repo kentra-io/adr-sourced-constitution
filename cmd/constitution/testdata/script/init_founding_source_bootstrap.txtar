@@ -1,0 +1,39 @@
+# When source tracking IS enabled (sourceTracking.type != none), founding ADRs
+# seeded by init carry the reserved `bootstrap` source — the counterpart to
+# init_happy/init_founding_file, which cover the default `none` case (no source
+# field). init cannot set the tracking type via a flag, so we pre-place a config
+# with type: generic; init loads it (existing config wins) and seeds against it.
+# `bootstrap` is a reserved value that bypasses the configured pattern check,
+# and regen + guard stay clean.
+
+env CONSTITUTION_TODAY=2026-07-02
+
+exec constitution init --principle 'All code must have tests'
+stdout 'init: constitution ready'
+
+grep 'status: accepted' constitution/adr/ADR-0001-all-code-must-have-tests.md
+grep 'source: bootstrap' constitution/adr/ADR-0001-all-code-must-have-tests.md
+
+exec constitution regen
+! stderr .
+exec constitution guard
+stdout 'clean'
+
+-- constitution.yml --
+schemaVersion: 1
+agentInstructions:
+  targets:
+    - claude
+    - agents
+consent:
+  policy: strict
+sourceTracking:
+  type: generic
+categories:
+  - architecture
+  - process
+skills:
+  trees:
+    - claude
+    - agents
+    - cursor

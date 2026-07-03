@@ -34,9 +34,10 @@ grep '@constitution/constitution.md' CLAUDE.md
 # --- AGENTS.md carries the textual pointer ---
 grep 'governing constitution and takes precedence' AGENTS.md
 
-# --- founding ADR is a real MADR record, source bootstrap ---
+# --- founding ADR is a real MADR record; under default sourceTracking.type
+#     (none) it carries NO source field (plan §2.8: none ⇒ no source allowed) ---
 grep 'status: accepted' constitution/adr/ADR-0001-all-code-must-have-tests.md
-grep 'source: bootstrap' constitution/adr/ADR-0001-all-code-must-have-tests.md
+! grep 'source:' constitution/adr/ADR-0001-all-code-must-have-tests.md
 grep '## Decision Outcome' constitution/adr/ADR-0001-all-code-must-have-tests.md
 
 # --- the skill stub has its invocation stance ---

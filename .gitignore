@@ -1,5 +1,9 @@
-# Build output
+# Build output. NOTE: `/constitution` (no slash) would also ignore this repo's
+# own dogfood constitution/ directory (implementation-plan.md §2.11), so it is
+# re-included below. A root FILE named `constitution` cannot exist anyway now —
+# it would collide with the directory — so only the .exe artifact matters.
 /constitution
+!/constitution/
 /constitution.exe
 /dist/
 
