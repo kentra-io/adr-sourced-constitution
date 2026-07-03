@@ -1,0 +1,37 @@
+# Idempotency (M4 DoD): running init twice with identical flags is a no-op —
+# every generated file is byte-identical after the second run. Snapshot each
+# generated file, re-run, and cmp.
+
+env CONSTITUTION_TODAY=2026-07-02
+
+exec constitution init --principle 'Idempotent principle' --target claude --target agents
+
+# snapshot every generated file
+cp constitution.yml snap.yml
+cp CLAUDE.md snap.claude
+cp AGENTS.md snap.agents
+cp constitution/.state snap.state
+cp constitution/constitution.md snap.md
+cp constitution/adr/.manifest.sha256 snap.manifest
+cp constitution/adr/ADR-0001-idempotent-principle.md snap.adr
+cp .claude/skills/adr-draft/SKILL.md snap.skill.claude
+cp .agents/skills/plan-gate/SKILL.md snap.skill.agents
+cp .cursor/skills/constitution-gov/SKILL.md snap.skill.cursor
+
+# second run: identical flags
+exec constitution init --principle 'Idempotent principle' --target claude --target agents
+
+# every file byte-identical
+cmp constitution.yml snap.yml
+cmp CLAUDE.md snap.claude
+cmp AGENTS.md snap.agents
+cmp constitution/.state snap.state
+cmp constitution/constitution.md snap.md
+cmp constitution/adr/.manifest.sha256 snap.manifest
+cmp constitution/adr/ADR-0001-idempotent-principle.md snap.adr
+cmp .claude/skills/adr-draft/SKILL.md snap.skill.claude
+cmp .agents/skills/plan-gate/SKILL.md snap.skill.agents
+cmp .cursor/skills/constitution-gov/SKILL.md snap.skill.cursor
+
+# no second founding ADR was seeded (idempotent seeding)
+! exists constitution/adr/ADR-0002-idempotent-principle.md

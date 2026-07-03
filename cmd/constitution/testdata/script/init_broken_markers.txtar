@@ -1,0 +1,19 @@
+# A malformed marker pair (BEGIN with no END) is never guessed: init refuses
+# with a clear error and exit code 2 (could-not-run), and — because the check
+# is a pre-flight — nothing is scaffolded (M4 DoD broken-marker case).
+
+env CONSTITUTION_TODAY=2026-07-02
+
+exitcode 2 constitution init --principle 'P1' --target claude
+stderr 'BEGIN marker present without a matching END'
+
+# pre-flight refused before any writes
+! exists constitution.yml
+! exists constitution/constitution.md
+! exists constitution/adr/ADR-0001-p1.md
+
+-- CLAUDE.md --
+# Project
+
+<!-- BEGIN adr-sourced-constitution v1 (managed — do not edit by hand; `constitution init` updates it) -->
+@constitution/constitution.md

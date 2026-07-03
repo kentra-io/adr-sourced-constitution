@@ -1,0 +1,34 @@
+# Managed-block drift (M4 DoD): hand-editing inside a managed block is
+# detected. A non-interactive re-run without --force refuses (non-zero, clear
+# message) and leaves the file untouched; --force rewrites only the interior,
+# preserving the user's content outside the block.
+
+env CONSTITUTION_TODAY=2026-07-02
+
+exec constitution init --principle 'P1' --target claude --target agents
+
+# Replace CLAUDE.md with a version that keeps the markers but drifts the
+# interior and adds user content outside the block.
+cp drifted-claude.md CLAUDE.md
+
+# --- non-interactive, no --force: refuse, nothing rewritten ---
+! exec constitution init --principle 'P1' --target claude --target agents
+stderr 'drifted from what'
+stderr 'refusing to overwrite'
+grep 'HACKED' CLAUDE.md
+
+# --- --force: rewrite the interior only; user content outside preserved ---
+exec constitution init --principle 'P1' --target claude --target agents --force
+! grep 'HACKED' CLAUDE.md
+grep '@constitution/constitution.md' CLAUDE.md
+grep 'MY CUSTOM HEADER' CLAUDE.md
+grep 'Trailing user note' CLAUDE.md
+
+-- drifted-claude.md --
+# MY CUSTOM HEADER
+
+<!-- BEGIN adr-sourced-constitution v1 (managed — do not edit by hand; `constitution init` updates it) -->
+@constitution/HACKED.md
+<!-- END adr-sourced-constitution v1 -->
+
+Trailing user note.

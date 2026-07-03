@@ -1,0 +1,50 @@
+# `constitution init` on an empty scratch repo (M4 DoD happy path): one init
+# yields config, a founding ADR, a rendered projection, pointer blocks in both
+# default targets, and skill copies in all three trees; regen and guard both
+# exit 0 afterward.
+
+env CONSTITUTION_TODAY=2026-07-02
+
+exec constitution init --principle 'All code must have tests'
+stdout 'init: constitution ready'
+! stderr .
+
+# --- scaffold structure ---
+exists constitution.yml
+exists constitution/adr/ADR-0001-all-code-must-have-tests.md
+exists constitution/constitution.md
+exists constitution/.state
+exists constitution/adr/.manifest.sha256
+
+# --- both agent-instruction targets by default ---
+exists CLAUDE.md
+exists AGENTS.md
+
+# --- skills fanned out to all three trees (real copies) ---
+exists .claude/skills/constitution-init/SKILL.md
+exists .claude/skills/adr-draft/SKILL.md
+exists .claude/skills/plan-gate/SKILL.md
+exists .claude/skills/constitution-gov/SKILL.md
+exists .agents/skills/adr-draft/SKILL.md
+exists .cursor/skills/plan-gate/SKILL.md
+
+# --- CLAUDE.md carries the @import (path resolves: constitution/constitution.md exists) ---
+grep '<!-- BEGIN adr-sourced-constitution v1' CLAUDE.md
+grep '@constitution/constitution.md' CLAUDE.md
+# --- AGENTS.md carries the textual pointer ---
+grep 'governing constitution and takes precedence' AGENTS.md
+
+# --- founding ADR is a real MADR record, source bootstrap ---
+grep 'status: accepted' constitution/adr/ADR-0001-all-code-must-have-tests.md
+grep 'source: bootstrap' constitution/adr/ADR-0001-all-code-must-have-tests.md
+grep '## Decision Outcome' constitution/adr/ADR-0001-all-code-must-have-tests.md
+
+# --- the skill stub has its invocation stance ---
+grep 'disable-model-invocation: true' .claude/skills/constitution-init/SKILL.md
+grep 'disable-model-invocation: true' .claude/skills/plan-gate/SKILL.md
+
+# --- regen and guard are clean on the fresh scaffold ---
+exec constitution regen
+! stderr .
+exec constitution guard
+stdout 'clean'

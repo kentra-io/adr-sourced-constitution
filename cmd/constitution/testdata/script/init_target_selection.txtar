@@ -1,0 +1,21 @@
+# Target selection honors flags (M4 DoD): init with only --target agents
+# writes AGENTS.md and never touches CLAUDE.md, and the written config records
+# only the agents target (so re-runs honor it too).
+
+env CONSTITUTION_TODAY=2026-07-02
+
+exec constitution init --principle 'P1' --target agents
+
+exists AGENTS.md
+grep 'governing constitution and takes precedence' AGENTS.md
+! exists CLAUDE.md
+
+# the config's instruction targets are honored on re-runs: a second init (no
+# --target flags) reads the config and still touches only AGENTS.md
+exec constitution init --principle 'P1'
+! exists CLAUDE.md
+
+# skills fan-out is independent of instruction targets: default is all trees
+exists .claude/skills/adr-draft/SKILL.md
+exists .agents/skills/adr-draft/SKILL.md
+exists .cursor/skills/adr-draft/SKILL.md
