@@ -107,13 +107,17 @@ supersedes: ADR-0003             # optional; present only when this ADR supersed
 <options weighed>
 
 ## Decision Outcome
-<the rule / choice — what the projection renders>
+<the decision / choice and its rationale — the durable record>
 
 ## Consequences
 <tradeoffs, follow-ons>          # optional in MADR; we keep it
+
+## Rule                          # OPTIONAL (plan §2.12) — present ⇒ rule-bearing ⇒ projects
+<the standing rule, 1–3 lines — the text the projection renders verbatim>
 ```
 
 - **MADR-derived body** (headings match MADR verbatim): `Context and Problem Statement` (req), `Considered Options` (**required by MADR v4** — one of its three mandatory body sections; keep it in every ADR, even as a single bullet for principle-style rules), `Decision Outcome` (req), `Consequences` (optional in MADR; we keep it). *(Corrected 2026-07-02 against the MADR v4 templates — an earlier revision mislabeled `Considered Options` as optional.)*
+- **Rule-bearing marker — one custom optional section** (plan §2.12, revision 2026-07-03; a stated deviation from stock MADR): an ADR body MAY include a single `## Rule` section — a 1–3 line normative statement. Its **presence** makes the ADR *rule-bearing* (it projects into `constitution.md`, §6); its **absence** makes the ADR a catalog-only record that stays in the log alone. An empty/whitespace-only `## Rule` is a validation error. The `Decision Outcome` remains mandatory but **no longer projects** — the projection now renders the `Rule` section.
 - **Frontmatter beyond MADR** (all MADR frontmatter is *optional*, so this stays compliant): `id`, `category`, `source`, `supersedes` are our additions; `status` uses MADR's own field. We omit MADR's optional `decision-makers`/`consulted`/`informed` (YAGNI).
 - **`status`** is a first-class field (§5) — restored so each record is a proper ADR. `proposed`/`rejected` never appear in the store (proposals are ephemeral — §5.1).
 - **Deliberate deviations from MADR convention** (content-compliant; stated so they read as decisions, not oversights): (i) we use `status: superseded` + a separate derived `superseded-by:` field, where MADR's own worked example embeds the link in the status string (`status: superseded by ADR-0123`) — chosen for cleaner machine parsing in the event-sourced model; (ii) `date` means **date created** (frozen with the rest of the record), whereas MADR defines it as "last updated" — matches the immutability invariant (§5) without widening the guard's permitted mutations; (iii) filenames are `ADR-NNNN-slug.md` under `constitution/adr/`, not MADR's bare `NNNN-slug.md` in `docs/decisions/` — chosen for readability; stock MADR-ecosystem tools glob `^\d{4}-` and won't auto-discover our files without custom configuration (a known, accepted interop gap).
@@ -160,10 +164,10 @@ Local git hooks are **not** enforcement — same trust domain as the editing age
 
 `constitution.md` is produced by the **Layer-1 Go CLI** (`constitution regen`) — **deterministic, no LLM**:
 1. Read all ADR files.
-2. Take the **active set** = ADRs with `status: accepted` (drop `superseded`/`deprecated`).
-3. Group by `category`.
-4. Render each section from a fixed template: `title` + `Decision Outcome` body (+ `id`, `date`, `source`, and any derived `superseded-by`).
-5. Write the single `constitution.md`.
+2. Take the **projected set** = ADRs with `status: accepted` **and** carrying a `## Rule` section (drop `superseded`/`deprecated`, and drop catalog-only records with no rule — plan §2.12).
+3. Group by `category` (a category with no rule-bearing active ADR is omitted).
+4. Render each section from a fixed template: `title` + the `Rule` section body **verbatim** (+ `id`, `date`, `source`, and any derived `superseded-by`). The `Decision Outcome` no longer projects.
+5. Write the single `constitution.md`. If **no** active ADR is rule-bearing, write the placeholder form: the generated-file header, `# Constitution`, and one line — `No standing rules yet. Decision log: constitution/adr/.`
 
 **`regen` runs automatically** as the final step of `adr new` / `supersede` / `deprecate` (append-then-project, atomic), and is available standalone. The constitution is never stale.
 
@@ -184,7 +188,7 @@ It gathers and records (into a project config file):
 4. **Consent policy** (§7.1).
 5. **Category vocabulary** (§4.2) — proposes a reference list; author defines their own.
 
-Then it **seeds founding-principle ADRs** into `adr/` (not a hand-written `constitution.md` — the constitution is a projection) and runs `regen` to render the initial `constitution.md`.
+Then it **seeds founding-principle ADRs** into `adr/` (not a hand-written `constitution.md` — the constitution is a projection) and runs `regen` to render the initial `constitution.md`. Each `--principle` is a standing rule, so its founding ADR is rule-bearing (the principle text is its `## Rule`); a `--founding-file` principle is rule-bearing only when it carries a `## Rule` section (plan §2.12).
 
 ### 7.1 Consent policy (configured, not hardcoded)
 Whether/how strictly ADR acceptance requires human consent is a **project-owner decision at init**, not a law baked into the primitive (it is standalone and publishable). Recorded in config; applies to every acceptance.
@@ -203,7 +207,7 @@ Tool-neutral: `constitution.md` is a plain file; every consumer reads the same f
 **(a) Planning support — input to design (primary, proactive).** The planning agent has the constitution **on hand** as it designs; it shapes the technical design and how functional/non-functional requirements are met — informing the design as it is created, not merely checking it after. *Mechanism:* loaded into context via the governance skill (§7.2) / the agent-instructions pointer (§9.1).
 
 **(b) Plan-validation gate.** A plan (from any planning tool) is validated against the constitution **before code exists**.
-- *Mechanism:* a Layer-2 skill/adapter reasons about the plan vs the constitution and serializes findings to a machine-readable **`deviation.json`**, each **citing the specific violated `ADR-id`**. In our harness the Spec-Kit adapter builds on `/speckit.analyze`; other tools consume `constitution.md` their own way.
+- *Mechanism:* a Layer-2 skill/adapter reasons about the plan vs the constitution and serializes findings to a machine-readable **`deviation.json`**, each **citing the specific violated `ADR-id`**. Because `constitution.md` now carries only rule-bearing active ADRs (§6, plan §2.12), a citation must name a **rule-bearing active** ADR — the CLI validator rejects a citation to a record-only ADR (it never appears in the constitution). In our harness the Spec-Kit adapter builds on `/speckit.analyze`; other tools consume `constitution.md` their own way.
 - *Seam:* the primitive **emits** `deviation.json`; an engine/CI **enforces**. *Phasing:* Phase 1 surfaces + human honors; Phase 2 Conductor/CI hard-blocks.
 
 **(c) Code validation — background drift sweep (DEFERRED).** A background process scans the **codebase** for drift from the constitution and files todos/issues that re-enter the pipeline. First-class to what the constitution is *for*, but **deferred** (§12); no framework offers a native seam for it — it's a standalone-CLI concern.
