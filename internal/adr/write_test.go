@@ -189,6 +189,54 @@ func TestValidateBody(t *testing.T) {
 	}
 }
 
+// TestValidateBodyEmptyRule proves a present-but-empty "## Rule" section is
+// rejected on the write path too (plan §2.12).
+func TestValidateBodyEmptyRule(t *testing.T) {
+	body := "## Context and Problem Statement\n\nx\n\n## Considered Options\n\n- a\n\n## Decision Outcome\n\ny\n\n## Rule\n\n   \n"
+	err := ValidateBody([]byte(body), "b.md")
+	if err == nil {
+		t.Fatal("ValidateBody(empty Rule) = nil, want error")
+	}
+	want := `b.md: field "Rule": the "## Rule" section is present but empty; give it a normative statement or remove it (a record-only ADR has no Rule section)`
+	if err.Error() != want {
+		t.Errorf("ValidateBody error = %q, want %q", err.Error(), want)
+	}
+}
+
+// TestHasAndAppendRuleSection covers the --rule composition helpers (plan
+// §2.12): detecting an existing Rule section, and appending one as the last
+// body section such that it parses back rule-bearing.
+func TestHasAndAppendRuleSection(t *testing.T) {
+	base := "## Context and Problem Statement\n\nWhy.\n\n## Considered Options\n\n- a\n\n## Decision Outcome\n\nDo it.\n"
+	if HasRuleSection([]byte(base)) {
+		t.Error("HasRuleSection(base) = true, want false")
+	}
+
+	withRule := AppendRuleSection([]byte(base), "Do the thing.")
+	if !HasRuleSection(withRule) {
+		t.Error("HasRuleSection(appended) = false, want true")
+	}
+	if err := ValidateBody(withRule, "b.md"); err != nil {
+		t.Fatalf("ValidateBody(appended) = %v", err)
+	}
+	// It composes into an ADR that parses back rule-bearing with the exact rule.
+	out := Compose(NewADR{
+		ID: "ADR-0001", Title: "T", Category: "architecture", Date: "2026-07-01",
+		Body: string(withRule),
+	})
+	a, err := ParseBytes(out, "ADR-0001-t.md")
+	if err != nil {
+		t.Fatalf("composed ADR does not parse: %v\n%s", err, out)
+	}
+	if !a.IsRuleBearing() || a.Rule() != "Do the thing." {
+		t.Errorf("rule-bearing=%v rule=%q, want true/%q", a.IsRuleBearing(), a.Rule(), "Do the thing.")
+	}
+	// The Rule must be the LAST section.
+	if last := a.SectionOrder[len(a.SectionOrder)-1]; last != RuleSection {
+		t.Errorf("last section = %q, want %q", last, RuleSection)
+	}
+}
+
 func TestValidateBodyCRLF(t *testing.T) {
 	// A CRLF-authored body validates the same as its LF twin.
 	full := "## Context and Problem Statement\r\n\r\nx\r\n\r\n## Considered Options\r\n\r\n- a\r\n\r\n## Decision Outcome\r\n\r\ny\r\n"

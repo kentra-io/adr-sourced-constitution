@@ -19,3 +19,7 @@ Inconsistent formatting produces noisy diffs and slows review.
 ## Decision Outcome
 
 All Go code must be formatted with gofmt; CI rejects unformatted diffs.
+
+## Rule
+
+Format all Go code with gofmt; unformatted diffs must not merge.

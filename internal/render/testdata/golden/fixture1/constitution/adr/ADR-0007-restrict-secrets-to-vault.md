@@ -22,3 +22,8 @@ through logs, shell history, and CI artifacts.
 All secrets must be stored in the managed vault and injected at runtime;
 none may be committed or passed as plain environment variables in CI
 configuration.
+
+## Rule
+
+Store all secrets in the managed vault; never commit them or pass them as
+plain CI environment variables.

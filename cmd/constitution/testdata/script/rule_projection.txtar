@@ -1,0 +1,105 @@
+# Rule-bearing projection end-to-end (plan §2.12): --rule composes a ## Rule
+# section that projects; a body-file MAY carry its own ## Rule; supplying both
+# is an error; a record-only ADR (no rule) stays in the log but never projects;
+# regen warns (never blocks) on a Rule section longer than 5 lines.
+
+env CONSTITUTION_TODAY=2026-07-02
+
+# --- --rule happy path: the ADR projects with the rule text verbatim ---
+exec constitution adr new --title 'Format with gofmt' --category architecture --body-file body.md --rule 'Format all Go code with gofmt.'
+stdout 'created .*ADR-0001-format-with-gofmt\.md'
+grep '## Rule' constitution/adr/ADR-0001-format-with-gofmt.md
+grep 'Format all Go code with gofmt\.' constitution/constitution.md
+grep '### Format with gofmt' constitution/constitution.md
+# The Decision Outcome must NOT project — only the Rule does.
+! grep 'The full decision text.' constitution/constitution.md
+
+# --- record-only default: no --rule, no ## Rule in the body -> not projected ---
+exec constitution adr new --title 'A point-in-time record' --category architecture --body-file body.md
+stdout 'created .*ADR-0002-a-point-in-time-record\.md'
+! grep 'ADR-0002' constitution/constitution.md
+! grep 'A point-in-time record' constitution/constitution.md
+
+# --- body-file carries its own ## Rule section -> projects, no --rule needed ---
+exec constitution adr new --title 'Rule from body' --category architecture --body-file body-with-rule.md
+stdout 'created .*ADR-0003-rule-from-body\.md'
+grep 'Rule authored inside the body file\.' constitution/constitution.md
+
+# --- both --rule AND a body-file ## Rule -> error, nothing written ---
+! exec constitution adr new --title 'Ambiguous' --category architecture --body-file body-with-rule.md --rule 'A second rule.'
+stderr 'both --rule and a --body-file'
+! exists constitution/adr/ADR-0004-ambiguous.md
+
+# --- empty --rule -> validation error, nothing written ---
+! exec constitution adr new --title 'Blank rule' --category architecture --body-file body.md --rule '   '
+stderr 'the "## Rule" section is present but empty'
+! exists constitution/adr/ADR-0004-blank-rule.md
+
+# --- regen warns (does not block) on a >5-line Rule section ---
+exec constitution adr new --title 'Long rule' --category architecture --body-file body-long-rule.md
+stderr 'ADR-0004 has a 6-line Rule section'
+exec constitution regen
+stdout 'wrote'
+stderr 'ADR-0004 has a 6-line Rule section'
+grep '### Long rule' constitution/constitution.md
+
+-- constitution.yml --
+schemaVersion: 1
+consent:
+  policy: off
+sourceTracking:
+  type: none
+categories:
+  - architecture
+
+-- body.md --
+## Context and Problem Statement
+
+x
+
+## Considered Options
+
+- a
+
+## Decision Outcome
+
+The full decision text.
+
+-- body-with-rule.md --
+## Context and Problem Statement
+
+x
+
+## Considered Options
+
+- a
+
+## Decision Outcome
+
+The full decision text.
+
+## Rule
+
+Rule authored inside the body file.
+
+-- body-long-rule.md --
+## Context and Problem Statement
+
+x
+
+## Considered Options
+
+- a
+
+## Decision Outcome
+
+The full decision text.
+
+## Rule
+
+line one
+line two
+line three
+line four
+line five
+line six

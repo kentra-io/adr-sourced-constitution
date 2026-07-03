@@ -21,3 +21,7 @@ credential-compromise risk.
 
 All repository administrators must have two-factor authentication
 enabled; org settings enforce it.
+
+## Rule
+
+Require two-factor authentication for all repository administrators.

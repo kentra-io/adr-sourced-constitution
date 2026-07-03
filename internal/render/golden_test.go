@@ -37,26 +37,36 @@ func renderFixture(t *testing.T, name string) []byte {
 	return out
 }
 
-// TestGoldenFixture1 is the M1 DoD golden fixture: ~12 ADRs across 6
-// categories, including a three-link supersede chain (ADR-0001 ->
-// ADR-0005 -> ADR-0009) and a deprecated entry (ADR-0004), asserting a
-// byte-exact constitution.md projection.
-func TestGoldenFixture1(t *testing.T) {
-	got := renderFixture(t, "fixture1")
+// TestGolden is the M1/M5.5 DoD golden suite, asserting byte-exact
+// constitution.md projections:
+//   - fixture1: a mixed rule/record log — ~12 ADRs across 6 categories,
+//     some active rule-bearing (project), some active record-only (stay in
+//     the log only), a three-link supersede chain (ADR-0001 -> ADR-0005 ->
+//     ADR-0009) and a deprecated entry (ADR-0004). Two categories (process,
+//     data) have only record-only active ADRs and are omitted entirely
+//     (plan §2.12 category omission).
+//   - empty: no active ADR is rule-bearing (one record-only accepted, one
+//     deprecated rule) — the placeholder form (plan §2.12).
+func TestGolden(t *testing.T) {
+	for _, name := range []string{"fixture1", "empty"} {
+		t.Run(name, func(t *testing.T) {
+			got := renderFixture(t, name)
 
-	golden := filepath.Join("testdata", "golden", "fixture1", "constitution", "constitution.md")
-	if *update {
-		if err := os.WriteFile(golden, got, 0o644); err != nil {
-			t.Fatalf("write golden: %v", err)
-		}
-	}
+			golden := filepath.Join("testdata", "golden", name, "constitution", "constitution.md")
+			if *update {
+				if err := os.WriteFile(golden, got, 0o644); err != nil {
+					t.Fatalf("write golden: %v", err)
+				}
+			}
 
-	want, err := os.ReadFile(golden)
-	if err != nil {
-		t.Fatalf("read golden: %v (run go test -update to create it)", err)
-	}
-	if !bytes.Equal(got, want) {
-		t.Errorf("rendered output does not match golden %s\n--- got ---\n%s\n--- want ---\n%s", golden, got, want)
+			want, err := os.ReadFile(golden)
+			if err != nil {
+				t.Fatalf("read golden: %v (run go test -update to create it)", err)
+			}
+			if !bytes.Equal(got, want) {
+				t.Errorf("rendered output does not match golden %s\n--- got ---\n%s\n--- want ---\n%s", golden, got, want)
+			}
+		})
 	}
 }
 

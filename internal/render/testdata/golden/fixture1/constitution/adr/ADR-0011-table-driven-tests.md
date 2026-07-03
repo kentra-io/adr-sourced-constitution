@@ -21,3 +21,7 @@ gaps than a single table of cases.
 
 Prefer table-driven tests with named `t.Run` subtests for anything with
 more than two similar cases.
+
+## Rule
+
+Prefer table-driven tests with named subtests beyond two similar cases.

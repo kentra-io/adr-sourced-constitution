@@ -9,7 +9,23 @@ import (
 	"github.com/kentra-io/adr-sourced-constitution/internal/render"
 )
 
+// newADR builds a rule-bearing ADR (it carries a "## Rule" section, so it
+// projects into constitution.md — plan §2.12). Use newRecordADR for a
+// catalog-only record that must not project.
 func newADR(id string, num int, category string, status adr.Status) adr.ADR {
+	return adr.ADR{
+		ID: id, Num: num, Title: "Title " + id, Category: category, Date: "2026-07-01",
+		Status: status, Path: "constitution/adr/" + id + "-x.md",
+		Sections: map[string]string{
+			adr.DecisionOutcomeSection: "Outcome for " + id + ".",
+			adr.RuleSection:            "Rule for " + id + ".",
+		},
+	}
+}
+
+// newRecordADR builds a catalog-only record: it has a Decision Outcome but no
+// Rule section, so it stays in the log and never projects (plan §2.12).
+func newRecordADR(id string, num int, category string, status adr.Status) adr.ADR {
 	return adr.ADR{
 		ID: id, Num: num, Title: "Title " + id, Category: category, Date: "2026-07-01",
 		Status: status, Path: "constitution/adr/" + id + "-x.md",
@@ -47,6 +63,68 @@ func TestUnknownCategoryOnInactiveADR(t *testing.T) {
 
 	if _, err := render.Render(cfg, adrs); err == nil {
 		t.Fatal("Render() error = nil, want an unknown-category error even for a non-active ADR")
+	}
+}
+
+// TestRenderRecordOnlyDoesNotProject proves the curated-projection rule (plan
+// §2.12): an active ADR with no "## Rule" section stays in the log but never
+// appears in constitution.md.
+func TestRenderRecordOnlyDoesNotProject(t *testing.T) {
+	cfg := &config.Config{Categories: []string{"architecture"}}
+	rule := newADR("ADR-0001", 1, "architecture", adr.StatusAccepted)
+	record := newRecordADR("ADR-0002", 2, "architecture", adr.StatusAccepted)
+
+	out, err := render.Render(cfg, []adr.ADR{rule, record})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(out), "Rule for ADR-0001.") {
+		t.Errorf("rule-bearing ADR-0001 should project:\n%s", out)
+	}
+	if strings.Contains(string(out), "ADR-0002") {
+		t.Errorf("record-only ADR-0002 must not project:\n%s", out)
+	}
+}
+
+// TestRenderEmptyConstitutionPlaceholder proves the placeholder render (plan
+// §2.12): when no active ADR is rule-bearing, constitution.md carries the
+// header, the # Constitution heading, and one placeholder line — no category.
+func TestRenderEmptyConstitutionPlaceholder(t *testing.T) {
+	cfg := &config.Config{Categories: []string{"architecture"}}
+	adrs := []adr.ADR{
+		newRecordADR("ADR-0001", 1, "architecture", adr.StatusAccepted),
+		newADR("ADR-0002", 2, "architecture", adr.StatusSuperseded), // rule-bearing but inactive
+	}
+	out, err := render.Render(cfg, adrs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if !strings.Contains(got, "No standing rules yet. Decision log: constitution/adr/.\n") {
+		t.Errorf("expected the placeholder line, got:\n%s", got)
+	}
+	if strings.Contains(got, "## architecture") {
+		t.Errorf("no category heading should appear in the placeholder form:\n%s", got)
+	}
+}
+
+// TestRenderOmitsRecordOnlyCategory proves category omission (plan §2.12): a
+// category whose only active ADRs are record-only is dropped entirely.
+func TestRenderOmitsRecordOnlyCategory(t *testing.T) {
+	cfg := &config.Config{Categories: []string{"architecture", "process"}}
+	adrs := []adr.ADR{
+		newADR("ADR-0001", 1, "architecture", adr.StatusAccepted),  // projects
+		newRecordADR("ADR-0002", 2, "process", adr.StatusAccepted), // record-only
+	}
+	out, err := render.Render(cfg, adrs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(out), "## architecture") {
+		t.Errorf("architecture (has a rule) should appear:\n%s", out)
+	}
+	if strings.Contains(string(out), "## process") {
+		t.Errorf("process (record-only) must be omitted:\n%s", out)
 	}
 }
 
@@ -139,6 +217,10 @@ Why.
 
 ## Decision Outcome
 
+The decision, at length.
+
+## Rule
+
 First line of the rule.
 Second line of the rule.
 `, "\n", "\r\n")
@@ -157,7 +239,10 @@ Second line of the rule.
 		t.Errorf("rendered constitution.md contains \\r bytes from CRLF input:\n%q", out)
 	}
 	if !strings.Contains(string(out), "First line of the rule.\nSecond line of the rule.") {
-		t.Errorf("rendered output missing the LF-normalized Decision Outcome body:\n%s", out)
+		t.Errorf("rendered output missing the LF-normalized Rule body:\n%s", out)
+	}
+	if strings.Contains(string(out), "The decision, at length.") {
+		t.Errorf("Decision Outcome must not project; only the Rule section does:\n%s", out)
 	}
 }
 

@@ -1,7 +1,9 @@
 # `--founding-file` seeds one founding ADR per '## ' heading: the heading is
-# the ADR title, the text beneath it is the rule statement (Decision Outcome).
-# All land in --founding-category. Under the default sourceTracking.type (none)
-# they carry no source field (plan §2.8).
+# the ADR title, the text beneath it is the Decision Outcome. A nested
+# '## Rule' heading makes that founding ADR rule-bearing (it projects into
+# constitution.md); a principle with no '## Rule' is a catalog-only record
+# (plan §2.12). All land in --founding-category. Under the default
+# sourceTracking.type (none) they carry no source field (plan §2.8).
 
 env CONSTITUTION_TODAY=2026-07-02
 
@@ -11,14 +13,26 @@ stdout 'created .*ADR-0002-small-focused-prs\.md'
 
 grep 'category: process' constitution/adr/ADR-0001-tests-are-mandatory.md
 ! grep 'source:' constitution/adr/ADR-0001-tests-are-mandatory.md
-grep 'Every change ships with tests.' constitution/adr/ADR-0001-tests-are-mandatory.md
+grep 'Every change ships with tests, no exceptions.' constitution/adr/ADR-0001-tests-are-mandatory.md
 grep 'Keep pull requests focused and small.' constitution/adr/ADR-0002-small-focused-prs.md
+
+# ADR-0001 has a '## Rule' -> rule-bearing -> projects with its rule text.
+grep '## Rule' constitution/adr/ADR-0001-tests-are-mandatory.md
+grep 'Every change ships with tests.' constitution/constitution.md
+grep '### Tests are mandatory' constitution/constitution.md
+# ADR-0002 has no '## Rule' -> record-only -> stays in the log, does not project.
+! grep '## Rule' constitution/adr/ADR-0002-small-focused-prs.md
+! grep 'Small focused PRs' constitution/constitution.md
 
 exec constitution guard
 stdout 'clean'
 
 -- principles.md --
 ## Tests are mandatory
+
+Every change ships with tests, no exceptions.
+
+## Rule
 
 Every change ships with tests.
 
