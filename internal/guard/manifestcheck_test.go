@@ -99,7 +99,11 @@ func TestCheckManifest(t *testing.T) {
 		}
 	})
 
-	t.Run("a file present on disk but absent from the manifest is not a violation (new, not-yet-regenerated file)", func(t *testing.T) {
+	t.Run("a file present on disk but absent from the manifest is a manifest_mismatch (reverse check)", func(t *testing.T) {
+		// The manifest cross-check is bidirectional: an on-disk ADR that no
+		// manifest line records — whether a benign hand-added ADR never
+		// regen'd, or a tamper that deleted the line to hide an edit — must be
+		// flagged, not passed silently.
 		dir := t.TempDir()
 		writeManifest(t, dir, nil) // empty manifest
 		fresh := sampleADR()
@@ -108,8 +112,30 @@ func TestCheckManifest(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(got) != 0 {
-			t.Errorf("checkManifest() = %+v, want no violations", got)
+		if len(got) != 1 || got[0].Kind != KindManifestMismatch {
+			t.Fatalf("checkManifest() = %+v, want exactly one manifest_mismatch (on-disk ADR not recorded)", got)
+		}
+		if got[0].ID != "ADR-0001" {
+			t.Errorf("violation.ID = %q, want ADR-0001", got[0].ID)
+		}
+	})
+
+	t.Run("a malformed manifest line is a could-not-run error (M6: the manifest is machine-written)", func(t *testing.T) {
+		dir := t.TempDir()
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		a := sampleADR()
+		// A well-formed line followed by a garbled one: the CLI never writes a
+		// line missing the two-space separator, so it is corruption/tampering.
+		content := manifest.Render([]adr.ADR{a})
+		content = append(content, []byte("deadbeef-no-separator\n")...)
+		if err := os.WriteFile(filepath.Join(dir, manifest.FileName), content, 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		if _, err := checkManifest(dir, []adr.ADR{a}); err == nil {
+			t.Error("checkManifest() = nil error, want a could-not-run error on a malformed manifest line")
 		}
 	})
 

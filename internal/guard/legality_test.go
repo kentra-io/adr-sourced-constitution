@@ -144,6 +144,20 @@ func TestCompareLegal(t *testing.T) {
 			},
 			wantKinds: []Kind{KindBodyChanged, KindFrozenFieldChanged},
 		},
+		{
+			// A LEGAL status transition does NOT license smuggling frozen-content
+			// changes alongside it: the status change is allowed, but the frozen
+			// field and body edits riding with it must still each fire. Proves
+			// the legality allow-list is scoped to status/superseded-by only.
+			name: "a legal supersede carrying a frozen-field edit and a body edit still fires both content violations",
+			mutate: func(a *adr.ADR) {
+				a.Status = adr.StatusSuperseded
+				a.SupersededBy = "ADR-0002"          // legal transition -> no status violation
+				a.Category = "process"               // frozen field -> frozen_field_changed
+				a.Sections["Decision Outcome"] = "z" // body -> body_changed
+			},
+			wantKinds: []Kind{KindBodyChanged, KindFrozenFieldChanged},
+		},
 	}
 
 	for _, tt := range tests {

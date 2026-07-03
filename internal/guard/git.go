@@ -130,41 +130,67 @@ type diffEntry struct {
 	oldPath string // set only for R/C: the base-ref path
 }
 
-// diffNameStatus runs `git diff --name-status -M <base> -- <pathspec>` and
-// parses the output. pathspec must already be repo-root-relative and
-// forward-slash (the caller — checkGit — is responsible for that; see its
-// doc comment on why that's always safe once requireRepoRootIsGitTop has
-// passed).
+// diffNameStatus runs `git diff --name-status -z -M <base> -- <pathspec>` and
+// parses the NUL-delimited output. pathspec must already be
+// repo-root-relative and forward-slash (the caller — checkGit — is
+// responsible for that; see its doc comment on why that's always safe once
+// requireRepoRootIsGitTop has passed).
+//
+// -z is load-bearing, not a nicety: WITHOUT it git C-quotes any path with a
+// non-ASCII or control byte (e.g. a rename to ADR-0001-première-règle.md
+// arrives as the literal string "constitution/adr/ADR-0001-premi\303\250re-…\.md"
+// — surrounding double-quotes included) and separates the old/new rename
+// paths with a tab. That defeats a byte-level ".md" extension check (the
+// quoted path ends in `.md"`, not `.md`) and makes tab-in-filename ambiguous.
+// With -z, paths are emitted verbatim as raw bytes, NUL-terminated, never
+// quoted, so the parser and the downstream extension filter see the true
+// path (spec §5.3 must not be evadable by a filename choice).
 func diffNameStatus(dir, base, pathspec string) ([]diffEntry, error) {
-	out, err := runGit(dir, "diff", "--name-status", "-M", base, "--", pathspec)
+	out, err := runGit(dir, "diff", "--name-status", "-z", "-M", base, "--", pathspec)
 	if err != nil {
 		return nil, fmt.Errorf("guard: git diff against %s: %w", base, err)
 	}
-	return parseNameStatus(out), nil
+	return parseNameStatus(out)
 }
 
-func parseNameStatus(out string) []diffEntry {
+// parseNameStatus parses `git diff --name-status -z` output: a flat stream of
+// NUL-terminated tokens. Each record is a status token (a single letter
+// optionally followed by a similarity score, e.g. "M", "D", "A", "R089")
+// followed by one path token, except rename/copy (R/C) records, which carry
+// two path tokens: old then new. A truncated record (a status token with its
+// path token(s) missing) is a parse failure, not something to skip silently —
+// guard fails closed (exit 2) rather than risk overlooking a mutation.
+func parseNameStatus(out string) ([]diffEntry, error) {
+	tokens := strings.Split(out, "\x00")
 	var entries []diffEntry
-	for _, line := range strings.Split(out, "\n") {
-		if line == "" {
+	for i := 0; i < len(tokens); {
+		status := tokens[i]
+		if status == "" {
+			// The stream is NUL-terminated, so Split yields a trailing "" (and
+			// nothing else empty in well-formed output); skip it.
+			i++
 			continue
 		}
-		fields := strings.Split(line, "\t")
-		if len(fields) < 2 || fields[0] == "" {
-			continue
-		}
-		code := fields[0][0]
+		code := status[0]
 		switch code {
 		case 'R', 'C':
-			if len(fields) < 3 {
-				continue
+			// git never emits an empty path token, so a "" where a path is
+			// expected (including the stream's trailing "" reached early)
+			// means the record was truncated.
+			if i+2 >= len(tokens) || tokens[i+1] == "" || tokens[i+2] == "" {
+				return nil, fmt.Errorf("guard: malformed git diff -z output: rename/copy record %q missing its path token(s)", status)
 			}
-			entries = append(entries, diffEntry{status: code, oldPath: fields[1], path: fields[2]})
+			entries = append(entries, diffEntry{status: code, oldPath: tokens[i+1], path: tokens[i+2]})
+			i += 3
 		default:
-			entries = append(entries, diffEntry{status: code, path: fields[1]})
+			if i+1 >= len(tokens) || tokens[i+1] == "" {
+				return nil, fmt.Errorf("guard: malformed git diff -z output: record %q missing its path token", status)
+			}
+			entries = append(entries, diffEntry{status: code, path: tokens[i+1]})
+			i += 2
 		}
 	}
-	return entries
+	return entries, nil
 }
 
 // readWorkingTree reads the current on-disk content of a repo-root-relative,

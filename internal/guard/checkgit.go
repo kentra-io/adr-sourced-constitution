@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 
 	"github.com/kentra-io/adr-sourced-constitution/internal/adr"
+	"github.com/kentra-io/adr-sourced-constitution/internal/manifest"
 )
 
 // checkGit runs the git-mode structured comparison (spec §5.3, plan §2.7):
@@ -29,8 +30,32 @@ func checkGit(repoRoot, base string) ([]Violation, error) {
 
 	var violations []Violation
 	for _, e := range entries {
-		if filepath.Ext(e.path) != ".md" || filepath.Base(e.path) == "" {
+		// The manifest file itself legitimately changes on every mutating
+		// command (it records the new ADR's hash), and is verified separately
+		// by the always-on manifest cross-check — so a change to it is
+		// deliberately not a git-mode concern. This is the ONLY entry the git
+		// path skips.
+		if filepath.Base(e.path) == manifest.FileName {
 			continue
+		}
+		// Fail closed. Every other entry under the constitution/adr/ pathspec
+		// must be an ADR ".md" file guard can classify. Anything else here is
+		// something guard has no rule for; skipping it silently is exactly the
+		// quotepath bypass this rework closes — a rename to a non-ASCII name
+		// once arrived C-quoted (ending `.md"`), read as non-".md", and was
+		// dropped, letting a tampered frozen body pass clean. With -z parsing
+		// the path is now the true path, so a non-".md" entry genuinely is
+		// unclassifiable: refuse to run (exit 2) rather than report clean. For
+		// a rename, BOTH endpoints must be ADR files.
+		if filepath.Ext(e.path) != ".md" {
+			return nil, fmt.Errorf(
+				"guard: cannot classify %q (git status %c) under constitution/adr/; expected an ADR .md file or %s — refusing to report clean",
+				e.path, e.status, manifest.FileName)
+		}
+		if (e.status == 'R' || e.status == 'C') && filepath.Ext(e.oldPath) != ".md" {
+			return nil, fmt.Errorf(
+				"guard: cannot classify rename/copy source %q (git status %c) under constitution/adr/; expected an ADR .md file — refusing to report clean",
+				e.oldPath, e.status)
 		}
 		v, err := checkGitEntry(repoRoot, base, e)
 		if err != nil {
@@ -72,18 +97,21 @@ func checkGitEntry(repoRoot, base string, e diffEntry) ([]Violation, error) {
 		return compareLegal(oldADR.ID, e.path, oldADR, curADR), nil
 
 	case 'R':
-		oldBlob, err := showFile(repoRoot, base, e.oldPath)
+		// A rename is itself a violation (an accepted ADR's filename is frozen
+		// along with its content), but a rename can ALSO carry a content edit
+		// hidden behind git's rename detection. Compare the old blob (at the
+		// old path) against the current file (at the new path) and append any
+		// content/frozen-field/status violations, so a rename-and-edit reports
+		// what actually changed, not just file_renamed.
+		oldADR, curADR, err := parseBothSides(repoRoot, base, e.oldPath, e.path)
 		if err != nil {
 			return nil, err
 		}
-		oldADR, err := adr.ParseBytes(oldBlob, e.oldPath)
-		if err != nil {
-			return nil, fmt.Errorf("guard: %s:%s: %w", base, e.oldPath, err)
-		}
-		return []Violation{{
+		vs := []Violation{{
 			Kind: KindFileRenamed, ID: oldADR.ID, File: e.path, OldFile: e.oldPath,
 			Message: fmt.Sprintf("%s: renamed from %s to %s; an accepted ADR's filename is frozen along with its content", oldADR.ID, e.oldPath, e.path),
-		}}, nil
+		}}
+		return append(vs, compareLegal(oldADR.ID, e.path, oldADR, curADR)...), nil
 
 	default:
 		// Copies (C) and type changes (T) are not expected for a Markdown

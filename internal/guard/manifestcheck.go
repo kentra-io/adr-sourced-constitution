@@ -44,8 +44,11 @@ func checkManifest(adrDir string, adrs []adr.ADR) ([]Violation, error) {
 		byFile[filepath.Base(adrs[i].Path)] = adrs[i]
 	}
 
+	recordedFiles := make(map[string]bool, len(recorded))
+
 	var violations []Violation
 	for _, rec := range recorded {
+		recordedFiles[rec.filename] = true
 		a, present := byFile[rec.filename]
 		if !present {
 			violations = append(violations, Violation{
@@ -60,6 +63,26 @@ func checkManifest(adrDir string, adrs []adr.ADR) ([]Violation, error) {
 				Message: fmt.Sprintf(
 					"%s: on-disk frozen-content hash %s does not match the hash recorded in %s (%s); the file changed without going through the constitution CLI",
 					a.ID, got, manifest.FileName, rec.hash,
+				),
+			})
+		}
+	}
+
+	// Reverse direction: an ADR present on disk but absent from the manifest.
+	// The forward loop above alone is one-directional — deleting an ADR's
+	// manifest line (whether a cheap tamper that hides an edit, or a benign
+	// hand-added ADR never regen'd) would otherwise pass silently. The
+	// manifest must enumerate every accepted ADR, so an unrecorded on-disk ADR
+	// is a manifest_mismatch. adrs is already filename-sorted (scanDir), so
+	// these append in a stable order.
+	for i := range adrs {
+		name := filepath.Base(adrs[i].Path)
+		if !recordedFiles[name] {
+			violations = append(violations, Violation{
+				Kind: KindManifestMismatch, ID: adrs[i].ID, File: rootRelFile(name),
+				Message: fmt.Sprintf(
+					"%s: present on disk but not recorded in %s; every accepted ADR must be recorded — run `constitution regen` (or the file was added out-of-band, or its manifest line was removed to hide an edit)",
+					adrs[i].ID, manifest.FileName,
 				),
 			})
 		}
@@ -85,11 +108,18 @@ func readManifest(adrDir string) ([]manifestRecord, error) {
 			continue
 		}
 		// internal/manifest.Render always writes "<hex>  <filename>" (two
-		// spaces, sha256sum-style); tolerate a lone stray line rather than
-		// fail the whole guard run on it.
+		// spaces, sha256sum-style). The manifest is machine-written, never
+		// hand-edited, so a line that does not parse is not a stray to
+		// tolerate — it is corruption or tampering, and the conservative
+		// posture for a could-not-run condition is exit 2, not silently
+		// dropping the line (which would let a deleted-and-garbled record slip
+		// an ADR out of the cross-check).
 		parts := strings.SplitN(line, "  ", 2)
 		if len(parts) != 2 {
-			continue
+			return nil, fmt.Errorf(
+				"guard: malformed line in %s: %q; the manifest is machine-written, so a line that does not match \"<sha256>  <filename>\" indicates corruption or tampering",
+				manifest.FileName, line,
+			)
 		}
 		recs = append(recs, manifestRecord{hash: parts[0], filename: parts[1]})
 	}

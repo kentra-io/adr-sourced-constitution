@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 
 	"github.com/urfave/cli/v3"
 
@@ -39,6 +40,13 @@ func guardCommand() *cli.Command {
 			&cli.BoolFlag{Name: "no-git", Usage: "skip git mode; run the manifest + id-uniqueness checks only"},
 			&cli.StringFlag{Name: "format", Value: "text", Usage: "output format: text|json"},
 		},
+		// A flag-parse/usage error (unknown flag, missing value) is a
+		// "could not run" condition, not "violations found": map it to exit 2
+		// like every other guard usage error, so a JSON consumer never reads a
+		// bare parse failure as exit 1 (plan §2.7 exit contract).
+		OnUsageError: func(_ context.Context, _ *cli.Command, err error, _ bool) error {
+			return &exitError{err: fmt.Errorf("guard: %w", err), code: guardExitCouldNotRun}
+		},
 		Action: func(_ context.Context, cmd *cli.Command) error {
 			return runGuard(cmd)
 		},
@@ -46,20 +54,46 @@ func guardCommand() *cli.Command {
 }
 
 func runGuard(cmd *cli.Command) error {
+	// Usage errors are "could not run" (exit 2), never "violations" (exit 1):
+	// a JSON consumer must be able to tell a bad invocation from a dirty log.
 	format := cmd.String("format")
 	if format != "text" && format != "json" {
-		return fmt.Errorf("guard: --format must be %q or %q (got %q)", "text", "json", format)
+		return &exitError{
+			err:  fmt.Errorf("guard: --format must be %q or %q (got %q)", "text", "json", format),
+			code: guardExitCouldNotRun,
+		}
+	}
+
+	base, mergeBase := cmd.String("base"), cmd.String("merge-base")
+	if base != "" && mergeBase != "" {
+		return &exitError{
+			err:  fmt.Errorf("guard: --base and --merge-base are mutually exclusive (--base pins an explicit ref; --merge-base computes one against a target — pick one)"),
+			code: guardExitCouldNotRun,
+		}
 	}
 
 	cwd, err := os.Getwd()
 	if err != nil {
-		return err
+		return &exitError{err: fmt.Errorf("guard: %w", err), code: guardExitCouldNotRun}
+	}
+
+	// Validate that cwd actually is a constitution project root before
+	// reporting anything: guard's Root is the current directory, and without
+	// this a run from a subdirectory (or anywhere with no project at all)
+	// scans zero ADRs and reports a false "clean". Require constitution.yml
+	// here. A project WITH constitution.yml but no ADRs yet is still
+	// legitimately clean — that case is handled downstream, not rejected here.
+	if _, err := os.Stat(filepath.Join(cwd, "constitution.yml")); err != nil {
+		return &exitError{
+			err:  fmt.Errorf("guard: no constitution.yml in %s; run guard from a constitution project root", cwd),
+			code: guardExitCouldNotRun,
+		}
 	}
 
 	opts := guard.Options{
 		Root:      cwd,
-		Base:      cmd.String("base"),
-		MergeBase: cmd.String("merge-base"),
+		Base:      base,
+		MergeBase: mergeBase,
 		NoGit:     cmd.Bool("no-git"),
 	}
 
@@ -72,14 +106,17 @@ func runGuard(cmd *cli.Command) error {
 		return &exitError{err: err, code: guardExitCouldNotRun}
 	}
 
+	// An output-write failure is a "could not run" condition (exit 2), not
+	// "violations found" (exit 1): a JSON consumer that got a truncated/failed
+	// write must not mistake it for a clean-vs-dirty signal.
 	stdout := cmd.Root().Writer
 	if format == "json" {
 		if err := writeGuardJSON(stdout, res); err != nil {
-			return err
+			return &exitError{err: fmt.Errorf("guard: writing JSON output: %w", err), code: guardExitCouldNotRun}
 		}
 	} else {
 		if err := writeGuardText(stdout, res); err != nil {
-			return err
+			return &exitError{err: fmt.Errorf("guard: writing output: %w", err), code: guardExitCouldNotRun}
 		}
 	}
 

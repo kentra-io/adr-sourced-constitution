@@ -92,6 +92,79 @@ func TestGuardJSONGolden(t *testing.T) {
 	}
 }
 
+// TestKindEnumLockstep holds three things in one enforced agreement (M4):
+// the Go enum (allKinds), the JSON-schema fixture's kind enum, and the golden
+// sample payload (sampleResult). Adding a 7th Kind without also extending the
+// schema enum AND adding a sample violation of that kind fails here — so the
+// machine contract (schema + golden bytes) can never silently drift behind the
+// code. Order-insensitive on purpose: the schema lists kinds in a fixed order,
+// but the guarantee is set-equality, not ordering.
+func TestKindEnumLockstep(t *testing.T) {
+	want := make(map[string]bool, len(allKinds))
+	for _, k := range allKinds {
+		want[string(k)] = true
+	}
+	if len(want) != len(allKinds) {
+		t.Fatalf("allKinds contains a duplicate: %v", allKinds)
+	}
+
+	t.Run("schema enum == allKinds", func(t *testing.T) {
+		got := schemaKindEnum(t)
+		if len(got) != len(want) {
+			t.Fatalf("schema kind enum has %d entries, allKinds has %d\n schema: %v\n allKinds: %v", len(got), len(want), got, allKinds)
+		}
+		for _, k := range got {
+			if !want[k] {
+				t.Errorf("schema kind enum lists %q, which is not in allKinds", k)
+			}
+		}
+	})
+
+	t.Run("sample payload covers exactly allKinds", func(t *testing.T) {
+		seen := map[string]bool{}
+		for _, v := range sampleResult().Violations {
+			if !want[string(v.Kind)] {
+				t.Errorf("sample payload carries kind %q not in allKinds", v.Kind)
+			}
+			seen[string(v.Kind)] = true
+		}
+		for k := range want {
+			if !seen[k] {
+				t.Errorf("sample payload is missing a violation of kind %q (every Kind must be exercised by the golden fixture)", k)
+			}
+		}
+	})
+}
+
+// schemaKindEnum reads the committed schema fixture and returns its
+// violation.kind enum as plain strings.
+func schemaKindEnum(t *testing.T) []string {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join("testdata", "guard.schema.json"))
+	if err != nil {
+		t.Fatalf("read schema: %v", err)
+	}
+	var doc struct {
+		Defs struct {
+			Violation struct {
+				Properties struct {
+					Kind struct {
+						Enum []string `json:"enum"`
+					} `json:"kind"`
+				} `json:"properties"`
+			} `json:"violation"`
+		} `json:"$defs"`
+	}
+	if err := json.Unmarshal(data, &doc); err != nil {
+		t.Fatalf("parse schema: %v", err)
+	}
+	enum := doc.Defs.Violation.Properties.Kind.Enum
+	if len(enum) == 0 {
+		t.Fatal("schema $defs.violation.properties.kind.enum is empty or unreadable")
+	}
+	return enum
+}
+
 // loadSchema compiles the committed JSON Schema fixture once.
 func loadSchema(t *testing.T) *jsonschema.Schema {
 	t.Helper()

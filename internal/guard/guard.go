@@ -44,6 +44,16 @@
 // layout (constitution/ inside a subdirectory of a larger git repo) is
 // out of scope for v1 and produces a clear error rather than silently
 // computing paths relative to the wrong root.
+//
+// # What guard does NOT check
+//
+// Referential integrity of the supersedes/superseded-by links (a
+// superseded-by pointing at an ADR id that does not exist, a supersedes
+// backlink with no matching forward link) is deliberately NOT guard's
+// concern in v1: it is the write path's invariant, established and held by
+// the mutating commands (`supersede`/`deprecate`) at the moment they write
+// the link, not re-verified here. guard's remit is out-of-band *mutation* of
+// already-accepted content, not link well-formedness.
 package guard
 
 import (
@@ -65,6 +75,21 @@ const (
 	KindManifestMismatch   Kind = "manifest_mismatch"
 	KindIDCollision        Kind = "id_collision"
 )
+
+// allKinds is the frozen enum plan §2.7 pins, as data: every Kind guard may
+// ever emit, in schema order. It is the single source the JSON-schema
+// fixture's `kind` enum and the all-kinds golden payload are held in lockstep
+// with (see json_test.go's TestKindEnumLockstep) — adding a 7th Kind without
+// updating the schema and the golden sample fails that test, so the machine
+// contract cannot drift out from under a consumer.
+var allKinds = []Kind{
+	KindFrozenFieldChanged,
+	KindBodyChanged,
+	KindFileDeleted,
+	KindFileRenamed,
+	KindManifestMismatch,
+	KindIDCollision,
+}
 
 // Violation is one detected illegal mutation, citing the ADR id and the
 // file(s) involved (plan §2.7: "each citing the ADR id"). Fields unused by
