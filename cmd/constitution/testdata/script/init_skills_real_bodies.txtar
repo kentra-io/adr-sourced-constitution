@@ -1,0 +1,25 @@
+# init on a scratch repo must fan out the REAL M5 skill bodies (not the M4
+# stubs) into every configured tree. Grep a distinctive phrase per skill in
+# each of .claude / .agents / .cursor, and prove the stub marker is gone.
+
+env CONSTITUTION_TODAY=2026-07-01
+
+exec constitution init --target claude --consent off --principle 'Prefer boring technology'
+stdout 'constitution ready'
+
+# Fanned into all three trees by default.
+exists .claude/skills/constitution-gov/SKILL.md
+exists .agents/skills/adr-draft/SKILL.md
+exists .cursor/skills/plan-gate/SKILL.md
+
+# Real bodies present (distinctive phrase per skill), stubs gone.
+grep 'Priority hierarchy \(highest wins\)' .claude/skills/constitution-gov/SKILL.md
+grep 'The consent checkpoint' .claude/skills/adr-draft/SKILL.md
+grep 'Check a plan against this repo' .claude/skills/plan-gate/SKILL.md
+grep 'Bootstrap this repository' .claude/skills/constitution-init/SKILL.md
+! grep 'Placeholder skill body' .claude/skills/constitution-gov/SKILL.md
+! grep 'Placeholder skill body' .agents/skills/adr-draft/SKILL.md
+! grep 'Placeholder skill body' .cursor/skills/plan-gate/SKILL.md
+
+# The always-on governance skill force-inlines the constitution generically.
+grep 'cat constitution/constitution.md' .cursor/skills/constitution-gov/SKILL.md

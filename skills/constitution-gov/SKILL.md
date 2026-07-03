@@ -3,8 +3,53 @@ name: constitution-gov
 description: Governs how the constitution is used — append-only log, consult-before-planning, amendments only via an ADR under the consent policy. Force-inlines the active constitution into context so governance does not depend on pointer compliance. Applies whenever planning or proposing changes in a governed repo.
 ---
 
-# constitution-gov (stub)
+# constitution-gov
 
-Placeholder skill body. M4 ships this stub with valid frontmatter only; the
-real governance rules and constitution force-inlining (plan §6) are authored
-in M5. Do not rely on this body for behavior yet.
+This repository is governed by a **constitution**: an append-only log of
+architectural decision records (ADRs) under `constitution/adr/`, projected into
+`constitution/constitution.md`. That projection is the ruling authority for how
+work here is planned and built. Load it into context now:
+
+```
+cat constitution/constitution.md
+```
+
+Do this at the start of every planning or architectural task, even if a pointer
+already imported it — reading it directly is how you stay governed regardless of
+which agent framework you are running under.
+
+## Priority hierarchy (highest wins)
+
+1. **The constitution** (`constitution/constitution.md`). Every active rule in
+   it is binding and cites an `ADR-NNNN`.
+2. **The human's current instruction**, when it conflicts with a rule — but
+   surface the conflict first (see "Amending" below); do not silently break a
+   rule to satisfy a request.
+3. **Inferred conventions** (what the surrounding code seems to do). These lose
+   to the constitution every time. If the codebase drifts from a rule, the rule
+   is right and the code is the bug.
+
+## Non-negotiable rules
+
+- **The ADR log is append-only.** Never hand-edit a file under
+  `constitution/adr/`, and never edit `constitution/constitution.md` — it is a
+  generated projection. The only permitted change to an accepted ADR is its
+  `status:` / `superseded-by:` line, and only the `constitution` CLI may make
+  it. Editing these files directly corrupts the log; a `constitution guard` run
+  will flag it.
+- **Consult before deciding.** Before proposing a plan, an architecture, or a
+  design change, check the constitution for a rule that already governs it. Cite
+  the `ADR-NNNN` you are relying on when you do.
+- **Amend only through the flow.** If a rule is wrong or in the way, you do not
+  override it and you do not edit it. You propose a new ADR (the `adr-draft`
+  skill) that supersedes it, and the human approves that write under the
+  project's consent policy. Amendment is a governed act, never an edit.
+
+## Why it works this way
+
+Rules live in individual, immutable decision records so their history and
+rationale survive; `constitution.md` is only a view of the currently-active set.
+That is why edits go through the CLI (it preserves the append-only log and
+re-renders the view) and why amendments are new records, not rewrites: the
+question "why is this a rule, and what did it replace?" must always be
+answerable from the log.
