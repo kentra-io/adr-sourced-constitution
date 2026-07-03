@@ -34,7 +34,7 @@ ADR-0008 · 2026-07-03
 
 ### Fix the deviation.json contract as SARIF-shaped and CLI-validated
 
-Fix the deviation.json contract as a SARIF-shaped JSON (fields: generatedAt, constitutionHash, plan, deviations[], summary) using the CRITICAL/HIGH/MEDIUM/LOW severity vocabulary; every deviation cites a required `adrId`. Default output `./deviation.json`. Validation is CLI-owned via the hidden `constitution deviation validate <path>` verb (exit 0 valid / 1 invalid / 2 could-not-run): it schema-checks the report, confirms every adrId exists in the log and the summary counts tally, and advises (HIGH, non-fatal) when constitutionHash no longer matches constitution.md.
+Fix the deviation.json contract as a SARIF-shaped JSON (fields: generatedAt, constitutionHash, plan, deviations[], summary) using the CRITICAL/HIGH/MEDIUM/LOW severity vocabulary; every deviation cites a required `adrId`. Default output `./deviation.json`. Validation is CLI-owned via the hidden `constitution deviation validate <path>` verb (exit 0 valid / 1 invalid / 2 could-not-run): it schema-checks the report, confirms every adrId cites an active ADR in the log and the summary counts tally, and advises (HIGH, non-fatal) when constitutionHash no longer matches constitution.md.
 
 ADR-0009 · 2026-07-03
 

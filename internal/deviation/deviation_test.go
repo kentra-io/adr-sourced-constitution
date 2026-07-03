@@ -109,6 +109,59 @@ func TestValidateUnknownADRID(t *testing.T) {
 	}
 }
 
+func TestValidateSupersededADRIDIsInactive(t *testing.T) {
+	// A two-ADR fixture: ADR-0002 supersedes ADR-0001, so ADR-0001 is no
+	// longer in force. A deviation citing the superseded ADR must fail — the
+	// gate may only measure a plan against active rules — and the error must
+	// name the ADR's actual status.
+	root := t.TempDir()
+	mustWrite(t, filepath.Join(root, "constitution.yml"),
+		"schemaVersion: 1\nconsent:\n  policy: off\nsourceTracking:\n  type: none\ncategories:\n  - architecture\n")
+
+	adrDir := filepath.Join(root, "constitution", "adr")
+	if err := os.MkdirAll(adrDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	mustWrite(t, filepath.Join(adrDir, "ADR-0001-first-rule.md"),
+		"---\nid: ADR-0001\ntitle: First rule\ncategory: architecture\ndate: 2026-07-01\nstatus: superseded\nsuperseded-by: ADR-0002\n---\n\n"+
+			"## Context and Problem Statement\n\nc\n\n## Considered Options\n\n- A\n- B\n\n## Decision Outcome\n\nAdopt A.\n")
+	mustWrite(t, filepath.Join(adrDir, "ADR-0002-second-rule.md"),
+		"---\nid: ADR-0002\ntitle: Second rule\ncategory: architecture\ndate: 2026-07-02\nstatus: accepted\nsupersedes: ADR-0001\n---\n\n"+
+			"## Context and Problem Statement\n\nc\n\n## Considered Options\n\n- A\n- B\n\n## Decision Outcome\n\nAdopt B.\n")
+	mustWrite(t, filepath.Join(root, "constitution", "constitution.md"),
+		"# Constitution\n\n## Architecture\n\n### Second rule\n\nAdopt B.\n")
+
+	hash, err := ConstitutionHash(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data := report(hash,
+		[]Deviation{dev("D-001", "ADR-0001", "HIGH")},
+		Summary{High: 1})
+
+	res, err := Validate(root, data)
+	if err != nil {
+		t.Fatalf("could not run: %v", err)
+	}
+	if res.Valid() {
+		t.Fatal("want invalid: a citation to a superseded ADR must fail")
+	}
+	if !containsSubstr(res.Errors, "ADR-0001 is superseded") ||
+		!containsSubstr(res.Errors, "deviations must cite active ADRs") {
+		t.Fatalf("error should name the superseded status: %v", res.Errors)
+	}
+
+	// A citation to the active ADR-0002 is fine.
+	ok := report(hash, []Deviation{dev("D-001", "ADR-0002", "HIGH")}, Summary{High: 1})
+	res, err = Validate(root, ok)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.Valid() {
+		t.Fatalf("citing the active ADR should validate: %v", res.Errors)
+	}
+}
+
 func TestValidateDuplicateDeviationID(t *testing.T) {
 	root, hash := scratchProject(t)
 	data := report(hash,

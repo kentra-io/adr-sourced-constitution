@@ -6,6 +6,6 @@ fc0a95c3867e3a8a79d14e4e0048a8bd33a7455715a478c502de08f4378500f9  ADR-0003-media
 2cb973b2483c6179ab3891deb14e556002a5afca55ff4e3c0363cc2109831265  ADR-0006-allocate-sequential-ids-with-a-renumber-escape-hatch.md
 d61aa5937eca3bdd1324cd910345ac0840afafcde20747dec4de8ba37492ff8f  ADR-0007-guard-the-log-with-git-and-advisory-manifest-modes.md
 809dd1d6a6d425b22155ad318add341fdbdeabd664e60745ad3d3ab29dd16f10  ADR-0008-type-the-source-ref-contract-in-config.md
-b16b776b05d20807b0672716f7bdc170fb28606812a6a074d3475741a9464bfe  ADR-0009-fix-the-deviation-json-contract-as-sarif-shaped-and-cli-validated.md
+47881c18b0403a0fa50c7aa9123023a37f1f20dd1c5905690d03215eca5f1f7d  ADR-0009-fix-the-deviation-json-contract-as-sarif-shaped-and-cli-validated.md
 339f4e229ea44d09fad5cc9749f0d89e45005dfd6b683532997ee5243acad078  ADR-0010-keep-project-config-in-a-versioned-root-constitution-yml.md
 8894e51555a06c582c80da200cf8b549ec64a810704d00fa52a3e64320d33ce0  ADR-0011-pin-the-byte-fidelity-stack-for-deterministic-projection.md

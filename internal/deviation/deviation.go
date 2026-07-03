@@ -12,10 +12,11 @@
 //     (deviation.schema.json, embedded here and copied to docs/). Required
 //     fields, the severity/recommendation enums, and the D-NNN / ADR-NNNN id
 //     shapes are all schema-enforced.
-//  2. Semantic — every deviation's adrId matches an ADR in the live log
-//     (the citation is the governance primitive, so a citation to a
-//     nonexistent ADR is a hard failure), deviation ids are unique, and the
-//     summary counts tally exactly with the per-severity totals.
+//  2. Semantic — every deviation's adrId matches an ACTIVE (accepted) ADR in
+//     the live log (the citation is the governance primitive, so a citation to
+//     a nonexistent ADR — or to a superseded/deprecated one that is no longer
+//     in force — is a hard failure), deviation ids are unique, and the summary
+//     counts tally exactly with the per-severity totals.
 //  3. Staleness (advisory) — constitutionHash is compared against the
 //     current constitution/constitution.md. A mismatch is a HIGH-severity
 //     advisory, not a failure: the report is structurally sound, it is just
@@ -165,11 +166,11 @@ func Validate(root string, data []byte) (Result, error) {
 	}
 
 	// --- 2. semantic ---
-	known, err := knownADRIDs(root)
+	statuses, err := adrStatuses(root)
 	if err != nil {
 		return Result{}, err
 	}
-	res.Errors = append(res.Errors, semanticErrors(rep, known)...)
+	res.Errors = append(res.Errors, semanticErrors(rep, statuses)...)
 
 	// --- 3. staleness (advisory) ---
 	expected, err := ConstitutionHash(root)
@@ -257,9 +258,11 @@ func instancePointer(segments []string) string {
 }
 
 // semanticErrors checks the citation and tally invariants the schema cannot
-// express: every adrId names a real ADR, deviation ids are unique, and the
-// summary counts match the per-severity totals.
-func semanticErrors(rep Report, known map[string]bool) []string {
+// express: every adrId names an ACTIVE (accepted) ADR — a citation to a
+// superseded or deprecated rule is a hard failure, since the plan-gate must
+// only measure a plan against rules still in force — deviation ids are
+// unique, and the summary counts match the per-severity totals.
+func semanticErrors(rep Report, statuses map[string]adr.Status) []string {
 	var errs []string
 
 	seen := map[string]bool{}
@@ -271,10 +274,14 @@ func semanticErrors(rep Report, known map[string]bool) []string {
 		}
 		seen[d.ID] = true
 
-		if !known[d.ADRID] {
+		if status, ok := statuses[d.ADRID]; !ok {
 			errs = append(errs, fmt.Sprintf(
 				"%s: adrId %q does not match any ADR in the log; every deviation must cite a real active rule",
 				where, d.ADRID))
+		} else if status != adr.StatusAccepted {
+			errs = append(errs, fmt.Sprintf(
+				"deviations[%d].adrId: %s is %s (deviations must cite active ADRs)",
+				i, d.ADRID, status))
 		}
 
 		switch d.Severity {
@@ -301,10 +308,11 @@ func fmtSummary(s Summary) string {
 	return fmt.Sprintf("{critical:%d high:%d medium:%d low:%d}", s.Critical, s.High, s.Medium, s.Low)
 }
 
-// knownADRIDs returns the set of ADR ids in the live log. A read failure is a
-// could-not-run condition (the validator cannot confirm citations without the
-// log).
-func knownADRIDs(root string) (map[string]bool, error) {
+// adrStatuses maps each ADR id in the live log to its lifecycle status, so the
+// semantic check can require a citation to point at an ACTIVE (accepted) rule.
+// A read failure is a could-not-run condition (the validator cannot confirm
+// citations without the log).
+func adrStatuses(root string) (map[string]adr.Status, error) {
 	adrDir := filepath.Join(root, "constitution", "adr")
 	adrs, err := adr.ParseDir(adrDir)
 	if err != nil {
@@ -313,11 +321,11 @@ func knownADRIDs(root string) (map[string]bool, error) {
 		}
 		return nil, fmt.Errorf("deviation: reading the ADR log: %w", err)
 	}
-	ids := make(map[string]bool, len(adrs))
+	statuses := make(map[string]adr.Status, len(adrs))
 	for _, a := range adrs {
-		ids[a.ID] = true
+		statuses[a.ID] = a.Status
 	}
-	return ids, nil
+	return statuses, nil
 }
 
 // ConstitutionHash computes the canonical sha256 of the on-disk
