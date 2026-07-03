@@ -2,11 +2,14 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/rogpeppe/go-internal/testscript"
@@ -42,8 +45,37 @@ func TestScripts(t *testing.T) {
 			// contract needs 1 (violations) told apart from 2 (could not run),
 			// so this is how the e2e suite asserts the exact code.
 			"exitcode": cmdExitcode,
+			// injecthash <jsonfile> replaces the literal token __HASH__ in
+			// <jsonfile> with "sha256:<hex>" of constitution/constitution.md,
+			// so a deviation-validate e2e can build a report whose
+			// constitutionHash actually matches the rendered projection without
+			// depending on a platform sha256 binary. This mirrors the plan-gate
+			// skill's real loop (fill the hash the validator reports).
+			"injecthash": cmdInjecthash,
 		},
 	})
+}
+
+func cmdInjecthash(ts *testscript.TestScript, neg bool, args []string) {
+	if neg || len(args) != 1 {
+		ts.Fatalf("usage: injecthash <jsonfile>")
+	}
+	md, err := os.ReadFile(ts.MkAbs("constitution/constitution.md"))
+	if err != nil {
+		ts.Fatalf("injecthash: reading constitution.md: %v", err)
+	}
+	sum := sha256.Sum256(md)
+	hash := "sha256:" + hex.EncodeToString(sum[:])
+
+	target := ts.MkAbs(args[0])
+	data, err := os.ReadFile(target)
+	if err != nil {
+		ts.Fatalf("injecthash: reading %s: %v", args[0], err)
+	}
+	out := strings.ReplaceAll(string(data), "__HASH__", hash)
+	if err := os.WriteFile(target, []byte(out), 0o644); err != nil {
+		ts.Fatalf("injecthash: writing %s: %v", args[0], err)
+	}
 }
 
 func cmdExitcode(ts *testscript.TestScript, neg bool, args []string) {
