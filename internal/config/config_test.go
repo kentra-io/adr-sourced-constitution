@@ -20,7 +20,7 @@ func TestLoadValid(t *testing.T) {
 	path := write(t, `
 schemaVersion: 1
 agentInstructions:
-  targets: [claude-md, agents-md]
+  targets: [claude, agents]
 consent:
   policy: strict
 sourceTracking:
@@ -109,6 +109,16 @@ func TestLoadInvalid(t *testing.T) {
 			name:    "bad sourceTracking type",
 			content: "schemaVersion: 1\ncategories: [architecture]\nsourceTracking:\n  type: trello\n",
 			wantErr: `field "sourceTracking.type": must be one of "none", "generic", "github-issue", "jira" (got "trello")`,
+		},
+		{
+			name:    "unknown agentInstructions target",
+			content: "schemaVersion: 1\ncategories: [architecture]\nagentInstructions:\n  targets: [claude, claude-md]\n",
+			wantErr: `field "agentInstructions.targets": unknown target "claude-md" (allowed: "claude", "agents")`,
+		},
+		{
+			name:    "unknown skills tree",
+			content: "schemaVersion: 1\ncategories: [architecture]\nskills:\n  trees: [claude, vscode]\n",
+			wantErr: `field "skills.trees": unknown skills tree "vscode" (allowed: "claude", "agents", "cursor")`,
 		},
 	}
 

@@ -97,6 +97,17 @@ var validSourceTrackingTypes = map[string]bool{
 	SourceTrackingJira:        true,
 }
 
+var validTargets = map[string]bool{
+	TargetClaude: true,
+	TargetAgents: true,
+}
+
+var validSkillTrees = map[string]bool{
+	SkillTreeClaude: true,
+	SkillTreeAgents: true,
+	SkillTreeCursor: true,
+}
+
 // Load reads and validates constitution.yml at path.
 func Load(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
@@ -155,6 +166,24 @@ func (c *Config) validate(path string) error {
 			SourceTrackingNone, SourceTrackingGeneric, SourceTrackingGitHubIssue, SourceTrackingJira,
 			c.SourceTracking.Type,
 		)
+	}
+
+	for _, t := range c.AgentInstructions.Targets {
+		if !validTargets[t] {
+			return fmt.Errorf(
+				"%s: field %q: unknown target %q (allowed: %q, %q)",
+				path, "agentInstructions.targets", t, TargetClaude, TargetAgents,
+			)
+		}
+	}
+
+	for _, tr := range c.Skills.Trees {
+		if !validSkillTrees[tr] {
+			return fmt.Errorf(
+				"%s: field %q: unknown skills tree %q (allowed: %q, %q, %q)",
+				path, "skills.trees", tr, SkillTreeClaude, SkillTreeAgents, SkillTreeCursor,
+			)
+		}
 	}
 
 	return nil
