@@ -65,8 +65,8 @@ isolating it keeps that guarantee structural.
    ```
 
    Rules for a valid report:
-   - Every deviation **must** cite an `adrId` that exists in the log — the
-     citation is the whole point.
+   - Every deviation **must** cite the `adrId` of an active (accepted) ADR —
+     the citation is the whole point; superseded/deprecated rules are rejected.
    - Severity is one of `CRITICAL | HIGH | MEDIUM | LOW`; `recommendation` is
      `conform` or `amend`.
    - `summary` counts must equal the actual per-severity totals.
@@ -101,4 +101,4 @@ isolating it keeps that guarantee structural.
 - Never edit the plan, the ADR log, or `constitution.md` from this skill.
 - Never present a `deviation.json` you have not run through
   `constitution deviation validate` successfully.
-- Never invent an `adrId`; only cite rules that are actually in the log.
+- Never invent an `adrId`; only cite rules that are active in the log.

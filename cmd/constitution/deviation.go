@@ -41,7 +41,7 @@ func deviationValidateCommand() *cli.Command {
 		ArgsUsage: "<path>",
 		Description: "Checks a deviation.json report (spec §8b, plan §2.9): it must be\n" +
 			"structurally valid against the deviation schema, every deviation's adrId\n" +
-			"must cite an ADR that exists in the log, deviation ids must be unique, and\n" +
+			"must cite an active ADR in the log, deviation ids must be unique, and\n" +
 			"the summary counts must tally with the deviations. constitutionHash is\n" +
 			"checked against constitution/constitution.md as an ADVISORY: a mismatch is\n" +
 			"a HIGH-severity staleness warning on stderr, not a failure.\n\n" +

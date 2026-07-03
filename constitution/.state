@@ -7,7 +7,7 @@ managed:
     - path: .agents/skills/constitution-init/SKILL.md
       hash: 2207abb9b4c8dbb6272a271fcd5ae7e6fb6fbe16abd287e3e5fb90b36d73ce19
     - path: .agents/skills/plan-gate/SKILL.md
-      hash: 6303080b82d0a1ac60a16110ae4705c29092138b48546886156534436553c483
+      hash: f25bef7f4b19e8738bba439af2db93fbfed76188e33ad936e3d47daabb02a01f
     - path: .claude/skills/adr-draft/SKILL.md
       hash: 5bf9a605f76def6c25df744924d8937ca7c9e57cf43f9b4fccca8ade4a9f1a9a
     - path: .claude/skills/constitution-gov/SKILL.md
@@ -15,7 +15,7 @@ managed:
     - path: .claude/skills/constitution-init/SKILL.md
       hash: 2207abb9b4c8dbb6272a271fcd5ae7e6fb6fbe16abd287e3e5fb90b36d73ce19
     - path: .claude/skills/plan-gate/SKILL.md
-      hash: 6303080b82d0a1ac60a16110ae4705c29092138b48546886156534436553c483
+      hash: f25bef7f4b19e8738bba439af2db93fbfed76188e33ad936e3d47daabb02a01f
     - path: .cursor/skills/adr-draft/SKILL.md
       hash: 5bf9a605f76def6c25df744924d8937ca7c9e57cf43f9b4fccca8ade4a9f1a9a
     - path: .cursor/skills/constitution-gov/SKILL.md
@@ -23,7 +23,7 @@ managed:
     - path: .cursor/skills/constitution-init/SKILL.md
       hash: 2207abb9b4c8dbb6272a271fcd5ae7e6fb6fbe16abd287e3e5fb90b36d73ce19
     - path: .cursor/skills/plan-gate/SKILL.md
-      hash: 6303080b82d0a1ac60a16110ae4705c29092138b48546886156534436553c483
+      hash: f25bef7f4b19e8738bba439af2db93fbfed76188e33ad936e3d47daabb02a01f
     - path: AGENTS.md
       hash: 7f39bbdc0f1f4a893ce0ec93d115b48c04cabad60cdd5615076e53a66ca96e30
     - path: CLAUDE.md
