@@ -8,6 +8,8 @@
 // rewrite).
 package adr
 
+import "strings"
+
 // Status is an ADR's lifecycle state (spec §5). "proposed"/"rejected"
 // never appear in the store — proposals are ephemeral and live only in
 // conversation until accepted (spec §5.1) — so those are not modeled here.
@@ -32,9 +34,19 @@ var MandatorySections = []string{
 	"Decision Outcome",
 }
 
-// DecisionOutcomeSection is the body heading whose content the projection
-// renders as the rule text (spec §6 step 4).
+// DecisionOutcomeSection is the mandatory MADR body heading carrying the
+// decision content. Since M5.5 (plan §2.12) it is no longer what the
+// projection renders — RuleSection is — but it remains mandatory on every
+// ADR (MADR v4; erratum #1).
 const DecisionOutcomeSection = "Decision Outcome"
+
+// RuleSection is the optional body heading whose presence makes an ADR
+// rule-bearing (plan §2.12). Its content — a short normative statement — is
+// what the constitution projection renders verbatim. An ADR without a Rule
+// section is a catalog-only record: it stays in the log and never projects.
+// An empty/whitespace-only Rule section is a validation error, so a present
+// Rule section always carries content.
+const RuleSection = "Rule"
 
 // ADR is the parsed, validated in-memory model of one ADR record (spec
 // §4.1). Body + all frontmatter except Status/SupersededBy are immutable
@@ -58,4 +70,18 @@ type ADR struct {
 	SectionOrder []string
 
 	Path string // source file path, for error messages and diagnostics
+}
+
+// IsRuleBearing reports whether this ADR carries a non-empty "## Rule"
+// section (plan §2.12). Only rule-bearing ADRs project into constitution.md;
+// the parser guarantees a present Rule section is non-empty, so presence in
+// Sections implies rule-bearing.
+func (a *ADR) IsRuleBearing() bool {
+	return a.Rule() != ""
+}
+
+// Rule returns the trimmed content of the ADR's "## Rule" section, or "" when
+// the ADR is a catalog-only record with no Rule section.
+func (a *ADR) Rule() string {
+	return strings.TrimSpace(a.Sections[RuleSection])
 }

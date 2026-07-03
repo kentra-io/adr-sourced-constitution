@@ -24,8 +24,8 @@ type CategorySection struct {
 }
 
 // ActiveSet returns the ADRs with status "accepted" — spec §5/§6: the
-// active set the projection renders; superseded/deprecated ADRs are
-// dropped (their metadata still parses, they're just excluded here).
+// active set; superseded/deprecated ADRs are dropped (their metadata still
+// parses, they're just excluded here).
 func ActiveSet(adrs []adr.ADR) []adr.ADR {
 	active := make([]adr.ADR, 0, len(adrs))
 	for _, a := range adrs {
@@ -34,6 +34,19 @@ func ActiveSet(adrs []adr.ADR) []adr.ADR {
 		}
 	}
 	return active
+}
+
+// RuleBearing filters to the ADRs that carry a "## Rule" section — the
+// curated read model (plan §2.12): only rule-bearing active ADRs project into
+// constitution.md; catalog-only records stay in the log alone.
+func RuleBearing(adrs []adr.ADR) []adr.ADR {
+	out := make([]adr.ADR, 0, len(adrs))
+	for i := range adrs {
+		if adrs[i].IsRuleBearing() {
+			out = append(out, adrs[i])
+		}
+	}
+	return out
 }
 
 // ValidateCategories hard-errors on any ADR (active or not — the log is a
@@ -82,7 +95,7 @@ func Render(cfg *config.Config, adrs []adr.ADR) ([]byte, error) {
 	if err := ValidateCategories(cfg, adrs); err != nil {
 		return nil, err
 	}
-	sections := Group(cfg, ActiveSet(adrs))
+	sections := Group(cfg, RuleBearing(ActiveSet(adrs)))
 	return renderTemplate(sections)
 }
 

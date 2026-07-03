@@ -4,8 +4,9 @@
 
 env CONSTITUTION_TODAY=2026-07-01
 
-# Build a live project: one ADR (ADR-0001) and a rendered constitution.md.
-exec constitution adr new --title 'First rule' --category architecture --body-file body.md
+# Build a live project: one rule-bearing ADR (ADR-0001) and a rendered
+# constitution.md. Deviations may only cite rule-bearing ADRs (plan §2.12).
+exec constitution adr new --title 'First rule' --category architecture --body-file body.md --rule 'Adopt the rule.'
 exists constitution/constitution.md
 
 # --- valid: matching hash, real adrId, tallying summary -> exit 0, no advisory
@@ -34,6 +35,14 @@ stderr 'at /deviations/0/severity: value must be one of .CRITICAL., .HIGH., .MED
 injecthash unknown_adr.json
 exitcode 1 constitution deviation validate unknown_adr.json
 stderr 'adrId "ADR-9999" does not match any ADR in the log'
+
+# --- invalid: cites an active-but-record-only ADR (plan §2.12) -> exit 1.
+# ADR-0002 is accepted but has no ## Rule, so it never appears in
+# constitution.md; a deviation cannot cite it.
+exec constitution adr new --title 'A record' --category architecture --body-file body.md
+injecthash record_adr.json
+exitcode 1 constitution deviation validate record_adr.json
+stderr 'ADR-0002 is a record-only ADR'
 
 # --- invalid: summary counts do not tally (semantic) -> exit 1
 injecthash bad_counts.json
@@ -108,3 +117,9 @@ Adopt the rule.
  "deviations":[{"id":"D-001","adrId":"ADR-0001","severity":"HIGH","rule":"r",
    "location":{"file":"p"},"summary":"s","recommendation":"conform"}],
  "summary":{"critical":5,"high":0,"medium":0,"low":0}}
+
+-- record_adr.json --
+{"generatedAt":"x","constitutionHash":"__HASH__","plan":"p",
+ "deviations":[{"id":"D-001","adrId":"ADR-0002","severity":"LOW","rule":"r",
+   "location":{"file":"p"},"summary":"s","recommendation":"amend"}],
+ "summary":{"critical":0,"high":0,"medium":0,"low":1}}

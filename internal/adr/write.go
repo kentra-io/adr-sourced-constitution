@@ -63,8 +63,32 @@ func ValidID(id string) bool {
 // read" can never drift apart. file is used only for the error's location.
 func ValidateBody(body []byte, file string) error {
 	body = normalize(body)
-	sections, _ := ExtractSections(body)
-	return validateSections(sections, MandatorySections, file)
+	sections, order := ExtractSections(body)
+	if err := validateSections(sections, MandatorySections, file); err != nil {
+		return err
+	}
+	return validateRuleSection(sections, order, file)
+}
+
+// HasRuleSection reports whether a MADR body already carries a "## Rule"
+// section. The write path uses it to reject supplying both --rule and a
+// body-file that already carries its own Rule section (plan §2.12).
+func HasRuleSection(body []byte) bool {
+	sections, _ := ExtractSections(normalize(body))
+	_, present := sections[RuleSection]
+	return present
+}
+
+// AppendRuleSection appends a "## Rule" section carrying rule as the LAST
+// body section (plan §2.12: the CLI composes --rule at the canonical last
+// position). The body is normalized and its trailing blank lines trimmed so
+// the composed section is separated by exactly one blank line. An
+// empty/whitespace rule composes to an empty section that ValidateBody then
+// rejects — the CLI never writes it.
+func AppendRuleSection(body []byte, rule string) []byte {
+	base := strings.TrimRight(normalizeToString(string(body)), "\n")
+	stmt := strings.TrimSpace(normalizeToString(rule))
+	return []byte(base + "\n\n## " + RuleSection + "\n\n" + stmt + "\n")
 }
 
 // NewADR is the input to Compose: the fields a freshly accepted ADR needs.

@@ -7,8 +7,12 @@ description: Governs how the constitution is used — append-only log, consult-b
 
 This repository is governed by a **constitution**: an append-only log of
 architectural decision records (ADRs) under `constitution/adr/`, projected into
-`constitution/constitution.md`. That projection is the ruling authority for how
-work here is planned and built. Load it into context now:
+`constitution/constitution.md`. The projection is **curated** — it renders only
+the ADRs that carry a standing rule (a `## Rule` section). Point-in-time records
+stay in the log as history but are deliberately absent from the constitution, so
+the ruling document reads as a concise rulebook, not a decision archive. That
+projection is the ruling authority for how work here is planned and built. Load
+it into context now:
 
 ```
 cat constitution/constitution.md
@@ -48,8 +52,10 @@ which agent framework you are running under.
 ## Why it works this way
 
 Rules live in individual, immutable decision records so their history and
-rationale survive; `constitution.md` is only a view of the currently-active set.
-That is why edits go through the CLI (it preserves the append-only log and
-re-renders the view) and why amendments are new records, not rewrites: the
-question "why is this a rule, and what did it replace?" must always be
-answerable from the log.
+rationale survive; `constitution.md` is only a view of the currently-active,
+rule-bearing set. Not every decision is a rule — a decision that establishes no
+standing constraint is recorded in the log without a `## Rule` section and never
+projects, keeping the constitution a tight list of what actually governs. That
+is why edits go through the CLI (it preserves the append-only log and re-renders
+the view) and why amendments are new records, not rewrites: the question "why is
+this a rule, and what did it replace?" must always be answerable from the log.

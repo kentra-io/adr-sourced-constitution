@@ -14,8 +14,9 @@ exists constitution/adr/.manifest.sha256
 exec constitution adr new --title 'Use trunk based development' --category process --body-file body-b.md
 stdout 'created .*ADR-0002-use-trunk-based-development\.md'
 
-# --- supersede ADR-0001 (new ADR gets supersedes:, old flips to superseded) ---
-exec constitution supersede ADR-0001 --title 'Refined event sourcing' --body-file body-c.md
+# --- supersede ADR-0001 (new ADR gets supersedes:, old flips to superseded).
+# The superseding ADR is made rule-bearing via --rule, so it projects. ---
+exec constitution supersede ADR-0001 --title 'Refined event sourcing' --body-file body-c.md --rule 'Use a refined event-sourced log.'
 stdout 'superseded ADR-0001'
 exists constitution/adr/ADR-0003-refined-event-sourcing.md
 grep 'status: superseded' constitution/adr/ADR-0001-model-as-an-event-sourced-log.md
@@ -99,7 +100,8 @@ Use a refined event-sourced log.
 <!--
   GENERATED FILE -- projection of the ADR log in constitution/adr/.
   Do not hand-edit; changes will be overwritten by the next "constitution
-  regen". To change a rule, add, supersede, or deprecate an ADR instead.
+  regen". Only rule-bearing (## Rule) active ADRs project here; to change a
+  rule, add, supersede, or deprecate an ADR instead.
 -->
 
 # Constitution

@@ -21,3 +21,7 @@ systems; that's hard to eyeball-review.
 
 Every change to the projection ships a golden fixture asserting the
 exact rendered bytes.
+
+## Rule
+
+Every projection change ships a byte-exact golden fixture.

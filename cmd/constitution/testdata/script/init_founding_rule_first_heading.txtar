@@ -1,0 +1,21 @@
+# '## Rule' may not be the FIRST heading of a founding file: "Rule" is a
+# reserved section name, not a principle title. This is a could-not-run error
+# (exit 2) that shows the expected structure. Nothing is seeded. Locks the
+# contract (implementation-plan §8).
+
+env CONSTITUTION_TODAY=2026-07-02
+
+exitcode 2 constitution init --founding-file principles.md --founding-category architecture --category architecture
+stderr '"## Rule" may not be the first heading: "Rule" is a reserved section name, not a principle title; a founding file is one principle per "## " heading, with an optional nested "## Rule" beneath each'
+
+# no founding ADR was seeded
+! exists constitution/adr/ADR-0001-rule.md
+
+-- principles.md --
+## Rule
+
+Some rule text.
+
+## Real Principle
+
+The body.

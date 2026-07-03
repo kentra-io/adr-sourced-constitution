@@ -24,7 +24,7 @@ func scratchProject(t *testing.T) (root, hash string) {
 	}
 	mustWrite(t, filepath.Join(adrDir, "ADR-0001-first-rule.md"),
 		"---\nid: ADR-0001\ntitle: First rule\ncategory: architecture\ndate: 2026-07-01\nstatus: accepted\n---\n\n"+
-			"## Context and Problem Statement\n\nc\n\n## Considered Options\n\n- A\n- B\n\n## Decision Outcome\n\nAdopt A.\n")
+			"## Context and Problem Statement\n\nc\n\n## Considered Options\n\n- A\n- B\n\n## Decision Outcome\n\nAdopt A.\n\n## Rule\n\nAdopt A.\n")
 
 	mustWrite(t, filepath.Join(root, "constitution", "constitution.md"),
 		"# Constitution\n\n## Architecture\n\n### First rule\n\nAdopt A.\n")
@@ -127,7 +127,7 @@ func TestValidateSupersededADRIDIsInactive(t *testing.T) {
 			"## Context and Problem Statement\n\nc\n\n## Considered Options\n\n- A\n- B\n\n## Decision Outcome\n\nAdopt A.\n")
 	mustWrite(t, filepath.Join(adrDir, "ADR-0002-second-rule.md"),
 		"---\nid: ADR-0002\ntitle: Second rule\ncategory: architecture\ndate: 2026-07-02\nstatus: accepted\nsupersedes: ADR-0001\n---\n\n"+
-			"## Context and Problem Statement\n\nc\n\n## Considered Options\n\n- A\n- B\n\n## Decision Outcome\n\nAdopt B.\n")
+			"## Context and Problem Statement\n\nc\n\n## Considered Options\n\n- A\n- B\n\n## Decision Outcome\n\nAdopt B.\n\n## Rule\n\nAdopt B.\n")
 	mustWrite(t, filepath.Join(root, "constitution", "constitution.md"),
 		"# Constitution\n\n## Architecture\n\n### Second rule\n\nAdopt B.\n")
 
@@ -159,6 +159,44 @@ func TestValidateSupersededADRIDIsInactive(t *testing.T) {
 	}
 	if !res.Valid() {
 		t.Fatalf("citing the active ADR should validate: %v", res.Errors)
+	}
+}
+
+// TestValidateRecordOnlyADRIDIsRejected proves the M5.5 tightening (plan
+// §2.12): a citation to an active but record-only ADR (no ## Rule section)
+// fails — such ADRs never appear in constitution.md, so the gate cannot cite
+// one. The error must explain why.
+func TestValidateRecordOnlyADRIDIsRejected(t *testing.T) {
+	root := t.TempDir()
+	mustWrite(t, filepath.Join(root, "constitution.yml"),
+		"schemaVersion: 1\nconsent:\n  policy: off\nsourceTracking:\n  type: none\ncategories:\n  - architecture\n")
+
+	adrDir := filepath.Join(root, "constitution", "adr")
+	if err := os.MkdirAll(adrDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// ADR-0001 is accepted but record-only (no ## Rule).
+	mustWrite(t, filepath.Join(adrDir, "ADR-0001-record-only.md"),
+		"---\nid: ADR-0001\ntitle: Record only\ncategory: architecture\ndate: 2026-07-01\nstatus: accepted\n---\n\n"+
+			"## Context and Problem Statement\n\nc\n\n## Considered Options\n\n- A\n- B\n\n## Decision Outcome\n\nJust a record.\n")
+	mustWrite(t, filepath.Join(root, "constitution", "constitution.md"),
+		"# Constitution\n\nNo standing rules yet. Decision log: constitution/adr/.\n")
+
+	hash, err := ConstitutionHash(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data := report(hash, []Deviation{dev("D-001", "ADR-0001", "HIGH")}, Summary{High: 1})
+
+	res, err := Validate(root, data)
+	if err != nil {
+		t.Fatalf("could not run: %v", err)
+	}
+	if res.Valid() {
+		t.Fatal("want invalid: a citation to a record-only ADR must fail")
+	}
+	if !containsSubstr(res.Errors, "record-only") || !containsSubstr(res.Errors, "ADR-0001") {
+		t.Fatalf("error should name the record-only ADR and explain why: %v", res.Errors)
 	}
 }
 

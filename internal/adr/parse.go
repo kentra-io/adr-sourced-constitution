@@ -106,6 +106,9 @@ func parseBytesCore(data []byte, path string) (*ADR, []byte, error) {
 	if err := validateSections(sections, requiredForRegen, path); err != nil {
 		return nil, nil, err
 	}
+	if err := validateRuleSection(sections, order, path); err != nil {
+		return nil, nil, err
+	}
 
 	num, _ := parseID(m.ID) // format already validated in parseMeta
 

@@ -28,3 +28,8 @@ of the ADRs with `status: accepted`.
 
 Supersedes ADR-0005; closes out the architecture question this ADR
 chain worked through.
+
+## Rule
+
+Model the constitution as a deterministic projection of the accepted ADR
+set; never hand-author constitution.md.

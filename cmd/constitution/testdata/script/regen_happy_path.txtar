@@ -1,6 +1,7 @@
 # `constitution regen` renders constitution/constitution.md from the ADR
-# log (M1 DoD happy path): active ADRs render grouped by category; a
-# deprecated ADR is excluded from the projection.
+# log (M1 DoD happy path): rule-bearing active ADRs render grouped by
+# category; a record-only active ADR and a deprecated ADR are both excluded
+# from the projection (plan §2.12).
 
 exec constitution regen
 stdout 'wrote .*constitution.constitution\.md'
@@ -37,6 +38,11 @@ Need a source of truth that supports supersede/deprecate semantics.
 
 Model the constitution as a projection of an append-only ADR log.
 
+## Rule
+
+Model the constitution as a projection of an append-only ADR log; never
+hand-edit constitution.md.
+
 -- constitution/adr/ADR-0002-old-process-rule.md --
 ---
 id: ADR-0002
@@ -62,7 +68,8 @@ This rule no longer applies.
 <!--
   GENERATED FILE -- projection of the ADR log in constitution/adr/.
   Do not hand-edit; changes will be overwritten by the next "constitution
-  regen". To change a rule, add, supersede, or deprecate an ADR instead.
+  regen". Only rule-bearing (## Rule) active ADRs project here; to change a
+  rule, add, supersede, or deprecate an ADR instead.
 -->
 
 # Constitution
@@ -71,6 +78,7 @@ This rule no longer applies.
 
 ### Model the constitution as an event-sourced ADR log
 
-Model the constitution as a projection of an append-only ADR log.
+Model the constitution as a projection of an append-only ADR log; never
+hand-edit constitution.md.
 
 ADR-0001 · 2026-07-01
