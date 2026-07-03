@@ -1,6 +1,6 @@
 ---
 name: constitution-init
-description: Conversational greenfield interview that bootstraps a project's constitution — gathers targets, consent policy, source tracking, categories, and founding principles, then drives `constitution init` and one `constitution adr new` per accepted principle. Invoke explicitly with /constitution-init.
+description: Conversational greenfield interview that bootstraps a project's constitution — gathers targets, consent policy, source tracking, categories, and founding principles, then seeds them all in a single `constitution init` invocation (founding ADRs via --founding-file). Invoke explicitly with /constitution-init.
 disable-model-invocation: true
 ---
 

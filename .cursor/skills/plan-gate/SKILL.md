@@ -56,6 +56,14 @@ isolating it keeps that guarantee structural.
    }
    ```
 
+   A **conforming** plan is the common case: emit an empty `deviations` array
+   and an all-zero summary, and present it as a pass. Still run the validator
+   on it — a clean report is a validated report.
+
+   ```json
+   {"deviations": [], "summary": {"critical": 0, "high": 0, "medium": 0, "low": 0}}
+   ```
+
    Rules for a valid report:
    - Every deviation **must** cite an `adrId` that exists in the log — the
      citation is the whole point.

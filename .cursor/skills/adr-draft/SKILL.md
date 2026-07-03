@@ -51,7 +51,15 @@ this system makes. If the command is denied, stop and leave the log untouched.
    `Decision Drivers` too — it is standard MADR and makes the record legible.
    Write it to a temp path outside the repo tree, e.g. `/tmp/adr-draft.md`.
 
-4. **Show the human the full draft** and the command you intend to run:
+4. **Show the human the exact bytes that will be written**, then the command
+   you intend to run. Display the temp file's literal contents — `cat
+   /tmp/adr-draft.md` — and show that output verbatim. What you show **MUST**
+   be the exact byte content of the file you pass to `--body-file`: the
+   harness permission prompt shows only the command, not the file bytes, so
+   the shown-draft==written-file property is part of the consent guarantee. If
+   the human requests changes, edit the file and `cat` it again — loop until
+   they accept the shown bytes — before you ever invoke the CLI. Then show the
+   command:
 
    ```
    constitution adr new --title "<short imperative title>" --category <category> --body-file /tmp/adr-draft.md
