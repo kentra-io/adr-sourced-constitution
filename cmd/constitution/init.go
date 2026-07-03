@@ -24,7 +24,8 @@ var starterCategories = []string{"architecture", "code-style", "process", "testi
 
 // initCommand implements `constitution init` (plan §4). It scaffolds
 // constitution/adr/, writes constitution.yml at the repo root, seeds
-// founding ADRs (source: bootstrap) via the same internal write path as
+// founding ADRs (source: bootstrap only when source tracking is enabled) via
+// the same internal write path as
 // `adr new`, renders the projection, and writes the managed pointer blocks +
 // fanned-out skills, all drift-protected via constitution/.state. A re-run is
 // idempotent (byte-identical tree); interior/file drift requires --force or
@@ -289,6 +290,16 @@ func seedFounding(cmd *cli.Command, cfg *config.Config, adrDir string, stdout io
 		return err
 	}
 
+	// Founding ADRs carry the reserved `bootstrap` source ONLY when source
+	// tracking is enabled: under `type: none` no ADR may carry a `source`
+	// field at all (plan §2.8; the "founding ADRs use bootstrap" sentence
+	// applies only when type != none — erratum #8). When enabled, `bootstrap`
+	// is a reserved value that bypasses the configured pattern check.
+	foundingSource := ""
+	if cfg.SourceTracking.Type != config.SourceTrackingNone {
+		foundingSource = bootstrapSource
+	}
+
 	base, _, err := adr.NextID(adrDir)
 	if err != nil {
 		return err
@@ -313,7 +324,7 @@ func seedFounding(cmd *cli.Command, cfg *config.Config, adrDir string, stdout io
 			Title:    p.Title,
 			Category: category,
 			Date:     today(),
-			Source:   bootstrapSource,
+			Source:   foundingSource,
 			Body:     foundingBody(p.Statement),
 		})
 		if _, err := adr.ParseBytesUnnamed(content, foundingLabel(p.Title)); err != nil {

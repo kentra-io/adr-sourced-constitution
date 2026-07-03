@@ -1,6 +1,7 @@
 # `--founding-file` seeds one founding ADR per '## ' heading: the heading is
 # the ADR title, the text beneath it is the rule statement (Decision Outcome).
-# All land in --founding-category, source bootstrap.
+# All land in --founding-category. Under the default sourceTracking.type (none)
+# they carry no source field (plan §2.8).
 
 env CONSTITUTION_TODAY=2026-07-02
 
@@ -9,7 +10,7 @@ stdout 'created .*ADR-0001-tests-are-mandatory\.md'
 stdout 'created .*ADR-0002-small-focused-prs\.md'
 
 grep 'category: process' constitution/adr/ADR-0001-tests-are-mandatory.md
-grep 'source: bootstrap' constitution/adr/ADR-0001-tests-are-mandatory.md
+! grep 'source:' constitution/adr/ADR-0001-tests-are-mandatory.md
 grep 'Every change ships with tests.' constitution/adr/ADR-0001-tests-are-mandatory.md
 grep 'Keep pull requests focused and small.' constitution/adr/ADR-0002-small-focused-prs.md
 

@@ -30,6 +30,7 @@ Research against primary sources found these defects in the spec text. They are 
 5. **§13.1 "load-bearing" framing should be softened.** Anthropic's own docs state CLAUDE.md content is context, not enforcement. Pointer reliability is load-bearing for the *UX quality* of use (a); the *correctness* backstop is the plan-validation gate, which re-reads `constitution.md` regardless of whether the agent followed the pointer. (Resolution of the spike itself: §2.1.)
 6. **§11 component inventory gains one verb:** `adr renumber` (§2.6, the id-collision escape hatch).
 7. **§5.4's SHA-256 manifest is partially pulled forward** into v1 (write-path + advisory check; see §2.7) — a conscious scope amendment, since it is cheap and it is the only guard mode that works without git.
+8. **§2.8's "founding ADRs use the reserved `bootstrap` source" applies only when `type != none`** — under `type: none` the "no ADR may carry a `source`" rule wins, so `init` seeds founding ADRs with no `source` field at all and only stamps `bootstrap` once source tracking is enabled (discovered at M5 review, where the sentence read as an unconditional stamp).
 
 ---
 
