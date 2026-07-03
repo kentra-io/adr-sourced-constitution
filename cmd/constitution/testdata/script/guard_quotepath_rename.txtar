@@ -1,0 +1,89 @@
+# C1 regression: the quotepath bypass. An accepted ADR is renamed (git mv, so
+# git detects it as R) to a NON-ASCII filename AND its frozen body is edited,
+# then the manifest is regenerated so the manifest cross-check is satisfied by
+# the tampered content. Before the fix, `git diff --name-status` C-quoted the
+# non-ASCII path (arriving as "...premi\303\250re-r\303\250gle.md" — a literal
+# string ending in `.md"`, not `.md`), so the extension filter silently
+# skipped it and, with the manifest regenerated, guard reported clean exit 0 —
+# a full evasion. With `-z` (raw NUL-delimited paths) the rename is seen for
+# what it is: file_renamed AND the smuggled body_changed both fire. Exit 1.
+#
+# Deliberately asserts NO manifest_mismatch: the attacker defeated the manifest
+# by regenerating it, so this is git mode alone catching the bypass — exactly
+# the path C1 said was broken.
+
+env CONSTITUTION_TODAY=2026-07-01
+env GIT_AUTHOR_NAME=guard-test
+env GIT_AUTHOR_EMAIL=guard-test@example.com
+env GIT_COMMITTER_NAME=guard-test
+env GIT_COMMITTER_EMAIL=guard-test@example.com
+env GIT_CONFIG_NOSYSTEM=1
+
+exec git init -q -b main
+exec constitution adr new --title 'First rule' --category architecture --body-file body.md
+exec git add -A
+exec git commit -q -m init
+
+# rename to a non-ASCII filename (git mv stages it so -M reports R, not D+add),
+# smuggle a frozen-body edit under the rename, then regenerate the manifest so
+# the manifest cross-check is satisfied by the tampered content.
+exec git mv constitution/adr/ADR-0001-first-rule.md constitution/adr/ADR-0001-première-règle.md
+cp tampered.md constitution/adr/ADR-0001-première-règle.md
+exec constitution regen
+
+exitcode 1 constitution guard
+stdout '\[file_renamed\] ADR-0001'
+stdout '\[body_changed\] ADR-0001'
+! stdout 'manifest_mismatch'
+
+# and the JSON payload carries both kinds against the true (unquoted) path
+exitcode 1 constitution guard --format json
+stdout '"kind": "file_renamed"'
+stdout '"kind": "body_changed"'
+stdout 'ADR-0001-première-règle.md'
+stdout '"clean": false'
+
+-- constitution.yml --
+schemaVersion: 1
+consent:
+  policy: off
+sourceTracking:
+  type: none
+categories:
+  - architecture
+
+-- body.md --
+## Context and Problem Statement
+
+We need a governing rule.
+
+## Considered Options
+
+- Do nothing
+- Adopt the rule
+
+## Decision Outcome
+
+Adopt the rule.
+
+-- tampered.md --
+---
+id: ADR-0001
+title: First rule
+category: architecture
+date: 2026-07-01
+status: accepted
+---
+
+## Context and Problem Statement
+
+We need a governing rule.
+
+## Considered Options
+
+- Do nothing
+- Adopt the rule
+
+## Decision Outcome
+
+Quietly reverse the rule.

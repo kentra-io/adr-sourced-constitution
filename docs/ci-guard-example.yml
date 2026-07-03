@@ -1,0 +1,56 @@
+# Advisory `constitution guard` job — copy into an adopting repo's
+# .github/workflows/ (e.g. constitution-guard.yml).
+#
+# This is an EXAMPLE and it is intentionally ADVISORY in v1 (plan §2.7,
+# spec §5.4 "Phase 1: surfaces; human honors"):
+#
+#   * It is NOT a required check. Do not add it to branch protection's
+#     required-status-checks yet. The guard's manifest cross-check is
+#     advisory — a committer who edits an ADR and its manifest line in the
+#     same commit defeats it (see docs/manifest-canonicalization.md), so
+#     making it a hard merge gate would over-promise. Required checks,
+#     signed commits, and a protected constitution/adr/** path are Phase 2.
+#   * Its purpose is to SURFACE illegal out-of-band mutations of the ADR log
+#     on a pull request, for a human to honor.
+#
+# Two details are load-bearing and must not be "simplified" away:
+#
+#   1. fetch-depth: 0 — guard computes `git merge-base <target> HEAD`
+#      locally, which needs the full history of both the PR branch and the
+#      target branch. The default shallow checkout (depth 1) has neither.
+#   2. --merge-base "origin/${{ github.base_ref }}" — the base is computed
+#      LOCALLY from the target branch. Never trust the PR-provided base SHA
+#      (github.event.pull_request.base.sha): a malicious PR controls it.
+
+name: constitution guard (advisory)
+
+on:
+  pull_request:
+
+# Least privilege: guard only reads.
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    # Advisory: a failure annotates the PR but does not block it. Remove this
+    # line only alongside the Phase-2 branch-protection work, deliberately.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0 # full history — merge-base needs it (see note 1)
+
+      # Install the constitution binary. Pin a released version in a real
+      # repo; @latest is shown for brevity.
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.26.x"
+      - run: go install github.com/kentra-io/adr-sourced-constitution/cmd/constitution@latest
+
+      # merge-base mode: diff the PR against the fork point with the target
+      # branch, computed locally (see note 2). Exit codes: 0 clean, 1
+      # violations found, 2 guard could not run.
+      - name: guard the ADR log
+        run: constitution guard --merge-base "origin/${{ github.base_ref }}" --format text

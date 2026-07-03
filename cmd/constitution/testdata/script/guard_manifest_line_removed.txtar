@@ -1,0 +1,80 @@
+# I2 regression: the manifest cross-check must be bidirectional. An accepted
+# ADR's frozen body is tampered, its manifest LINE is then deleted (so no
+# recorded hash disagrees), and the whole thing is folded into HEAD via
+# `git commit --amend` (so a git-diff-vs-HEAD sees nothing). Before the fix the
+# manifest check only walked recorded->disk, so a deleted line meant the ADR
+# was checked by nobody and guard reported clean. Now the reverse direction
+# (disk->recorded) flags an on-disk ADR that no manifest line records as a
+# manifest_mismatch. Exit 1.
+
+env CONSTITUTION_TODAY=2026-07-01
+env GIT_AUTHOR_NAME=guard-test
+env GIT_AUTHOR_EMAIL=guard-test@example.com
+env GIT_COMMITTER_NAME=guard-test
+env GIT_COMMITTER_EMAIL=guard-test@example.com
+env GIT_CONFIG_NOSYSTEM=1
+
+exec git init -q -b main
+exec constitution adr new --title 'First rule' --category architecture --body-file body.md
+exec git add -A
+exec git commit -q -m init
+
+# tamper the body, blank the manifest (drops ADR-0001's recorded line), then
+# rewrite history so git-diff-vs-HEAD is blind to all of it.
+cp tampered.md constitution/adr/ADR-0001-first-rule.md
+cp empty.txt constitution/adr/.manifest.sha256
+exec git add -A
+exec git commit -q -m tamper
+exec git commit --amend -q -m 'tamper (history rewritten, manifest line removed)'
+
+exitcode 1 constitution guard
+stdout '\[manifest_mismatch\] ADR-0001'
+stdout 'not recorded'
+! stdout 'body_changed'
+
+-- constitution.yml --
+schemaVersion: 1
+consent:
+  policy: off
+sourceTracking:
+  type: none
+categories:
+  - architecture
+
+-- empty.txt --
+
+-- body.md --
+## Context and Problem Statement
+
+We need a governing rule.
+
+## Considered Options
+
+- Do nothing
+- Adopt the rule
+
+## Decision Outcome
+
+Adopt the rule.
+
+-- tampered.md --
+---
+id: ADR-0001
+title: First rule
+category: architecture
+date: 2026-07-01
+status: accepted
+---
+
+## Context and Problem Statement
+
+We need a governing rule.
+
+## Considered Options
+
+- Do nothing
+- Adopt the rule
+
+## Decision Outcome
+
+Quietly reverse the rule.

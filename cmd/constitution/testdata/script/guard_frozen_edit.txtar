@@ -1,0 +1,67 @@
+# Planted mutation: a frozen frontmatter field (title) edited out-of-band.
+# git legality flags frozen_field_changed on "title"; the manifest hash
+# (which covers frozen frontmatter) also mismatches. Exit 1.
+
+env CONSTITUTION_TODAY=2026-07-01
+env GIT_AUTHOR_NAME=guard-test
+env GIT_AUTHOR_EMAIL=guard-test@example.com
+env GIT_COMMITTER_NAME=guard-test
+env GIT_COMMITTER_EMAIL=guard-test@example.com
+env GIT_CONFIG_NOSYSTEM=1
+
+exec git init -q -b main
+exec constitution adr new --title 'First rule' --category architecture --body-file body.md
+exec git add -A
+exec git commit -q -m init
+
+cp tampered.md constitution/adr/ADR-0001-first-rule.md
+
+exitcode 1 constitution guard
+stdout '\[frozen_field_changed\] ADR-0001'
+stdout 'frozen field "title" changed'
+stdout '\[manifest_mismatch\] ADR-0001'
+
+-- constitution.yml --
+schemaVersion: 1
+consent:
+  policy: off
+sourceTracking:
+  type: none
+categories:
+  - architecture
+
+-- body.md --
+## Context and Problem Statement
+
+We need a governing rule.
+
+## Considered Options
+
+- Do nothing
+- Adopt the rule
+
+## Decision Outcome
+
+Adopt the rule.
+
+-- tampered.md --
+---
+id: ADR-0001
+title: A different title
+category: architecture
+date: 2026-07-01
+status: accepted
+---
+
+## Context and Problem Statement
+
+We need a governing rule.
+
+## Considered Options
+
+- Do nothing
+- Adopt the rule
+
+## Decision Outcome
+
+Adopt the rule.

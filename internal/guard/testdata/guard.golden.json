@@ -1,0 +1,51 @@
+{
+  "violations": [
+    {
+      "kind": "body_changed",
+      "id": "ADR-0001",
+      "file": "constitution/adr/ADR-0001-a.md",
+      "message": "ADR-0001: body changed; only status (and its derived superseded-by) may change on an existing ADR"
+    },
+    {
+      "kind": "frozen_field_changed",
+      "id": "ADR-0002",
+      "file": "constitution/adr/ADR-0002-b.md",
+      "field": "title",
+      "message": "ADR-0002: frozen field \"title\" changed from \"Old\" to \"New\""
+    },
+    {
+      "kind": "file_deleted",
+      "id": "ADR-0003",
+      "file": "constitution/adr/ADR-0003-c.md",
+      "message": "ADR-0003: deleted (present at HEAD, absent from the working tree); the ADR log is append-only"
+    },
+    {
+      "kind": "file_renamed",
+      "id": "ADR-0004",
+      "file": "constitution/adr/ADR-0004-renamed.md",
+      "oldFile": "constitution/adr/ADR-0004-original.md",
+      "message": "ADR-0004: renamed from constitution/adr/ADR-0004-original.md to constitution/adr/ADR-0004-renamed.md; an accepted ADR's filename is frozen along with its content"
+    },
+    {
+      "kind": "manifest_mismatch",
+      "id": "ADR-0005",
+      "file": "constitution/adr/ADR-0005-e.md",
+      "message": "ADR-0005: on-disk frozen-content hash does not match the hash recorded in .manifest.sha256; the file changed without going through the constitution CLI"
+    },
+    {
+      "kind": "id_collision",
+      "id": "ADR-0006",
+      "file": "constitution/adr/ADR-0006-f.md",
+      "files": [
+        "constitution/adr/ADR-0006-f.md",
+        "constitution/adr/ADR-0006-g.md"
+      ],
+      "message": "ADR-0006: id used by 2 files: constitution/adr/ADR-0006-f.md, constitution/adr/ADR-0006-g.md"
+    }
+  ],
+  "summary": {
+    "checked": 6,
+    "violations": 6,
+    "clean": false
+  }
+}

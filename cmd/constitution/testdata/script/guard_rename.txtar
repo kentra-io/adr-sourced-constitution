@@ -1,0 +1,46 @@
+# Planted mutation: an accepted ADR's file renamed (git mv, so git detects
+# the rename via -M). An accepted ADR's filename is frozen along with its
+# content -> file_renamed. The manifest, keyed by the old filename, also
+# reports it missing. Exit 1.
+
+env CONSTITUTION_TODAY=2026-07-01
+env GIT_AUTHOR_NAME=guard-test
+env GIT_AUTHOR_EMAIL=guard-test@example.com
+env GIT_COMMITTER_NAME=guard-test
+env GIT_COMMITTER_EMAIL=guard-test@example.com
+env GIT_CONFIG_NOSYSTEM=1
+
+exec git init -q -b main
+exec constitution adr new --title 'First rule' --category architecture --body-file body.md
+exec git add -A
+exec git commit -q -m init
+
+# git mv stages the rename so git diff -M reports it as R, not D+untracked.
+exec git mv constitution/adr/ADR-0001-first-rule.md constitution/adr/ADR-0001-renamed-rule.md
+
+exitcode 1 constitution guard
+stdout '\[file_renamed\] ADR-0001'
+stdout 'renamed from constitution/adr/ADR-0001-first-rule.md to constitution/adr/ADR-0001-renamed-rule.md'
+
+-- constitution.yml --
+schemaVersion: 1
+consent:
+  policy: off
+sourceTracking:
+  type: none
+categories:
+  - architecture
+
+-- body.md --
+## Context and Problem Statement
+
+We need a governing rule.
+
+## Considered Options
+
+- Do nothing
+- Adopt the rule
+
+## Decision Outcome
+
+Adopt the rule.

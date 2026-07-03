@@ -1,0 +1,50 @@
+# Planted mutation: a second file reusing an existing ADR id (the concurrent-
+# branch collision plan §2.6 warns about). id-uniqueness runs regardless of
+# git and names BOTH files rather than crashing. Exit 1.
+
+env CONSTITUTION_TODAY=2026-07-01
+env GIT_AUTHOR_NAME=guard-test
+env GIT_AUTHOR_EMAIL=guard-test@example.com
+env GIT_COMMITTER_NAME=guard-test
+env GIT_COMMITTER_EMAIL=guard-test@example.com
+env GIT_CONFIG_NOSYSTEM=1
+
+exec git init -q -b main
+exec constitution adr new --title 'First rule' --category architecture --body-file body.md
+exec git add -A
+exec git commit -q -m init
+
+# a duplicate carrying the same id: ADR-0001 now used by two files.
+cp constitution/adr/ADR-0001-first-rule.md constitution/adr/ADR-0001-duplicate.md
+
+exitcode 1 constitution guard
+stdout '\[id_collision\] ADR-0001'
+stdout 'id used by 2 files: constitution/adr/ADR-0001-duplicate.md, constitution/adr/ADR-0001-first-rule.md'
+
+# and the JSON payload lists both colliding files
+exitcode 1 constitution guard --format json
+stdout '"kind": "id_collision"'
+stdout '"files":'
+
+-- constitution.yml --
+schemaVersion: 1
+consent:
+  policy: off
+sourceTracking:
+  type: none
+categories:
+  - architecture
+
+-- body.md --
+## Context and Problem Statement
+
+We need a governing rule.
+
+## Considered Options
+
+- Do nothing
+- Adopt the rule
+
+## Decision Outcome
+
+Adopt the rule.

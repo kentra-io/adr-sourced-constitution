@@ -23,7 +23,18 @@ jobs:
           go-version: ${{ matrix.go }}
       - run: go build ./...
       - run: go vet ./...
-      - run: go test ./... -v
+      # -race only on the ubuntu/1.26 leg: the data-race detector needs cgo +
+      # a C toolchain, is slowest there, and one representative leg is enough
+      # coverage for our (mostly pure, filesystem-serial) code. The other legs
+      # run the same tests without it.
+      - name: test
+        shell: bash
+        run: |
+          flags=""
+          if [ "${{ matrix.os }}" = "ubuntu-latest" ] && [ "${{ matrix.go }}" = "1.26.x" ]; then
+            flags="-race"
+          fi
+          go test $flags ./... -v
 
   lint:
     runs-on: ubuntu-latest

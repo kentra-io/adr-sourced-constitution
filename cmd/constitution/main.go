@@ -15,7 +15,7 @@ import (
 func main() {
 	if err := run(context.Background(), os.Args); err != nil {
 		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		os.Exit(exitCode(err))
 	}
 }
 
@@ -29,6 +29,7 @@ func run(ctx context.Context, args []string) error {
 			supersedeCommand(),
 			deprecateCommand(),
 			regenCommand(),
+			guardCommand(),
 		},
 	}
 	return cmd.Run(ctx, args)
