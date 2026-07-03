@@ -203,6 +203,57 @@ func TestValidateBodyEmptyRule(t *testing.T) {
 	}
 }
 
+// TestValidateBodyDuplicateRule proves a body carrying two "## Rule" sections
+// is rejected rather than letting the last one silently win the projection
+// (plan §2.12, fix: rule input is validated, never silently swallowed).
+func TestValidateBodyDuplicateRule(t *testing.T) {
+	body := "## Context and Problem Statement\n\nx\n\n## Considered Options\n\n- a\n\n## Decision Outcome\n\ny\n\n## Rule\n\nFirst.\n\n## Rule\n\nSecond.\n"
+	err := ValidateBody([]byte(body), "b.md")
+	if err == nil {
+		t.Fatal("ValidateBody(duplicate Rule) = nil, want error")
+	}
+	want := `b.md: field "Rule": the "## Rule" section appears more than once; a body may carry at most one "## Rule" section`
+	if err.Error() != want {
+		t.Errorf("ValidateBody error = %q, want %q", err.Error(), want)
+	}
+}
+
+// TestValidateBodyRuleHeadingLine proves a "## Rule" section whose content
+// carries a Markdown heading line is rejected: a rule is plain prose (plan
+// §2.12). This covers the single-'#' case that survives extraction as content.
+func TestValidateBodyRuleHeadingLine(t *testing.T) {
+	body := "## Context and Problem Statement\n\nx\n\n## Considered Options\n\n- a\n\n## Decision Outcome\n\ny\n\n## Rule\n\nreal rule\n# Big Heading\n"
+	err := ValidateBody([]byte(body), "b.md")
+	if err == nil {
+		t.Fatal("ValidateBody(heading in Rule) = nil, want error")
+	}
+	want := `b.md: field "Rule": rule text is plain prose and must not contain Markdown heading lines; found a line beginning with "#": # Big Heading`
+	if err.Error() != want {
+		t.Errorf("ValidateBody error = %q, want %q", err.Error(), want)
+	}
+}
+
+// TestValidateRuleText proves the raw-flag validator (the --rule path) rejects
+// any line beginning with a Markdown heading marker, before composition — so a
+// heading-bearing rule is refused rather than silently split/truncated.
+func TestValidateRuleText(t *testing.T) {
+	if err := ValidateRuleText("Plain prose rule.", "--rule"); err != nil {
+		t.Errorf("ValidateRuleText(plain) = %v, want nil", err)
+	}
+	// A mid-line '#' is fine — only line-leading heading markers are rejected.
+	if err := ValidateRuleText("Tag commits with #ticket.", "--rule"); err != nil {
+		t.Errorf("ValidateRuleText(mid-line #) = %v, want nil", err)
+	}
+	err := ValidateRuleText("real rule\n## Sneaky\nmore", "--rule")
+	if err == nil {
+		t.Fatal("ValidateRuleText(heading line) = nil, want error")
+	}
+	want := `--rule: rule text is plain prose and must not contain Markdown heading lines; found a line beginning with "#": ## Sneaky`
+	if err.Error() != want {
+		t.Errorf("ValidateRuleText error = %q, want %q", err.Error(), want)
+	}
+}
+
 // TestHasAndAppendRuleSection covers the --rule composition helpers (plan
 // §2.12): detecting an existing Rule section, and appending one as the last
 // body section such that it parses back rule-bearing.

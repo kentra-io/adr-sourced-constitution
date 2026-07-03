@@ -325,6 +325,53 @@ Body.
 `,
 			wantErr: `{file}: field "Rule": the "## Rule" section is present but empty; give it a normative statement or remove it (a record-only ADR has no Rule section)`,
 		},
+		{
+			name:     "duplicate Rule section",
+			filename: "ADR-0009-duplicate-rule.md",
+			content: `---
+id: ADR-0009
+title: Duplicate rule section
+category: architecture
+date: 2026-07-01
+status: accepted
+---
+
+## Decision Outcome
+
+Body.
+
+## Rule
+
+First rule.
+
+## Rule
+
+Second rule.
+`,
+			wantErr: `{file}: field "Rule": the "## Rule" section appears more than once; a body may carry at most one "## Rule" section`,
+		},
+		{
+			name:     "heading line in Rule section",
+			filename: "ADR-0009-heading-in-rule.md",
+			content: `---
+id: ADR-0009
+title: Heading in rule section
+category: architecture
+date: 2026-07-01
+status: accepted
+---
+
+## Decision Outcome
+
+Body.
+
+## Rule
+
+real rule
+# Big Heading
+`,
+			wantErr: `{file}: field "Rule": rule text is plain prose and must not contain Markdown heading lines; found a line beginning with "#": # Big Heading`,
+		},
 	}
 
 	for _, tt := range tests {

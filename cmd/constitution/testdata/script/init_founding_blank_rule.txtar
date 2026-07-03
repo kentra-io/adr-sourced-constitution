@@ -1,0 +1,20 @@
+# A founding-file principle with a present-but-blank '## Rule' is a hard error
+# (exit 2), not a silently-dropped catalog-only record: rule input is
+# validated, never silently swallowed. The message names the offending
+# principle. Nothing is seeded. Locks the contract (implementation-plan §8).
+
+env CONSTITUTION_TODAY=2026-07-02
+
+exitcode 2 constitution init --founding-file principles.md --founding-category architecture --category architecture
+stderr 'principle "Tests are mandatory" has a "## Rule" section that is present but empty; give it a rule statement or remove the heading \(a catalog-only principle has no "## Rule"\)'
+
+# no founding ADR was seeded
+! exists constitution/adr/ADR-0001-tests-are-mandatory.md
+
+-- principles.md --
+## Tests are mandatory
+
+Every change ships with tests.
+
+## Rule
+

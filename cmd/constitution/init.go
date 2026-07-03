@@ -261,7 +261,10 @@ func normalizeChoices(flag string, given, def []string, allowed map[string]bool)
 // principle is one founding decision: Title becomes the ADR heading,
 // Statement its Decision Outcome. Rule, when non-empty, is composed as the
 // ADR's "## Rule" section — making it rule-bearing so it projects into
-// constitution.md (plan §2.12). A blank Rule yields a catalog-only record.
+// constitution.md (plan §2.12). An absent Rule (Rule == "") yields a
+// catalog-only record; a present-but-blank founding-file "## Rule" is not a
+// catalog-only record — it is rejected in parseFoundingFile, mirroring the
+// read/write path's empty-Rule error.
 type principle struct {
 	Title     string
 	Statement string
@@ -395,35 +398,61 @@ func gatherPrinciples(cmd *cli.Command) ([]principle, error) {
 // heading titled exactly "Rule" does NOT start a new principle — it supplies
 // the current principle's "## Rule" section, making that founding ADR
 // rule-bearing (plan §2.12). A principle with no '## Rule' is a catalog-only
-// record. An empty Rule section is an error, mirroring the ADR contract.
+// record. Rule input is validated, never silently swallowed: an empty "## Rule"
+// section is an error (mirroring the ADR contract), a second "## Rule" under
+// one principle is an error, and "## Rule" as the FIRST heading is an error
+// because "Rule" is a reserved section name, not a principle title.
 func parseFoundingFile(content string) ([]principle, error) {
 	var ps []principle
 	var cur *principle
 	var body []string
 	inRule := false
 
-	flushBody := func() {
+	// flushBody assigns the accumulated lines to the current principle's Rule
+	// (inside a "## Rule" section) or Statement, rejecting a present-but-blank
+	// Rule — symmetric with validateRuleSection on the read/write paths.
+	flushBody := func() error {
 		if cur == nil {
-			return
+			body = nil
+			return nil
 		}
 		text := strings.TrimSpace(strings.Join(body, "\n"))
+		body = nil
 		if inRule {
+			if text == "" {
+				return fmt.Errorf(
+					"principle %q has a \"## Rule\" section that is present but empty; give it a rule statement or remove the heading (a catalog-only principle has no \"## Rule\")",
+					cur.Title)
+			}
 			cur.Rule = text
 		} else {
 			cur.Statement = text
 		}
-		body = nil
+		return nil
 	}
 
 	for _, line := range strings.Split(content, "\n") {
 		if h, ok := strings.CutPrefix(line, "## "); ok {
 			heading := strings.TrimSpace(h)
-			if heading == adr.RuleSection && cur != nil {
-				flushBody()
+			if heading == adr.RuleSection {
+				if cur == nil {
+					return nil, fmt.Errorf(
+						"\"## Rule\" may not be the first heading: \"Rule\" is a reserved section name, not a principle title; a founding file is one principle per \"## \" heading, with an optional nested \"## Rule\" beneath each")
+				}
+				if inRule {
+					return nil, fmt.Errorf(
+						"principle %q has more than one \"## Rule\" section; a principle may carry at most one",
+						cur.Title)
+				}
+				if err := flushBody(); err != nil {
+					return nil, err
+				}
 				inRule = true
 				continue
 			}
-			flushBody()
+			if err := flushBody(); err != nil {
+				return nil, err
+			}
 			ps = append(ps, principle{Title: heading})
 			cur = &ps[len(ps)-1]
 			inRule = false
@@ -433,7 +462,9 @@ func parseFoundingFile(content string) ([]principle, error) {
 			body = append(body, line)
 		}
 	}
-	flushBody()
+	if err := flushBody(); err != nil {
+		return nil, err
+	}
 
 	if len(ps) == 0 {
 		return nil, fmt.Errorf("no principles found (expected one or more '## ' headings)")
@@ -449,8 +480,10 @@ func parseFoundingFile(content string) ([]principle, error) {
 // foundingBody builds a minimal, MADR-valid body (all three mandatory
 // sections) around a principle's statement (its Decision Outcome). When rule
 // is non-empty it appends a "## Rule" section, making the founding ADR
-// rule-bearing so it projects into constitution.md (plan §2.12); an empty
-// rule yields a catalog-only record.
+// rule-bearing so it projects into constitution.md (plan §2.12). An absent
+// rule (rule == "") means the principle carried no "## Rule" heading — a
+// catalog-only record; a present-but-blank founding-file "## Rule" never
+// reaches here, being rejected earlier in parseFoundingFile.
 func foundingBody(statement, rule string) string {
 	body := "## Context and Problem Statement\n\n" +
 		"Established at project bootstrap by `constitution init`.\n\n" +

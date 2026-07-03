@@ -63,11 +63,11 @@ func ValidID(id string) bool {
 // read" can never drift apart. file is used only for the error's location.
 func ValidateBody(body []byte, file string) error {
 	body = normalize(body)
-	sections, _ := ExtractSections(body)
+	sections, order := ExtractSections(body)
 	if err := validateSections(sections, MandatorySections, file); err != nil {
 		return err
 	}
-	return validateRuleSection(sections, file)
+	return validateRuleSection(sections, order, file)
 }
 
 // HasRuleSection reports whether a MADR body already carries a "## Rule"

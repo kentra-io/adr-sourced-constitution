@@ -106,7 +106,7 @@ func parseBytesCore(data []byte, path string) (*ADR, []byte, error) {
 	if err := validateSections(sections, requiredForRegen, path); err != nil {
 		return nil, nil, err
 	}
-	if err := validateRuleSection(sections, path); err != nil {
+	if err := validateRuleSection(sections, order, path); err != nil {
 		return nil, nil, err
 	}
 
