@@ -3,7 +3,7 @@ id: ADR-0002
 title: Write the managed pointer block in a versioned marker-delimited format
 category: architecture
 date: 2026-07-03
-status: accepted
+status: deprecated
 ---
 
 ## Context and Problem Statement

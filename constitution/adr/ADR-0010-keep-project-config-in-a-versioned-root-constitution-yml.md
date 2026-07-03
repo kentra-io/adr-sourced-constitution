@@ -3,7 +3,7 @@ id: ADR-0010
 title: Keep project config in a versioned root constitution.yml
 category: architecture
 date: 2026-07-03
-status: accepted
+status: deprecated
 ---
 
 ## Context and Problem Statement

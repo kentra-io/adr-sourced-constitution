@@ -3,7 +3,7 @@ id: ADR-0006
 title: Allocate sequential ids with a renumber escape hatch
 category: architecture
 date: 2026-07-03
-status: accepted
+status: deprecated
 ---
 
 ## Context and Problem Statement

@@ -3,7 +3,7 @@ id: ADR-0001
 title: Integrate via a hybrid per-tool pointer strategy
 category: architecture
 date: 2026-07-03
-status: accepted
+status: deprecated
 ---
 
 ## Context and Problem Statement

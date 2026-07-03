@@ -9,3 +9,4 @@ d61aa5937eca3bdd1324cd910345ac0840afafcde20747dec4de8ba37492ff8f  ADR-0007-guard
 47881c18b0403a0fa50c7aa9123023a37f1f20dd1c5905690d03215eca5f1f7d  ADR-0009-fix-the-deviation-json-contract-as-sarif-shaped-and-cli-validated.md
 339f4e229ea44d09fad5cc9749f0d89e45005dfd6b683532997ee5243acad078  ADR-0010-keep-project-config-in-a-versioned-root-constitution-yml.md
 8894e51555a06c582c80da200cf8b549ec64a810704d00fa52a3e64320d33ce0  ADR-0011-pin-the-byte-fidelity-stack-for-deterministic-projection.md
+1886e5f16d80cf6264671f94313889b3a93b47dec23abdf06baea639f9f96e32  ADR-0012-reset-the-active-constitution-to-cli-mediation-only.md

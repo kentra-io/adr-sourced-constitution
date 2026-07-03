@@ -3,7 +3,7 @@ id: ADR-0005
 title: Govern the category vocabulary in constitution.yml
 category: process
 date: 2026-07-03
-status: accepted
+status: deprecated
 ---
 
 ## Context and Problem Statement

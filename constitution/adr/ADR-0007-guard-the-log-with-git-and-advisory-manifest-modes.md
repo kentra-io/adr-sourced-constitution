@@ -3,7 +3,7 @@ id: ADR-0007
 title: Guard the log with git and advisory-manifest modes
 category: process
 date: 2026-07-03
-status: accepted
+status: deprecated
 ---
 
 ## Context and Problem Statement

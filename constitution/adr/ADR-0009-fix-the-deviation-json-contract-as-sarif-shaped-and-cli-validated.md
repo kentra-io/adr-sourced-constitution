@@ -3,7 +3,7 @@ id: ADR-0009
 title: Fix the deviation.json contract as SARIF-shaped and CLI-validated
 category: architecture
 date: 2026-07-03
-status: accepted
+status: deprecated
 ---
 
 ## Context and Problem Statement

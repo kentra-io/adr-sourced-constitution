@@ -3,7 +3,7 @@ id: ADR-0008
 title: Type the source-ref contract in config
 category: architecture
 date: 2026-07-03
-status: accepted
+status: deprecated
 ---
 
 ## Context and Problem Statement

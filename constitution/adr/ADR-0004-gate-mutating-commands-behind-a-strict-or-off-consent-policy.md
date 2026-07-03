@@ -3,7 +3,7 @@ id: ADR-0004
 title: Gate mutating commands behind a strict-or-off consent policy
 category: process
 date: 2026-07-03
-status: accepted
+status: deprecated
 ---
 
 ## Context and Problem Statement
