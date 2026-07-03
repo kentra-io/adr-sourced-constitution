@@ -55,10 +55,16 @@ RUN set -eux; \
       arm64) goarch=arm64 ;; \
       *) echo "unsupported arch: $arch" >&2; exit 1 ;; \
     esac; \
-    url="https://github.com/kentra-io/adr-sourced-constitution/releases/download/v${CONSTITUTION_VERSION}/constitution_${CONSTITUTION_VERSION}_linux_${goarch}.tar.gz"; \
-    curl -fsSL "$url" -o /tmp/constitution.tgz; \
-    tar -xzf /tmp/constitution.tgz -C /usr/local/bin constitution; \
-    rm /tmp/constitution.tgz; \
+    base="https://github.com/kentra-io/adr-sourced-constitution/releases/download/v${CONSTITUTION_VERSION}"; \
+    asset="constitution_${CONSTITUTION_VERSION}_linux_${goarch}.tar.gz"; \
+    cd /tmp; \
+    curl -fsSL "$base/$asset" -o "$asset"; \
+    curl -fsSL "$base/checksums.txt" -o checksums.txt; \
+    # Verify the download against the release checksums before extracting.
+    # --ignore-missing checks only the asset we fetched, not every line.
+    sha256sum -c --ignore-missing checksums.txt; \
+    tar -xzf "$asset" -C /usr/local/bin constitution; \
+    rm "$asset" checksums.txt; \
     constitution --version
 ```
 
@@ -99,3 +105,20 @@ goreleaser release --snapshot --clean --skip=publish  # dry run, builds everythi
 ```
 
 `./dist` is git-ignored; snapshot artifacts are never committed.
+
+## If a release fails midway
+
+A tag push that fails partway (e.g. the cask push errors after the GitHub
+Release was created) leaves a partial release and a published tag. GoReleaser
+does not overwrite an existing release, so re-running against the same tag will
+not recover it — tear the partial state down, fix the cause, and re-tag. Delete
+the partial release, delete the remote tag, then re-create both once fixed:
+
+```sh
+gh release delete v0.1.0 --yes             # remove the partial GitHub Release
+git push --delete origin v0.1.0            # remove the remote tag
+git tag -d v0.1.0                          # remove the local tag
+# ...fix the cause (config, secret, etc.), then re-cut:
+git tag v0.1.0
+git push origin v0.1.0
+```
