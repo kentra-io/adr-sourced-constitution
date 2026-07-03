@@ -1,0 +1,29 @@
+# init's config-shaping flags reject bad input with a precise message and exit
+# code 2 (could-not-run), before any bytes hit disk. Locks the error-message
+# contract (implementation-plan §8) for every such flag. Each invocation fails
+# in config authoring — no constitution.yml is ever written.
+
+env CONSTITUTION_TODAY=2026-07-02
+
+# --- --consent: unknown policy ---
+exitcode 2 constitution init --consent advisory --principle P
+stderr '--consent must be "strict" or "off" \(got "advisory"\)'
+
+# --- --target: unknown value ---
+exitcode 2 constitution init --target bogus
+stderr '--target: unknown value "bogus"'
+
+# --- --skills-tree: unknown value ---
+exitcode 2 constitution init --skills-tree bogus
+stderr '--skills-tree: unknown value "bogus"'
+
+# --- --category: duplicate entry ---
+exitcode 2 constitution init --category dup --category dup
+stderr '--category "dup" given more than once'
+
+# --- --category: empty entry ---
+exitcode 2 constitution init --category ''
+stderr '--category entries must not be empty'
+
+# nothing was authored: no config landed on disk
+! exists constitution.yml

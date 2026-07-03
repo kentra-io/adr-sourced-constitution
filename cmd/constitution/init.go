@@ -71,7 +71,7 @@ func runInit(cmd *cli.Command) error {
 	// --- 1. resolve config: honor an existing one, else author it from flags
 	// (in memory — not yet written, so pre-flight can refuse before any bytes
 	// hit disk) ---
-	cfg, isNew, err := buildOrLoadConfig(cmd, cwd)
+	cfg, isNew, err := buildOrLoadConfig(cmd, cwd, stderr)
 	if err != nil {
 		return err
 	}
@@ -142,10 +142,13 @@ func runInit(cmd *cli.Command) error {
 // in memory from flags and defaults. isNew reports whether the caller must
 // persist it; the config is not written here, so a pre-flight failure leaves
 // the tree untouched.
-func buildOrLoadConfig(cmd *cli.Command, root string) (cfg *config.Config, isNew bool, err error) {
+func buildOrLoadConfig(cmd *cli.Command, root string, stderr io.Writer) (cfg *config.Config, isNew bool, err error) {
 	configPath := filepath.Join(root, "constitution.yml")
 	if _, statErr := os.Stat(configPath); statErr == nil {
 		cfg, err = config.Load(configPath)
+		if err == nil {
+			noticeIgnoredReinitFlags(cmd, stderr)
+		}
 		return cfg, false, err
 	} else if !errors.Is(statErr, os.ErrNotExist) {
 		return nil, false, statErr
@@ -185,6 +188,25 @@ func buildOrLoadConfig(cmd *cli.Command, root string) (cfg *config.Config, isNew
 		Categories:        categories,
 		Skills:            config.Skills{Trees: trees},
 	}, true, nil
+}
+
+// noticeIgnoredReinitFlags prints a one-line stderr notice when init is run
+// against a repo that already has a constitution.yml and the user passed
+// config-shaping flags: the on-disk config wins on a re-run (plan §4), so
+// those flags are ignored. It is purely informational and changes nothing —
+// it just makes the "existing config wins" contract honest rather than silent.
+func noticeIgnoredReinitFlags(cmd *cli.Command, stderr io.Writer) {
+	var ignored []string
+	for _, f := range []string{"target", "skills-tree", "category", "consent"} {
+		if cmd.IsSet(f) {
+			ignored = append(ignored, "--"+f)
+		}
+	}
+	if len(ignored) == 0 || stderr == nil {
+		return
+	}
+	_, _ = fmt.Fprintf(stderr,
+		"init: existing constitution.yml wins; ignoring %s\n", strings.Join(ignored, ", "))
 }
 
 // resolveCategories applies the starter vocabulary when none were given, and
@@ -267,32 +289,58 @@ func seedFounding(cmd *cli.Command, cfg *config.Config, adrDir string, stdout io
 		return err
 	}
 
-	for _, p := range principles {
-		body := foundingBody(p.Statement)
-		if err := adr.ValidateBody([]byte(body), "founding principle"); err != nil {
-			return err
-		}
-		_, id, err := adr.NextID(adrDir)
-		if err != nil {
-			return err
-		}
-		file := adr.Compose(adr.NewADR{
+	base, _, err := adr.NextID(adrDir)
+	if err != nil {
+		return err
+	}
+
+	// Pre-flight: compose EVERY founding ADR and run it through the same
+	// read-path validator regen uses, before writing any of them. A single
+	// invalid principle (e.g. an empty '## ' heading yielding a blank title)
+	// must fail here — exit 2, nothing written — rather than land a poisoned
+	// `title: ""` record on disk that makes every later regen fail. Ids are
+	// allocated deterministically from `base` (the log is empty at this point,
+	// guaranteed by the len(existing)>0 guard above).
+	type seed struct {
+		dest    string
+		content []byte
+	}
+	seeds := make([]seed, len(principles))
+	for i, p := range principles {
+		id := adr.FormatID(base + i)
+		content := adr.Compose(adr.NewADR{
 			ID:       id,
 			Title:    p.Title,
 			Category: category,
 			Date:     today(),
 			Source:   bootstrapSource,
-			Body:     body,
+			Body:     foundingBody(p.Statement),
 		})
-		dest := filepath.Join(adrDir, adr.Filename(id, p.Title))
-		if err := atomicwrite.WriteFile(dest, file, 0o644); err != nil {
-			return err
+		if _, err := adr.ParseBytesUnnamed(content, foundingLabel(p.Title)); err != nil {
+			return &exitError{err: fmt.Errorf("init: invalid %s: %w", foundingLabel(p.Title), err), code: 2}
 		}
-		if _, err := fmt.Fprintf(stdout, "created %s\n", dest); err != nil {
+		seeds[i] = seed{dest: filepath.Join(adrDir, adr.Filename(id, p.Title)), content: content}
+	}
+
+	for i := range seeds {
+		if err := atomicwrite.WriteFile(seeds[i].dest, seeds[i].content, 0o644); err != nil {
+			return fmt.Errorf("init: writing %s: %w", foundingLabel(principles[i].Title), err)
+		}
+		if _, err := fmt.Fprintf(stdout, "created %s\n", seeds[i].dest); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// foundingLabel names a founding principle for error/label text: quoted by
+// its title when it has one, or a bare description when the title is blank
+// (the case pre-flight validation is meant to catch).
+func foundingLabel(title string) string {
+	if t := strings.TrimSpace(title); t != "" {
+		return fmt.Sprintf("founding principle %q", t)
+	}
+	return "founding principle (empty title)"
 }
 
 // gatherPrinciples collects founding principles from --principle (each string

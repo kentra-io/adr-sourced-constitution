@@ -1,0 +1,18 @@
+# Founding-ADR seeding is a one-time bootstrap action: a re-init of a repo whose
+# log already has ADRs is a no-op on the log, even when --principle names a
+# DIFFERENT principle. No new ADR is seeded, the existing one is untouched, and
+# init still exits 0 (it just refreshes integration).
+
+env CONSTITUTION_TODAY=2026-07-02
+
+exec constitution init --principle 'First principle' --target claude
+exists constitution/adr/ADR-0001-first-principle.md
+cp constitution/adr/ADR-0001-first-principle.md snap.adr
+
+# re-init with a totally different --principle value
+exec constitution init --principle 'Totally different principle' --target claude
+stdout 'init: constitution ready'
+
+# no second founding ADR seeded on a non-empty log; the log is unchanged
+! exists constitution/adr/ADR-0002-totally-different-principle.md
+cmp constitution/adr/ADR-0001-first-principle.md snap.adr

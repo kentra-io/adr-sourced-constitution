@@ -18,8 +18,11 @@ cp .claude/skills/adr-draft/SKILL.md snap.skill.claude
 cp .agents/skills/plan-gate/SKILL.md snap.skill.agents
 cp .cursor/skills/constitution-gov/SKILL.md snap.skill.cursor
 
-# second run: identical flags
+# second run: identical flags. The existing config wins on a re-run, so the
+# config-shaping --target flags are ignored — init says so on stderr (flag
+# honesty), while still producing a byte-identical tree.
 exec constitution init --principle 'Idempotent principle' --target claude --target agents
+stderr 'existing constitution.yml wins; ignoring --target'
 
 # every file byte-identical
 cmp constitution.yml snap.yml
