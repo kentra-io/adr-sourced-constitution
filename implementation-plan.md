@@ -119,6 +119,19 @@ Written by the plan-validation skill via the CLI-validated path, default `./devi
 ### 2.11 Dogfood decision
 The `adr-sourced-constitution` repo **governs itself**: M5 runs `constitution init` on this repo, and the founding ADRs are the very decisions in this plan (§2.1–§2.10, stack choices in §3). First real-world exercise + living example in one.
 
+### 2.12 Rule-bearing projection — constitution as curated read model (**revision, user-decided 2026-07-03**)
+v1 as first built projected **every** accepted ADR into `constitution.md`. User review rejected that: the log is the catalog; the constitution is a concise rulebook of standing, planning-relevant rules. Many ADRs are point-in-time records that belong in the log only. Pinned design:
+
+- **Opt-in marker = the rule text itself.** An ADR body MAY include one optional `## Rule` section: a 1–3 line normative statement of the standing rule the decision establishes. An ADR **with** a Rule section is *rule-bearing* and projects into `constitution.md`; one **without** is a catalog-only record. No separate boolean — presence is the flag, content is the projection. (New documented MADR deviation: one custom optional section.)
+- **Projection content:** per rule-bearing active ADR: title heading, the **Rule section body verbatim**, metadata line. The Decision Outcome no longer projects. Categories with no rule-bearing active ADRs are omitted. If no active ADR is rule-bearing, render the generated-file header + `# Constitution` + one line: `No standing rules yet. Decision log: constitution/adr/.`
+- **CLI:** `adr new --rule <text>` composes the section (canonical position: last body section). A `--body-file` MAY instead carry its own `## Rule` section; supplying both is an error; an empty/whitespace-only Rule section is invalid. `supersede` gains the same `--rule`/body-file semantics for the superseding ADR.
+- **Immutability unchanged:** the Rule section is body — frozen at acceptance. Promoting a record to a rule, demoting, or rewording a rule = supersede. No new mutable frontmatter fields; **zero guard changes**.
+- **Size guardrails:** `regen` warns (never blocks) when a Rule section exceeds 5 lines; the ~200-line whole-file warning stays.
+- **deviation.json tightening:** `deviation validate` requires `adrId` to cite an active **rule-bearing** ADR (the gate reasons over `constitution.md`, which now contains only rules; citing a record-only ADR is a category error).
+- **init:** each `--principle` yields a rule-bearing ADR (the principle text is the Rule). In `--founding-file`, a per-ADR `## Rule` section is honored; absent ⇒ record-only.
+- **Skills:** `adr-draft` asks whether the decision is a standing rule or a point-in-time record, and drafts the Rule section accordingly; `plan-gate`/`constitution-gov` prose updated to the curated-projection model.
+- **Migration:** none mechanically — pre-existing ADRs without Rule sections simply stop projecting. This repo's own constitution empties to the placeholder; the founding **re-seed is user-interactive with per-ADR approval** and is scheduled before the `v0.1.0` cut (also closes the consent gap flagged 2026-07-03).
+
 ---
 
 ## 3. Stack & repo layout (all choices verified live, 2026-07-02)
@@ -176,7 +189,7 @@ adr-sourced-constitution/
 | `constitution regen` | Deterministic projection (spec §6): read all → active set → group → render → atomic write. Warns >~200 lines (§2.1). Also refreshes managed blocks + manifest. |
 | `constitution guard` | §2.7: `--base <ref>` / merge-base / manifest-only; exit 0/1/2; `--format json`. |
 
-`constitution.md` render template (per active ADR under its category heading): title as rule heading, `Decision Outcome` body, then a metadata line (`ADR-0007 · 2026-07-01 · source FS-0042`). A short generated header states the file is a projection and must never be hand-edited, pointing at `adr/`. Exact layout is finalized in M1 against golden fixtures.
+`constitution.md` render template (per **rule-bearing** active ADR under its category heading, §2.12): title as rule heading, the `Rule` section body, then a metadata line (`ADR-0007 · 2026-07-01 · source FS-0042`). Record-only ADRs stay in the log and do not project. A short generated header states the file is a projection and must never be hand-edited, pointing at `adr/`. Exact layout is finalized against golden fixtures. `adr new`/`supersede` accept `--rule <text>` (§2.12).
 
 ---
 
@@ -232,6 +245,10 @@ Git mode (HEAD + merge-base), manifest mode, id-uniqueness, exit codes, `--forma
 Author the four SKILL.md bodies (§6); `deviation.json` end-to-end; **dogfood:** run `init` on this repo, seed founding ADRs from this plan's decisions (§2.11). Run the remaining live spike (§11.1) with a real Claude Code session (+ at least one AGENTS.md-only tool if available).
 **DoD (live sessions, the Phase-1-style acceptance):** an agent proposes an ADR from conversation and the write happens **only** after explicit human approval at the permission prompt; a plan containing a **deliberately planted violation** yields `deviation.json` citing the correct ADR-id; the governance skill demonstrably has the constitution in context (probe question); this repo's own `constitution/` is live and `guard` runs in its CI.
 
+### M5.5 — Rule-bearing projection (post-review revision, §2.12)
+Implement §2.12 end to end: `## Rule` section parse/validate in `internal/adr`; rule-only projection + empty-constitution placeholder + 5-line Rule warning in `internal/render`/`regen`; `--rule` flag (and body-file Rule detection, both-is-error) on `adr new`/`supersede`; init `--principle`/`--founding-file` rule semantics; `deviation validate` rule-bearing tightening; skills prose updates (adr-draft rule-or-record question; plan-gate/constitution-gov alignment) with fan-out refresh; spec doc (`adr-sourced-constitution.md`) aligned to the curated-projection model; goldens/testscripts updated with mixed rule/record fixtures; dogfood `regen` (this repo's constitution.md shrinks to the placeholder pending the user-interactive re-seed).
+**DoD:** goldens byte-exact incl. mixed rule/record logs and the empty-constitution case; testscript covers `--rule` vs body-file Rule vs both (error) vs record-only default; `deviation validate` rejects citations of record-only ADRs; determinism ×100 and coverage gates hold; dogfood CI green with the placeholder constitution.
+
 ### M6 — Distribution
 `.goreleaser.yaml` (**`homebrew_casks`, not the removed `brews`**; `main: ./cmd/constitution`; CGO_ENABLED=0; linux/darwin/windows × amd64/arm64; `-trimpath -s -w` + version ldflags; sha256 checksums), create `kentra-io/homebrew-tap`, fine-grained PAT as `HOMEBREW_TAP_TOKEN` (default `GITHUB_TOKEN` cannot push cross-repo), tag-triggered release workflow (`fetch-depth: 0`, `contents: write`, `goreleaser-action@v7`, `version: "~> v2"`), attestations deferred (commented-out follow-up step), claudebox `COPY` snippet in `docs/` using the deterministic asset URL (`…/releases/download/{tag}/constitution_{version}_linux_amd64.tar.gz`).
 **DoD:** `v0.1.0` released by CI; `brew install kentra-io/tap/constitution` and `go install …/cmd/constitution@v0.1.0` both yield a working, correctly-versioned binary; the linux asset URL resolves and the binary runs in a scratch container.
@@ -240,7 +257,7 @@ Author the four SKILL.md bodies (§6); `deviation.json` end-to-end; **dogfood:**
 On the greenfield testbed (`kafka-dq` shell): full adoption pass — `/constitution-init` interview → founding ADRs → append + supersede via conversation → planted-violation gate run. Capture friction as issues; write the companion-sync notes back to the harness docs (planning.md §7/§8 already point here).
 **DoD:** the mvp-plan Phase-1 constitution-related DoD items are demonstrably satisfied by this primitive standalone (bootstrap, append/supersede + regen, violation surfaced, amendment requires consent).
 
-Sequencing notes: M1→M2→M3 are strictly ordered on the domain core; M4 depends on M2; M6 can start any time after M0 (config is testable with snapshot releases) but the `v0.1.0` cut waits for M5; M7 is last. Estimated effort concentration: M2 (byte-preservation + atomicity) and M5 (prompt design + live validation) are the two riskiest; everything else is routine Go.
+Sequencing notes: M1→M2→M3 are strictly ordered on the domain core; M4 depends on M2; M6 can start any time after M0 (config is testable with snapshot releases) but the `v0.1.0` cut waits for M5.5 + the user-interactive founding re-seed (§2.12); M7 is last. Estimated effort concentration: M2 (byte-preservation + atomicity) and M5 (prompt design + live validation) are the two riskiest; everything else is routine Go.
 
 ---
 
