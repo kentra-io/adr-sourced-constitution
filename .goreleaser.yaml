@@ -1,0 +1,117 @@
+# GoReleaser v2 configuration for the `constitution` CLI.
+# Schema: https://goreleaser.com/customization/  (validated against goreleaser v2.16).
+#
+# Release flow (see docs/releasing.md): push a `vX.Y.Z` tag -> the release
+# workflow (.github/workflows/release.yml) runs `goreleaser release`, which
+# builds all targets, publishes a GitHub Release with archives + checksums,
+# and pushes a Homebrew cask to kentra-io/homebrew-tap.
+#
+# Local dry run (no publish, builds every target):
+#   goreleaser release --snapshot --clean --skip=publish
+version: 2
+
+# project_name drives the binary name, archive names, and cask name. It is set
+# to `constitution` (NOT the repo name `adr-sourced-constitution`) so the
+# `go install .../cmd/constitution` binary, the brew cask, and the release
+# assets all share the one user-facing name. This is what makes the documented
+# asset URL be `constitution_<version>_linux_amd64.tar.gz` (docs/releasing.md).
+project_name: constitution
+
+before:
+  hooks:
+    - go mod download
+
+builds:
+  - id: constitution
+    main: ./cmd/constitution
+    binary: constitution
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    # -trimpath strips local filesystem paths from the binary for reproducible,
+    # leak-free builds.
+    flags:
+      - -trimpath
+    # -s -w drop the symbol table and DWARF debug info (smaller binary). The
+    # -X flags inject the version metadata into package main's build-time vars
+    # (cmd/constitution/version.go) so a released binary's `--version` reports
+    # its tag, commit, and build date instead of falling back to ReadBuildInfo.
+    ldflags:
+      - -s -w
+      - -X main.version={{ .Version }}
+      - -X main.commit={{ .Commit }}
+      - -X main.date={{ .CommitDate }}
+    # Pin archive/binary mtimes to the commit timestamp for reproducible builds.
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: constitution
+    ids:
+      - constitution
+    # Produces e.g. constitution_0.1.0_linux_amd64.tar.gz — the exact asset name
+    # the claudebox install snippet (docs/releasing.md) depends on. Keep this in
+    # sync with that doc: {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}.
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats:
+      - tar.gz
+    # Windows users expect .zip.
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: "checksums.txt"
+  algorithm: sha256
+
+homebrew_casks:
+  - name: constitution
+    binaries:
+      - constitution
+    homepage: "https://github.com/kentra-io/adr-sourced-constitution"
+    description: "Append-only MADR ADR log rendered to a deterministic constitution.md projection"
+    license: "MIT"
+    # The cask is published to the kentra-io/homebrew-tap repo. GoReleaser needs
+    # a cross-repo token here: the default GITHUB_TOKEN is scoped to THIS repo
+    # only and cannot push to the tap. HOMEBREW_TAP_TOKEN is a fine-grained PAT
+    # (Contents: read/write on homebrew-tap) set as an Actions secret on this
+    # repo and wired through in .github/workflows/release.yml. The owner sets the
+    # secret before the first release (implementation-plan.md §9.4).
+    repository:
+      owner: kentra-io
+      name: homebrew-tap
+      branch: main
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    # The binary is not code-signed / notarized, so macOS Gatekeeper quarantines
+    # it. Strip the quarantine attribute on install so `constitution` runs
+    # without a manual "allow anyway" trip through System Settings.
+    hooks:
+      post:
+        install: |
+          if system_command("/usr/bin/xattr", args: ["-h"]).exit_status == 0
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/constitution"]
+          end
+
+release:
+  # Draft/prerelease handling: publish a normal release; mark prereleases
+  # automatically from tags like v1.2.3-rc1.
+  prerelease: auto
+
+changelog:
+  use: github
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "Merge pull request"

@@ -1,0 +1,49 @@
+name: Release
+
+# Cut a release by pushing a semver tag:  git tag v0.1.0 && git push origin v0.1.0
+# CI then runs GoReleaser (.goreleaser.yaml): builds every target, publishes a
+# GitHub Release with archives + checksums, and pushes the Homebrew cask to
+# kentra-io/homebrew-tap. See docs/releasing.md.
+on:
+  push:
+    tags:
+      - "v*"
+
+# GoReleaser needs write access to create the GitHub Release and upload assets.
+permissions:
+  contents: write
+
+jobs:
+  goreleaser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # GoReleaser's changelog + git-state checks need full history and tags.
+          fetch-depth: 0
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.26.x"
+      - uses: goreleaser/goreleaser-action@v7
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean
+        env:
+          # Default token: creates the Release and uploads assets to THIS repo.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Cross-repo token for pushing the cask to kentra-io/homebrew-tap. The
+          # default GITHUB_TOKEN cannot write to another repo. This secret is a
+          # fine-grained PAT (Contents: read/write on homebrew-tap) that the repo
+          # owner sets under Settings -> Secrets and variables -> Actions BEFORE
+          # the first release (implementation-plan.md §9.4). Absent it, the build
+          # succeeds but the cask push step fails.
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+
+      # Post-v1: attest build provenance for the release artifacts (supply-chain
+      # SLSA provenance). Deferred per implementation-plan.md §9.5/§12. To enable,
+      # uncomment this step AND add `id-token: write` + `attestations: write` to
+      # the job `permissions` above.
+      # - uses: actions/attest-build-provenance@v4
+      #   with:
+      #     subject-path: "dist/*.tar.gz,dist/*.zip,dist/checksums.txt"
