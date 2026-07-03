@@ -45,6 +45,23 @@ func ExtractSections(body []byte) (sections map[string]string, order []string) {
 	return sections, order
 }
 
+// validateRuleSection enforces the rule-bearing contract (plan §2.12): a
+// "## Rule" section MAY be absent (the ADR is then a catalog-only record),
+// but if present it must not be empty or whitespace-only — an empty Rule
+// section is meaningless and would render as a blank rule. Presence with
+// content is what makes an ADR project into constitution.md.
+func validateRuleSection(sections map[string]string, file string) error {
+	content, present := sections[RuleSection]
+	if present && strings.TrimSpace(content) == "" {
+		return &ParseError{
+			File:  file,
+			Field: RuleSection,
+			Msg:   "the \"## Rule\" section is present but empty; give it a normative statement or remove it (a record-only ADR has no Rule section)",
+		}
+	}
+	return nil
+}
+
 // validateSections checks that every section in `required` is present in
 // `sections`, returning a precise *ParseError (file + field = the missing
 // heading) for the first one missing. Exported indirectly via the

@@ -15,20 +15,26 @@ import (
 const header = `<!--
   GENERATED FILE -- projection of the ADR log in constitution/adr/.
   Do not hand-edit; changes will be overwritten by the next "constitution
-  regen". To change a rule, add, supersede, or deprecate an ADR instead.
+  regen". Only rule-bearing (## Rule) active ADRs project here; to change a
+  rule, add, supersede, or deprecate an ADR instead.
 -->
 
 # Constitution
 `
 
-// adrTmplText renders one active ADR's projected entry: title as a rule
-// heading, the Decision Outcome body, then a metadata line (plan §4).
-// Blank-line spacing *between* entries/categories is assembled in Go
-// (renderTemplate) rather than fought over in template whitespace-trim
-// syntax, so it stays easy to reason about and byte-exact.
+// placeholderLine is the sole body line when no active ADR is rule-bearing
+// (plan §2.12): the constitution is empty of standing rules, and the reader
+// is pointed at the decision log.
+const placeholderLine = "No standing rules yet. Decision log: constitution/adr/."
+
+// adrTmplText renders one rule-bearing ADR's projected entry: title as a rule
+// heading, the Rule section body verbatim, then a metadata line (plan §2.12,
+// §4). The Decision Outcome no longer projects. Blank-line spacing *between*
+// entries/categories is assembled in Go (renderTemplate) rather than fought
+// over in template whitespace-trim syntax, so it stays byte-exact.
 const adrTmplText = `### {{.Title}}
 
-{{.DecisionOutcome}}
+{{.Rule}}
 
 {{.MetaLine}}
 `
@@ -36,9 +42,9 @@ const adrTmplText = `### {{.Title}}
 var adrTmpl = template.Must(template.New("adr").Parse(adrTmplText))
 
 type tmplADR struct {
-	Title           string
-	DecisionOutcome string
-	MetaLine        string
+	Title    string
+	Rule     string
+	MetaLine string
 }
 
 // renderTemplate executes the projection template over pre-sorted
@@ -49,9 +55,9 @@ func renderTemplate(sections []CategorySection) ([]byte, error) {
 		adrChunks := make([]string, 0, len(s.ADRs))
 		for _, a := range s.ADRs {
 			data := tmplADR{
-				Title:           a.Title,
-				DecisionOutcome: a.Sections[adr.DecisionOutcomeSection],
-				MetaLine:        metaLine(a),
+				Title:    a.Title,
+				Rule:     a.Rule(),
+				MetaLine: metaLine(a),
 			}
 			var buf bytes.Buffer
 			if err := adrTmpl.Execute(&buf, data); err != nil {
@@ -62,11 +68,12 @@ func renderTemplate(sections []CategorySection) ([]byte, error) {
 		catChunks = append(catChunks, "## "+s.Name+"\n\n"+strings.Join(adrChunks, "\n\n"))
 	}
 
-	out := header
-	if body := strings.Join(catChunks, "\n\n"); body != "" {
-		out += "\n" + body + "\n"
+	body := strings.Join(catChunks, "\n\n")
+	if body == "" {
+		// No rule-bearing active ADR: render the placeholder (plan §2.12).
+		body = placeholderLine
 	}
-	return []byte(out), nil
+	return []byte(header + "\n" + body + "\n"), nil
 }
 
 // metaLine formats an active ADR's metadata line: "ADR-0007 · 2026-07-01
