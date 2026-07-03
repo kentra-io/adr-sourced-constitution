@@ -13,3 +13,7 @@ Go CLI: append-only MADR ADR log → deterministic `constitution.md` projection.
 - E2E tests: testscript txtar in `cmd/constitution/testdata/script/`; goldens
   regenerate with `-update`.
 - Read a file before Edit/Write-ing it — tooling rejects the call otherwise.
+
+<!-- BEGIN adr-sourced-constitution v1 (managed — do not edit by hand; `constitution init` updates it) -->
+@constitution/constitution.md
+<!-- END adr-sourced-constitution v1 -->
