@@ -10,6 +10,7 @@ import (
 	"github.com/urfave/cli/v3"
 	yaml "go.yaml.in/yaml/v3"
 
+	"github.com/kentra-io/adr-sourced-constitution/internal/adr"
 	"github.com/kentra-io/adr-sourced-constitution/internal/atomicwrite"
 	"github.com/kentra-io/adr-sourced-constitution/internal/config"
 )
@@ -109,6 +110,24 @@ func readBody(path string, stdin io.Reader) ([]byte, error) {
 		return io.ReadAll(stdin)
 	}
 	return os.ReadFile(path)
+}
+
+// applyRuleFlag reconciles the --rule flag with a body-file (plan §2.12,
+// shared by `adr new` and `supersede`). --rule composes a "## Rule" section
+// as the last body section, making the ADR rule-bearing. A body-file MAY
+// instead carry its own "## Rule" section; supplying BOTH is an error (the
+// intent is ambiguous). When neither is present the ADR is a catalog-only
+// record. The empty/whitespace-only check is deferred to adr.ValidateBody,
+// which the callers run next.
+func applyRuleFlag(cmd *cli.Command, body []byte) ([]byte, error) {
+	if !cmd.IsSet("rule") {
+		return body, nil
+	}
+	if adr.HasRuleSection(body) {
+		return nil, fmt.Errorf(
+			"both --rule and a --body-file that already contains a \"## Rule\" section were supplied; provide the rule exactly once (drop --rule, or remove the section from the body)")
+	}
+	return adr.AppendRuleSection(body, cmd.String("rule")), nil
 }
 
 // validateSource enforces the source-ref contract (plan §2.8) against the

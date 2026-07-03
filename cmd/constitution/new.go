@@ -27,6 +27,7 @@ func newCommand() *cli.Command {
 			&cli.StringFlag{Name: "category", Required: true, Usage: "category from the configured vocabulary"},
 			&cli.StringFlag{Name: "source", Usage: "source ref (required when sourceTracking.type != none)"},
 			&cli.StringFlag{Name: "body-file", Required: true, Usage: "path to the MADR body (the ## sections), or - for stdin"},
+			&cli.StringFlag{Name: "rule", Usage: "standing-rule text; composed as a ## Rule section (makes the ADR rule-bearing, so it projects into constitution.md). Omit for a catalog-only record. Mutually exclusive with a body-file that carries its own ## Rule section"},
 			&cli.BoolFlag{Name: "new-category", Usage: "introduce --category into the vocabulary if it is unknown"},
 			approveFlag(),
 		},
@@ -48,6 +49,10 @@ func runNew(cmd *cli.Command) error {
 
 	// --- validate everything up front (no writes, no prompt yet) ---
 	body, err := readBody(cmd.String("body-file"), m.stdin)
+	if err != nil {
+		return err
+	}
+	body, err = applyRuleFlag(cmd, body)
 	if err != nil {
 		return err
 	}

@@ -166,11 +166,11 @@ func Validate(root string, data []byte) (Result, error) {
 	}
 
 	// --- 2. semantic ---
-	statuses, err := adrStatuses(root)
+	adrs, err := adrByID(root)
 	if err != nil {
 		return Result{}, err
 	}
-	res.Errors = append(res.Errors, semanticErrors(rep, statuses)...)
+	res.Errors = append(res.Errors, semanticErrors(rep, adrs)...)
 
 	// --- 3. staleness (advisory) ---
 	expected, err := ConstitutionHash(root)
@@ -258,11 +258,13 @@ func instancePointer(segments []string) string {
 }
 
 // semanticErrors checks the citation and tally invariants the schema cannot
-// express: every adrId names an ACTIVE (accepted) ADR — a citation to a
-// superseded or deprecated rule is a hard failure, since the plan-gate must
-// only measure a plan against rules still in force — deviation ids are
-// unique, and the summary counts match the per-severity totals.
-func semanticErrors(rep Report, statuses map[string]adr.Status) []string {
+// express: every adrId names an ACTIVE (accepted) AND rule-bearing ADR —
+// constitution.md now contains only rule-bearing active ADRs (plan §2.12), so
+// the gate reasons over exactly those; a citation to a superseded/deprecated
+// ADR, or to an active record-only ADR that never projects, is a hard failure
+// — deviation ids are unique, and the summary counts match the per-severity
+// totals.
+func semanticErrors(rep Report, adrs map[string]adr.ADR) []string {
 	var errs []string
 
 	seen := map[string]bool{}
@@ -274,14 +276,19 @@ func semanticErrors(rep Report, statuses map[string]adr.Status) []string {
 		}
 		seen[d.ID] = true
 
-		if status, ok := statuses[d.ADRID]; !ok {
+		switch a, ok := adrs[d.ADRID]; {
+		case !ok:
 			errs = append(errs, fmt.Sprintf(
 				"%s: adrId %q does not match any ADR in the log; every deviation must cite a real active rule",
 				where, d.ADRID))
-		} else if status != adr.StatusAccepted {
+		case a.Status != adr.StatusAccepted:
 			errs = append(errs, fmt.Sprintf(
 				"deviations[%d].adrId: %s is %s (deviations must cite active ADRs)",
-				i, d.ADRID, status))
+				i, d.ADRID, a.Status))
+		case !a.IsRuleBearing():
+			errs = append(errs, fmt.Sprintf(
+				"deviations[%d].adrId: %s is a record-only ADR (no ## Rule section); record-only ADRs do not appear in constitution.md, so a deviation cannot cite one — cite a rule-bearing ADR instead",
+				i, d.ADRID))
 		}
 
 		switch d.Severity {
@@ -308,11 +315,11 @@ func fmtSummary(s Summary) string {
 	return fmt.Sprintf("{critical:%d high:%d medium:%d low:%d}", s.Critical, s.High, s.Medium, s.Low)
 }
 
-// adrStatuses maps each ADR id in the live log to its lifecycle status, so the
-// semantic check can require a citation to point at an ACTIVE (accepted) rule.
-// A read failure is a could-not-run condition (the validator cannot confirm
-// citations without the log).
-func adrStatuses(root string) (map[string]adr.Status, error) {
+// adrByID maps each ADR id in the live log to its parsed record, so the
+// semantic check can require a citation to point at an ACTIVE (accepted) AND
+// rule-bearing ADR (plan §2.12). A read failure is a could-not-run condition
+// (the validator cannot confirm citations without the log).
+func adrByID(root string) (map[string]adr.ADR, error) {
 	adrDir := filepath.Join(root, "constitution", "adr")
 	adrs, err := adr.ParseDir(adrDir)
 	if err != nil {
@@ -321,11 +328,11 @@ func adrStatuses(root string) (map[string]adr.Status, error) {
 		}
 		return nil, fmt.Errorf("deviation: reading the ADR log: %w", err)
 	}
-	statuses := make(map[string]adr.Status, len(adrs))
+	byID := make(map[string]adr.ADR, len(adrs))
 	for _, a := range adrs {
-		statuses[a.ID] = a.Status
+		byID[a.ID] = a
 	}
-	return statuses, nil
+	return byID, nil
 }
 
 // ConstitutionHash computes the canonical sha256 of the on-disk

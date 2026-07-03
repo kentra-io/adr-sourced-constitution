@@ -29,6 +29,7 @@ func supersedeCommand() *cli.Command {
 			&cli.StringFlag{Name: "category", Usage: "category of the new ADR (defaults to the superseded ADR's category)"},
 			&cli.StringFlag{Name: "source", Usage: "source ref (required when sourceTracking.type != none)"},
 			&cli.StringFlag{Name: "body-file", Required: true, Usage: "path to the new ADR's MADR body, or - for stdin"},
+			&cli.StringFlag{Name: "rule", Usage: "standing-rule text for the superseding ADR; composed as a ## Rule section (makes it rule-bearing). Mutually exclusive with a body-file that carries its own ## Rule section"},
 			&cli.BoolFlag{Name: "new-category", Usage: "introduce --category into the vocabulary if it is unknown"},
 			approveFlag(),
 		},
@@ -73,6 +74,10 @@ func runSupersede(cmd *cli.Command) error {
 
 	// --- validate up front ---
 	body, err := readBody(cmd.String("body-file"), m.stdin)
+	if err != nil {
+		return err
+	}
+	body, err = applyRuleFlag(cmd, body)
 	if err != nil {
 		return err
 	}

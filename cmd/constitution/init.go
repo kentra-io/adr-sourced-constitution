@@ -43,7 +43,11 @@ func initCommand() *cli.Command {
 			"a target hand-edited since init last wrote it requires --force.\n\n" +
 			"--founding-file format: a Markdown file with one principle per '## ' heading;\n" +
 			"the heading becomes the ADR title and the text beneath it (until the next\n" +
-			"heading) becomes the rule statement (its Decision Outcome).",
+			"heading) becomes its Decision Outcome. A nested '## Rule' heading supplies\n" +
+			"that principle's standing-rule text, making the founding ADR rule-bearing\n" +
+			"(it then projects into constitution.md); a principle with no '## Rule' is a\n" +
+			"catalog-only record. Each --principle is always rule-bearing (its text is the\n" +
+			"rule).",
 		ArgsUsage: " ", // no positional args
 		Flags: []cli.Flag{
 			&cli.StringSliceFlag{Name: "principle", Usage: "a founding principle (repeatable); the text is both the ADR title and its rule statement"},
@@ -254,11 +258,14 @@ func normalizeChoices(flag string, given, def []string, allowed map[string]bool)
 	return out, nil
 }
 
-// principle is one founding rule: Title becomes the ADR heading, Statement
-// its Decision Outcome (the rendered rule text).
+// principle is one founding decision: Title becomes the ADR heading,
+// Statement its Decision Outcome. Rule, when non-empty, is composed as the
+// ADR's "## Rule" section — making it rule-bearing so it projects into
+// constitution.md (plan §2.12). A blank Rule yields a catalog-only record.
 type principle struct {
 	Title     string
 	Statement string
+	Rule      string
 }
 
 // seedFounding writes one ADR per founding principle — but only on a fresh
@@ -325,7 +332,7 @@ func seedFounding(cmd *cli.Command, cfg *config.Config, adrDir string, stdout io
 			Category: category,
 			Date:     today(),
 			Source:   foundingSource,
-			Body:     foundingBody(p.Statement),
+			Body:     foundingBody(p.Statement, p.Rule),
 		})
 		if _, err := adr.ParseBytesUnnamed(content, foundingLabel(p.Title)); err != nil {
 			return &exitError{err: fmt.Errorf("init: invalid %s: %w", foundingLabel(p.Title), err), code: 2}
@@ -364,7 +371,9 @@ func gatherPrinciples(cmd *cli.Command) ([]principle, error) {
 		if p == "" {
 			return nil, &exitError{err: fmt.Errorf("init: --principle must not be empty"), code: 2}
 		}
-		ps = append(ps, principle{Title: p, Statement: p})
+		// A --principle is a standing rule: its text is both the decision
+		// content and the Rule, so the founding ADR is rule-bearing (plan §2.12).
+		ps = append(ps, principle{Title: p, Statement: p, Rule: p})
 	}
 	if f := cmd.String("founding-file"); f != "" {
 		data, err := os.ReadFile(f)
@@ -382,55 +391,78 @@ func gatherPrinciples(cmd *cli.Command) ([]principle, error) {
 
 // parseFoundingFile splits a founding-principles Markdown file into one
 // principle per '## ' heading: the heading is the title, the text until the
-// next heading is the statement (falling back to the title if empty).
+// next heading is the statement (falling back to the title if empty). A
+// heading titled exactly "Rule" does NOT start a new principle — it supplies
+// the current principle's "## Rule" section, making that founding ADR
+// rule-bearing (plan §2.12). A principle with no '## Rule' is a catalog-only
+// record. An empty Rule section is an error, mirroring the ADR contract.
 func parseFoundingFile(content string) ([]principle, error) {
 	var ps []principle
-	var title string
+	var cur *principle
 	var body []string
-	inSection := false
+	inRule := false
 
-	flush := func() {
-		if !inSection {
+	flushBody := func() {
+		if cur == nil {
 			return
 		}
-		statement := strings.TrimSpace(strings.Join(body, "\n"))
-		if statement == "" {
-			statement = title
+		text := strings.TrimSpace(strings.Join(body, "\n"))
+		if inRule {
+			cur.Rule = text
+		} else {
+			cur.Statement = text
 		}
-		ps = append(ps, principle{Title: title, Statement: statement})
+		body = nil
 	}
 
 	for _, line := range strings.Split(content, "\n") {
 		if h, ok := strings.CutPrefix(line, "## "); ok {
-			flush()
-			title = strings.TrimSpace(h)
-			body = nil
-			inSection = true
+			heading := strings.TrimSpace(h)
+			if heading == adr.RuleSection && cur != nil {
+				flushBody()
+				inRule = true
+				continue
+			}
+			flushBody()
+			ps = append(ps, principle{Title: heading})
+			cur = &ps[len(ps)-1]
+			inRule = false
 			continue
 		}
-		if inSection {
+		if cur != nil {
 			body = append(body, line)
 		}
 	}
-	flush()
+	flushBody()
 
 	if len(ps) == 0 {
 		return nil, fmt.Errorf("no principles found (expected one or more '## ' headings)")
+	}
+	for i := range ps {
+		if ps[i].Statement == "" {
+			ps[i].Statement = ps[i].Title
+		}
 	}
 	return ps, nil
 }
 
 // foundingBody builds a minimal, MADR-valid body (all three mandatory
-// sections) around a principle's statement, which becomes the Decision
-// Outcome the projection renders.
-func foundingBody(statement string) string {
-	return "## Context and Problem Statement\n\n" +
+// sections) around a principle's statement (its Decision Outcome). When rule
+// is non-empty it appends a "## Rule" section, making the founding ADR
+// rule-bearing so it projects into constitution.md (plan §2.12); an empty
+// rule yields a catalog-only record.
+func foundingBody(statement, rule string) string {
+	body := "## Context and Problem Statement\n\n" +
 		"Established at project bootstrap by `constitution init`.\n\n" +
 		"## Considered Options\n\n" +
 		"- Adopt this founding principle\n" +
 		"- Leave the convention implicit\n\n" +
 		"## Decision Outcome\n\n" +
 		statement + "\n"
+	if strings.TrimSpace(rule) != "" {
+		body += "\n## " + adr.RuleSection + "\n\n" + strings.TrimSpace(rule) + "\n"
+	}
+	return body
 }
 
 // resolveFoundingCategory picks the category founding ADRs are filed under:
