@@ -25,6 +25,7 @@ func run(ctx context.Context, args []string) error {
 		Usage:   "maintain an ADR log and its constitution.md projection",
 		Version: buildVersion(),
 		Commands: []*cli.Command{
+			initCommand(),
 			adrCommand(),
 			supersedeCommand(),
 			deprecateCommand(),

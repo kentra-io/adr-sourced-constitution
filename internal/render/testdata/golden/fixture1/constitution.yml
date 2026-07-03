@@ -1,7 +1,7 @@
 schemaVersion: 1
 
 agentInstructions:
-  targets: [claude-md, agents-md]
+  targets: [claude, agents]
 
 consent:
   policy: strict

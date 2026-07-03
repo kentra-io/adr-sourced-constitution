@@ -26,15 +26,39 @@ type Config struct {
 	// config order"). Governed: a new category is introduced by an ADR
 	// (plan §2.5); `regen` hard-errors on any ADR category outside it.
 	Categories []string `yaml:"categories"`
+	// Skills records which agent-skill trees `constitution init` fans the
+	// Layer-2 skills out to and `regen` keeps refreshed (plan §6). Optional:
+	// absent/empty means no fan-out (the pre-M4 config shape still parses).
+	Skills Skills `yaml:"skills,omitempty"`
 }
 
 // AgentInstructions records which agent-instruction file(s) get the
-// managed pointer block (spec §7 item 1, §9.1). Not used by M1 (regen
-// doesn't touch these files — that's M4's `init`/managed-block work); the
-// field exists so constitution.yml's full schema round-trips today.
+// managed pointer block (spec §7 item 1, §9.1, plan §2.1/§5). The values
+// are the target keys "claude" (→ CLAUDE.md, an `@import` pointer) and
+// "agents" (→ AGENTS.md, a short textual pointer). Written by `init`,
+// honored (not overridden by flags) on re-runs; `regen` refreshes the
+// blocks named here.
 type AgentInstructions struct {
-	Targets []string `yaml:"targets"` // e.g. "claude-md", "agents-md"
+	Targets []string `yaml:"targets"` // "claude", "agents"
 }
+
+// Skills records the agent-skill fan-out trees (plan §6). Values are the
+// tree keys "claude" (→ .claude/skills/), "agents" (→ .agents/skills/,
+// covering Codex + Gemini), and "cursor" (→ .cursor/skills/). Default on
+// `init` is all three.
+type Skills struct {
+	Trees []string `yaml:"trees,omitempty"`
+}
+
+// Target-key and skills-tree vocabularies (plan §2.1/§5/§6).
+const (
+	TargetClaude = "claude"
+	TargetAgents = "agents"
+
+	SkillTreeClaude = "claude"
+	SkillTreeAgents = "agents"
+	SkillTreeCursor = "cursor"
+)
 
 // Consent policy vocabulary (plan §2.4): "strict" | "off". Not enforced
 // by M1 (regen is a non-mutating command); consumed by M2's mutating
@@ -71,6 +95,17 @@ var validSourceTrackingTypes = map[string]bool{
 	SourceTrackingGeneric:     true,
 	SourceTrackingGitHubIssue: true,
 	SourceTrackingJira:        true,
+}
+
+var validTargets = map[string]bool{
+	TargetClaude: true,
+	TargetAgents: true,
+}
+
+var validSkillTrees = map[string]bool{
+	SkillTreeClaude: true,
+	SkillTreeAgents: true,
+	SkillTreeCursor: true,
 }
 
 // Load reads and validates constitution.yml at path.
@@ -131,6 +166,24 @@ func (c *Config) validate(path string) error {
 			SourceTrackingNone, SourceTrackingGeneric, SourceTrackingGitHubIssue, SourceTrackingJira,
 			c.SourceTracking.Type,
 		)
+	}
+
+	for _, t := range c.AgentInstructions.Targets {
+		if !validTargets[t] {
+			return fmt.Errorf(
+				"%s: field %q: unknown target %q (allowed: %q, %q)",
+				path, "agentInstructions.targets", t, TargetClaude, TargetAgents,
+			)
+		}
+	}
+
+	for _, tr := range c.Skills.Trees {
+		if !validSkillTrees[tr] {
+			return fmt.Errorf(
+				"%s: field %q: unknown skills tree %q (allowed: %q, %q, %q)",
+				path, "skills.trees", tr, SkillTreeClaude, SkillTreeAgents, SkillTreeCursor,
+			)
+		}
 	}
 
 	return nil

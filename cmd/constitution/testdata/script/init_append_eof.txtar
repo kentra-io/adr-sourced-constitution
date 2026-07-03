@@ -1,0 +1,28 @@
+# A pre-existing CLAUDE.md with no markers: init appends the managed block at
+# EOF and leaves the user's existing content untouched (M4 DoD block-append).
+
+env CONSTITUTION_TODAY=2026-07-02
+
+exec constitution init --principle 'P1' --target claude
+
+# user content preserved verbatim, block appended after it
+grep 'Existing user guidance' CLAUDE.md
+grep '<!-- BEGIN adr-sourced-constitution v1' CLAUDE.md
+grep '@constitution/constitution.md' CLAUDE.md
+cmp CLAUDE.md want-claude.md
+
+# only the claude target was selected: no AGENTS.md
+! exists AGENTS.md
+
+-- CLAUDE.md --
+# My project
+
+Existing user guidance.
+-- want-claude.md --
+# My project
+
+Existing user guidance.
+
+<!-- BEGIN adr-sourced-constitution v1 (managed — do not edit by hand; `constitution init` updates it) -->
+@constitution/constitution.md
+<!-- END adr-sourced-constitution v1 -->

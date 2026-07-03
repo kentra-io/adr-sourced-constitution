@@ -1,0 +1,34 @@
+# A corrupt/version-mismatched constitution/.state must never brick auto-regen
+# or the mutating verbs that trigger it (the binding "auto-regen must never be
+# blockable" invariant). LoadState self-heals: it degrades to an empty drift
+# state with a prominent stderr warning, so `adr new` still lands the ADR and
+# writes the projection, and exits 0 — the exit code never lies.
+
+env CONSTITUTION_TODAY=2026-07-02
+
+exec constitution init --principle 'P1' --target claude
+
+# poison the CLI's drift bookkeeping
+cp corrupt.state constitution/.state
+
+# adr new triggers regen -> Refresh -> LoadState (degrades, warns) but succeeds
+exec constitution adr new --title 'New rule' --category architecture --body-file body.md --approve
+stdout 'created .*ADR-0002-new-rule\.md'
+stdout 'wrote .*constitution\.md'
+stderr 'empty drift state'
+exists constitution/adr/ADR-0002-new-rule.md
+
+-- corrupt.state --
+schemaVersion: [1
+-- body.md --
+## Context and Problem Statement
+
+x
+
+## Considered Options
+
+- a
+
+## Decision Outcome
+
+y

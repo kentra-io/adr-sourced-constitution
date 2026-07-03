@@ -1,0 +1,24 @@
+# A --founding-file section with a blank '## ' heading composes an ADR with an
+# empty title. Pre-flight runs EVERY composed founding ADR through the read-path
+# validator before writing any of them, so this fails fast (exit 2) with nothing
+# seeded — a persisted `title: ""` record would poison the log and make every
+# later regen fail. (The blank heading line below is '##' + a trailing space, so
+# it parses as a heading whose title trims to empty — keep that space.)
+
+env CONSTITUTION_TODAY=2026-07-02
+
+exitcode 2 constitution init --founding-file principles.md --target claude
+stderr 'invalid founding principle'
+
+# nothing was seeded: neither the valid section nor the blank-titled one landed
+! exists constitution/adr/ADR-0001-tests-are-mandatory.md
+! exists constitution/adr/ADR-0002-adr.md
+
+-- principles.md --
+## Tests are mandatory
+
+Every change ships with tests.
+
+## 
+
+An orphan body under a blank heading.
