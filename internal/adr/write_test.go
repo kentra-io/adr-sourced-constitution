@@ -3,6 +3,7 @@ package adr
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -96,6 +97,52 @@ func TestSlugify(t *testing.T) {
 	for _, tt := range tests {
 		if got := Slugify(tt.in); got != tt.want {
 			t.Errorf("Slugify(%q) = %q, want %q", tt.in, got, tt.want)
+		}
+	}
+}
+
+func TestSlugifyBounded(t *testing.T) {
+	// A pathologically long title must not yield an unbounded (>255-byte)
+	// filename. The slug is capped at a hyphen boundary, stays non-empty, and
+	// is deterministic across calls.
+	words := make([]string, 60)
+	for i := range words {
+		words[i] = "word"
+	}
+	long := strings.Join(words, " ") // "word word word ..." -> 60 hyphenated tokens
+
+	got := Slugify(long)
+	if len(got) > maxSlugLen {
+		t.Fatalf("Slugify(long) length = %d, want <= %d", len(got), maxSlugLen)
+	}
+	if got == "" || got == "adr" {
+		t.Fatalf("Slugify(long) = %q, want a real bounded slug", got)
+	}
+	if strings.HasPrefix(got, "-") || strings.HasSuffix(got, "-") {
+		t.Fatalf("Slugify(long) = %q, must not have leading/trailing hyphens", got)
+	}
+	if got != Slugify(long) {
+		t.Fatal("Slugify is not deterministic for a long title")
+	}
+	// The bounded slug keeps the leading words of the title (cut at a boundary).
+	if !strings.HasPrefix(got, "word-word") {
+		t.Fatalf("Slugify(long) = %q, expected to start with the title's words", got)
+	}
+	// A single unbroken over-long word is hard-truncated to the bound.
+	oneWord := strings.Repeat("a", 200)
+	if l := len(Slugify(oneWord)); l != maxSlugLen {
+		t.Fatalf("Slugify(one long word) length = %d, want %d", l, maxSlugLen)
+	}
+}
+
+func TestSlugifyUnderBoundUnchanged(t *testing.T) {
+	// Titles under the bound must be untouched (golden-file stability).
+	for _, s := range []string{
+		"use-event-sourcing",
+		"model-the-constitution-as-an-event-sourced-adr-log",
+	} {
+		if got := Slugify(strings.ReplaceAll(s, "-", " ")); got != s {
+			t.Errorf("Slugify short title = %q, want %q", got, s)
 		}
 	}
 }

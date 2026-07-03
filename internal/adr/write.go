@@ -114,10 +114,17 @@ func Filename(id, title string) string {
 	return id + "-" + Slugify(title) + ".md"
 }
 
+// maxSlugLen bounds the slug portion of a filename so a very long title can
+// never produce a filename past the common 255-byte path-component limit
+// (the id prefix + ".md" suffix leave ample headroom). The slug is only for
+// human-readable filenames; the full title is preserved verbatim in
+// frontmatter, so truncating it here is lossless for the log's meaning.
+const maxSlugLen = 80
+
 // Slugify turns a title into a filename-safe slug: lowercase, runs of
-// non-alphanumeric characters collapsed to a single hyphen, trimmed. An
-// empty result (a title with no alphanumerics) falls back to "adr" so a
-// filename is always well-formed.
+// non-alphanumeric characters collapsed to a single hyphen, trimmed, and
+// bounded to maxSlugLen at a hyphen boundary. An empty result (a title with
+// no alphanumerics) falls back to "adr" so a filename is always well-formed.
 func Slugify(title string) string {
 	var b strings.Builder
 	prevHyphen := false
@@ -137,7 +144,22 @@ func Slugify(title string) string {
 	if slug == "" {
 		return "adr"
 	}
-	return slug
+	return boundSlug(slug)
+}
+
+// boundSlug caps slug at maxSlugLen, preferring to cut back to the last
+// hyphen boundary so a word is not split; a single unbroken word longer than
+// the bound is hard-truncated. The result is deterministic and never empty
+// (slug is already non-empty and hyphen-trimmed on entry).
+func boundSlug(slug string) string {
+	if len(slug) <= maxSlugLen {
+		return slug
+	}
+	truncated := slug[:maxSlugLen]
+	if i := strings.LastIndexByte(truncated, '-'); i > 0 {
+		truncated = truncated[:i]
+	}
+	return strings.Trim(truncated, "-")
 }
 
 // FindByID returns the path of the ADR file in dir whose filename encodes
