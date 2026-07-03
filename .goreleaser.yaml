@@ -91,6 +91,12 @@ homebrew_casks:
       name: homebrew-tap
       branch: main
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    # Prerelease tags (e.g. v0.1.0-rc1) must NOT overwrite the stable cask in the
+    # tap. "auto" skips the cask upload whenever the version is a prerelease
+    # (SemVer with a hyphen), so an -rc/-beta build still produces a GitHub
+    # Release + archives but leaves the published formula pointing at the last
+    # stable version. skip_upload only affects publish; the build is unaffected.
+    skip_upload: "auto"
     # The binary is not code-signed / notarized, so macOS Gatekeeper quarantines
     # it. Strip the quarantine attribute on install so `constitution` runs
     # without a manual "allow anyway" trip through System Settings.

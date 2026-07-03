@@ -48,6 +48,20 @@ jobs:
         with:
           version: v2.12.2
 
+  # Validate .goreleaser.yaml at PR time so a broken release config is caught
+  # before a tag ever runs release.yml. `goreleaser check` is config-only (no
+  # build/publish); the pinned `version: "~> v2"` matches release.yml. Required
+  # (not continue-on-error): config validity is binary.
+  release-config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: goreleaser/goreleaser-action@v7
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: check
+
   # This repo governs itself (dogfood, implementation-plan.md §2.11): its own
   # constitution/ log is guarded here. ADVISORY (continue-on-error) exactly as
   # docs/ci-guard-example.yml prescribes — surfaces out-of-band mutation of the
