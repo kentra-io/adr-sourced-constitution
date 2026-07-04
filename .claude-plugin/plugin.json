@@ -1,0 +1,12 @@
+{
+  "name": "adr-sourced-constitution",
+  "description": "Event-sourced ADR log → deterministic constitution.md projection. Bundles the governance skills: adr-draft, plan-gate, constitution-init, constitution-gov.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Kentra"
+  },
+  "homepage": "https://github.com/kentra-io/adr-sourced-constitution",
+  "repository": "https://github.com/kentra-io/adr-sourced-constitution",
+  "license": "MIT",
+  "keywords": ["adr", "governance", "constitution", "sdd", "spec-driven", "madr"]
+}
