@@ -16,7 +16,9 @@ exists .cursor/skills/plan-gate/SKILL.md
 grep 'Priority hierarchy \(highest wins\)' .claude/skills/constitution-gov/SKILL.md
 grep 'The consent checkpoint' .claude/skills/adr-draft/SKILL.md
 grep 'Check a plan against this repo' .claude/skills/plan-gate/SKILL.md
-grep 'Bootstrap this repository' .claude/skills/constitution-init/SKILL.md
+# constitution-init is bootstrap-only: it ships via the plugin and is never
+# fanned into the governed repo.
+! exists .claude/skills/constitution-init/SKILL.md
 ! grep 'Placeholder skill body' .claude/skills/constitution-gov/SKILL.md
 ! grep 'Placeholder skill body' .agents/skills/adr-draft/SKILL.md
 ! grep 'Placeholder skill body' .cursor/skills/plan-gate/SKILL.md

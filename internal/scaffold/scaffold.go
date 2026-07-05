@@ -302,8 +302,18 @@ func treeDir(tree string) (string, bool) {
 	return "", false
 }
 
+// bootstrapOnlySkills are embedded so the marketplace plugin can ship them,
+// but are never fanned into a governed repo: they exist to *create* a
+// constitution, not to operate one. Adopters get these from the plugin (user
+// scope); a governed repo only carries the ongoing-governance skills.
+var bootstrapOnlySkills = map[string]bool{
+	"constitution-init": true,
+}
+
 // skillNames returns the embedded skills' directory names, in ReadDir order
-// (sorted), so fan-out is deterministic.
+// (sorted), so fan-out is deterministic. Bootstrap-only skills (see
+// bootstrapOnlySkills) are excluded — they are delivered by the plugin, not
+// copied into the governed repo.
 func skillNames() ([]string, error) {
 	entries, err := fs.ReadDir(root.SkillsFS, "skills")
 	if err != nil {
@@ -311,7 +321,7 @@ func skillNames() ([]string, error) {
 	}
 	var names []string
 	for _, e := range entries {
-		if e.IsDir() {
+		if e.IsDir() && !bootstrapOnlySkills[e.Name()] {
 			names = append(names, e.Name())
 		}
 	}
