@@ -20,8 +20,10 @@ exists constitution/adr/.manifest.sha256
 exists CLAUDE.md
 exists AGENTS.md
 
-# --- skills fanned out to all three trees (real copies) ---
-exists .claude/skills/constitution-init/SKILL.md
+# --- ongoing-governance skills fanned out to all three trees (real copies);
+#     the bootstrap-only constitution-init skill is NOT fanned — it ships via
+#     the marketplace plugin, not the governed repo ---
+! exists .claude/skills/constitution-init/SKILL.md
 exists .claude/skills/adr-draft/SKILL.md
 exists .claude/skills/plan-gate/SKILL.md
 exists .claude/skills/constitution-gov/SKILL.md
@@ -41,7 +43,6 @@ grep 'status: accepted' constitution/adr/ADR-0001-all-code-must-have-tests.md
 grep '## Decision Outcome' constitution/adr/ADR-0001-all-code-must-have-tests.md
 
 # --- the skill stub has its invocation stance ---
-grep 'disable-model-invocation: true' .claude/skills/constitution-init/SKILL.md
 grep 'disable-model-invocation: true' .claude/skills/plan-gate/SKILL.md
 
 # --- regen and guard are clean on the fresh scaffold ---

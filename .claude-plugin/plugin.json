@@ -1,6 +1,6 @@
 {
   "name": "adr-sourced-constitution",
-  "description": "Event-sourced ADR log → deterministic constitution.md projection. Bundles the governance skills: adr-draft, plan-gate, constitution-init, constitution-gov.",
+  "description": "Bootstrap skill for the adr-sourced-constitution primitive: constitution-init interviews and scaffolds a project's constitution (event-sourced ADR log → deterministic constitution.md). The ongoing-governance skills (constitution-gov, adr-draft, plan-gate) are installed into the governed repo by `constitution init`, not bundled here.",
   "version": "0.1.0",
   "author": {
     "name": "Kentra"
