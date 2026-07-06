@@ -16,6 +16,21 @@ First check you are not clobbering an existing setup: if `constitution.yml`
 already exists, stop and tell the human this repo is already initialized (a
 re-run only refreshes integration; it will not re-seed founding ADRs).
 
+## Ensure the `constitution` CLI is available
+
+Every step here shells out to `constitution`. If it is not on PATH (a fresh
+container often has no binary), install the **prebuilt release** — do **not**
+build from source or install a Go toolchain (that is only for developing the
+primitive itself):
+
+```
+curl -sSfL https://raw.githubusercontent.com/kentra-io/adr-sourced-constitution/main/install.sh | sh
+```
+
+This is arch-aware, checksum-verified, and installs to `~/.local/bin` (no root).
+Add that dir to PATH if the script warns it is missing. For containers, prefer
+baking the binary into the image (see the repo's `docs/releasing.md`).
+
 ## Interview — gather, confirming each answer
 
 1. **Agent-instruction targets.** Which files should carry the managed pointer

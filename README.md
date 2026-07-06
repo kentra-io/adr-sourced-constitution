@@ -22,12 +22,38 @@ It ships as a Go CLI + agent-agnostic skills/commands + thin per-framework
 adapters, integrating by default via a dedicated folder and an agent-instructions
 pointer.
 
+## Install
+
+Prebuilt binaries ship on every [release](https://github.com/kentra-io/adr-sourced-constitution/releases)
+for linux/darwin/windows × amd64/arm64. Pick the channel for your environment:
+
+- **Linux / claudebox / CI / macOS-without-brew** — the neutral install script
+  (arch-aware, checksum-verified, no toolchain, user-space by default):
+
+  ```sh
+  curl -sSfL https://raw.githubusercontent.com/kentra-io/adr-sourced-constitution/main/install.sh | sh
+  # pin a version:      … | sh -s -- v0.1.0
+  # choose a dir:       … | BINDIR=/usr/local/bin sh
+  ```
+
+  Default `BINDIR` is `~/.local/bin` (no root). To bake it into a container image,
+  see [docs/releasing.md](./docs/releasing.md#claudebox--docker).
+
+- **macOS host** — Homebrew cask from the tap (this is a **cask, macOS-only**; it
+  does not cover Linux — use the script above there):
+
+  ```sh
+  brew install --cask kentra-io/tap/constitution
+  ```
+
+- **From source** (only when developing the primitive itself):
+  `go install github.com/kentra-io/adr-sourced-constitution/cmd/constitution@latest`.
+
 ## Status
 
-**DESIGN — pending review.** The buildable design lives in
-[`adr-sourced-constitution.md`](./adr-sourced-constitution.md); the sequenced
-v1 build plan lives in [`implementation-plan.md`](./implementation-plan.md).
-No code yet.
+The [design](./adr-sourced-constitution.md) and [v1 build plan](./implementation-plan.md)
+are implemented and released (v0.1.0). The deferred **code-validation** sweep
+(README use #3) is the remaining roadmap item.
 
 ## License
 

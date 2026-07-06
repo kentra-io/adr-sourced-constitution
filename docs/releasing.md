@@ -41,36 +41,29 @@ https://github.com/kentra-io/adr-sourced-constitution/releases/download/v0.1.0/c
 
 ### claudebox / Docker
 
-Because the asset URL is deterministic, a container image can install a pinned
-version with a plain `COPY`-free download. Add to your `.claudebox/Dockerfile`
-(or any Debian/Ubuntu-based image):
+A fresh container (a new product's claudebox, CI, any Debian/Ubuntu image) has
+no `constitution` binary. Provision it at image-build time so nothing falls back
+to building from source. The one-liner: pipe [`install.sh`](../install.sh) with a
+pinned tag and a system `BINDIR` (root at build time, so `/usr/local/bin` is on
+everyone's PATH):
 
 ```dockerfile
-# Install the constitution CLI at a pinned version.
-ARG CONSTITUTION_VERSION=0.1.0
-RUN set -eux; \
-    arch="$(dpkg --print-architecture)"; \
-    case "$arch" in \
-      amd64) goarch=amd64 ;; \
-      arm64) goarch=arm64 ;; \
-      *) echo "unsupported arch: $arch" >&2; exit 1 ;; \
-    esac; \
-    base="https://github.com/kentra-io/adr-sourced-constitution/releases/download/v${CONSTITUTION_VERSION}"; \
-    asset="constitution_${CONSTITUTION_VERSION}_linux_${goarch}.tar.gz"; \
-    cd /tmp; \
-    curl -fsSL "$base/$asset" -o "$asset"; \
-    curl -fsSL "$base/checksums.txt" -o checksums.txt; \
-    # Verify the download against the release checksums before extracting.
-    # --ignore-missing checks only the asset we fetched, not every line.
-    sha256sum -c --ignore-missing checksums.txt; \
-    tar -xzf "$asset" -C /usr/local/bin constitution; \
-    rm "$asset" checksums.txt; \
-    constitution --version
+# Install the constitution CLI at a pinned version (arch-aware, checksum-verified).
+ARG CONSTITUTION_VERSION=v0.1.0
+RUN curl -sSfL https://raw.githubusercontent.com/kentra-io/adr-sourced-constitution/main/install.sh \
+      | BINDIR=/usr/local/bin sh -s -- "${CONSTITUTION_VERSION}"
 ```
 
-The `<version>_<os>_<arch>` template is produced by the `archives.name_template`
-in [`.goreleaser.yaml`](../.goreleaser.yaml); keep the two in sync if either
-changes.
+`install.sh` detects OS/arch, downloads the matching release archive, verifies it
+against `checksums.txt`, and drops the binary in `BINDIR`. It never installs a Go
+toolchain or builds from source. Defaults: latest release, `BINDIR=~/.local/bin`
+(user space — no root needed) when run outside a Dockerfile.
+
+If you prefer no pipe-to-`sh`, the deterministic asset URL
+(`constitution_<version>_<os>_<arch>.tar.gz`, produced by
+`archives.name_template` in [`.goreleaser.yaml`](../.goreleaser.yaml)) lets you
+download, `sha256sum -c --ignore-missing checksums.txt`, and `tar -xzf … -C
+/usr/local/bin constitution` by hand.
 
 ## How a release is cut
 
