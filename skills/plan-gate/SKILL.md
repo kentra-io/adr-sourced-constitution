@@ -18,6 +18,10 @@ the log (`constitution/adr/`) but never appear here, and you must not cite them
 (the CLI validator rejects a citation to a record-only ADR). The constitution
 is the complete and exclusive set of rules a plan can deviate from.
 
+If the `constitution` binary is not on PATH, install the prebuilt release —
+`curl -sSfL https://raw.githubusercontent.com/kentra-io/adr-sourced-constitution/main/install.sh | sh`
+— do **not** build from source or install a Go toolchain.
+
 Where the platform supports it, run this in a **read-only / forked context**
 (a sub-agent with no write tools): the gate should never mutate anything, and
 isolating it keeps that guarantee structural.
