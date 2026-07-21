@@ -48,7 +48,7 @@ func TestUnknownCategory(t *testing.T) {
 	cfg := &config.Config{Categories: []string{"architecture", "code-style"}}
 	adrs := []adr.ADR{newADR("ADR-0001", 1, "bogus", adr.StatusAccepted)}
 
-	_, err := render.Render(cfg, adrs)
+	_, _, err := render.Render(cfg, adrs)
 	if err == nil {
 		t.Fatal("Render() error = nil, want an unknown-category error")
 	}
@@ -71,7 +71,7 @@ func TestUnknownCategoryOnInactiveADR(t *testing.T) {
 	cfg := &config.Config{Categories: []string{"architecture"}}
 	adrs := []adr.ADR{newADR("ADR-0001", 1, "bogus", adr.StatusSuperseded)}
 
-	if _, err := render.Render(cfg, adrs); err == nil {
+	if _, _, err := render.Render(cfg, adrs); err == nil {
 		t.Fatal("Render() error = nil, want an unknown-category error even for a non-active ADR")
 	}
 }
@@ -84,7 +84,7 @@ func TestRenderRecordOnlyDoesNotProject(t *testing.T) {
 	rule := newADR("ADR-0001", 1, "architecture", adr.StatusAccepted)
 	record := newRecordADR("ADR-0002", 2, adr.StatusAccepted)
 
-	out, err := render.Render(cfg, []adr.ADR{rule, record})
+	out, _, err := render.Render(cfg, []adr.ADR{rule, record})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +105,7 @@ func TestRenderEmptyConstitutionPlaceholder(t *testing.T) {
 		newRecordADR("ADR-0001", 1, adr.StatusAccepted),
 		newADR("ADR-0002", 2, "architecture", adr.StatusSuperseded), // rule-bearing but inactive
 	}
-	out, err := render.Render(cfg, adrs)
+	out, _, err := render.Render(cfg, adrs)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,7 +126,7 @@ func TestRenderOmitsRecordOnlyCategory(t *testing.T) {
 		newADR("ADR-0001", 1, "architecture", adr.StatusAccepted), // projects
 		newRecordADR("ADR-0002", 2, adr.StatusAccepted),           // record-only
 	}
-	out, err := render.Render(cfg, adrs)
+	out, _, err := render.Render(cfg, adrs)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -167,7 +167,7 @@ func TestGroupOrder(t *testing.T) {
 		newADR("ADR-0003", 3, "architecture", adr.StatusAccepted),
 	}
 
-	sections := render.Group(cfg, render.ActiveSet(adrs))
+	sections := render.Group(cfg, render.ActiveSet(adrs), nil)
 
 	var gotNames []string
 	for _, s := range sections {
@@ -200,7 +200,7 @@ func TestGroupMultiRuleADR(t *testing.T) {
 		},
 	}
 
-	sections := render.Group(cfg, []adr.ADR{a})
+	sections := render.Group(cfg, []adr.ADR{a}, nil)
 	if len(sections) != 2 || sections[0].Name != "architecture" || sections[1].Name != "testing" {
 		t.Fatalf("sections = %+v, want [architecture testing]", sections)
 	}
@@ -220,7 +220,7 @@ func TestRenderOmitsSourceWhenAbsent(t *testing.T) {
 	a := newADR("ADR-0001", 1, "architecture", adr.StatusAccepted)
 	a.Source = "" // sourceTracking: none, or simply not set on this ADR
 
-	out, err := render.Render(cfg, []adr.ADR{a})
+	out, _, err := render.Render(cfg, []adr.ADR{a})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -274,7 +274,7 @@ Second line of the rule.
 	}
 
 	cfg := &config.Config{Categories: []string{"architecture"}}
-	out, err := render.Render(cfg, []adr.ADR{*a})
+	out, _, err := render.Render(cfg, []adr.ADR{*a})
 	if err != nil {
 		t.Fatalf("Render() error = %v", err)
 	}
@@ -294,11 +294,286 @@ func TestRenderIncludesSourceWhenPresent(t *testing.T) {
 	a := newADR("ADR-0001", 1, "architecture", adr.StatusAccepted)
 	a.Source = "FS-0042"
 
-	out, err := render.Render(cfg, []adr.ADR{a})
+	out, _, err := render.Render(cfg, []adr.ADR{a})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(string(out), "ADR-0001 · 2026-07-01 · source FS-0042\n") {
 		t.Errorf("expected metadata line with source segment, got:\n%s", out)
+	}
+}
+
+// ---- Fold tests (retirement / A6/A7) ------------------------------------
+
+// cfgWith builds a config with the given category vocabulary.
+func cfgWith(cats ...string) *config.Config {
+	return &config.Config{Categories: cats}
+}
+
+// mkADR composes a complete, valid MADR file string — frontmatter
+// (id/title/date/status + optional extra lines like "supersedes-rules:
+// [...]"), the mandatory body sections, and an optional "## Rules" body —
+// and parses it through the package's real parse pipeline
+// (adr.ParseBytesUnnamed), so fold tests exercise ADRs exactly as the CLI
+// would see them. The status goes straight into the frontmatter: all three
+// stored statuses are valid on parse, and the fold reads the Status field.
+func mkADR(t *testing.T, id string, status adr.Status, fmExtra, rulesBody string) adr.ADR {
+	t.Helper()
+	var b strings.Builder
+	b.WriteString("---\n")
+	b.WriteString("id: " + id + "\n")
+	b.WriteString("title: Title " + id + "\n")
+	b.WriteString("date: 2026-07-01\n")
+	b.WriteString("status: " + string(status) + "\n")
+	if fmExtra != "" {
+		b.WriteString(fmExtra + "\n")
+	}
+	b.WriteString("---\n\n")
+	b.WriteString("## Context and Problem Statement\n\nWhy.\n\n")
+	b.WriteString("## Considered Options\n\n- Option\n\n")
+	b.WriteString("## Decision Outcome\n\nOutcome for " + id + ".\n")
+	if rulesBody != "" {
+		b.WriteString("\n## Rules\n\n" + rulesBody + "\n")
+	}
+
+	path := "constitution/adr/" + id + "-x.md"
+	a, err := adr.ParseBytesUnnamed([]byte(b.String()), path)
+	if err != nil {
+		t.Fatalf("mkADR(%s): %v", id, err)
+	}
+	return *a
+}
+
+// TestFoldRetirementMasksRule is the core A6 fold: an accepted ADR's
+// supersedes-rules ref masks exactly the targeted rule of the earlier ADR;
+// the earlier ADR's other rules and the retirer's own rules still project.
+func TestFoldRetirementMasksRule(t *testing.T) {
+	a2 := mkADR(t, "ADR-0002", adr.StatusAccepted, "",
+		"### testing\n\n#### old-tiers\nOld.\n\n#### keep-me\nKeep.")
+	a9 := mkADR(t, "ADR-0009", adr.StatusAccepted,
+		"supersedes-rules: [ADR-0002/testing/old-tiers]",
+		"### testing\n\n#### new-tiers\nNew.")
+
+	out, warns, err := render.Render(cfgWith("testing"), []adr.ADR{a2, a9})
+	if err != nil {
+		t.Fatalf("Render() error = %v", err)
+	}
+	if len(warns) != 0 {
+		t.Errorf("Render() warnings = %q, want none", warns)
+	}
+	got := string(out)
+	if !strings.Contains(got, "### keep-me") {
+		t.Errorf("unretired rule keep-me must still project:\n%s", got)
+	}
+	if !strings.Contains(got, "### new-tiers") {
+		t.Errorf("the retirer's own rule new-tiers must project:\n%s", got)
+	}
+	if strings.Contains(got, "Old.") || strings.Contains(got, "### old-tiers") {
+		t.Errorf("retired rule old-tiers must be masked:\n%s", got)
+	}
+}
+
+// TestFoldRemovesRulesMasksToo proves removes-rules has the identical fold
+// effect (A6: the verb documents intent, the mechanics are the same).
+func TestFoldRemovesRulesMasksToo(t *testing.T) {
+	a2 := mkADR(t, "ADR-0002", adr.StatusAccepted, "",
+		"### testing\n\n#### old-tiers\nOld.")
+	a9 := mkADR(t, "ADR-0009", adr.StatusAccepted,
+		"removes-rules: [ADR-0002/testing/old-tiers]", "")
+
+	out, warns, err := render.Render(cfgWith("testing"), []adr.ADR{a2, a9})
+	if err != nil {
+		t.Fatalf("Render() error = %v", err)
+	}
+	if len(warns) != 0 {
+		t.Errorf("Render() warnings = %q, want none", warns)
+	}
+	if strings.Contains(string(out), "Old.") {
+		t.Errorf("removes-rules-retired rule must be masked:\n%s", out)
+	}
+}
+
+func TestFoldDanglingRefIsError(t *testing.T) {
+	a9 := mkADR(t, "ADR-0009", adr.StatusAccepted,
+		"supersedes-rules: [ADR-0002/testing/ghost]",
+		"### testing\n\n#### x\nX.")
+
+	_, _, err := render.Render(cfgWith("testing"), []adr.ADR{a9})
+	if err == nil {
+		t.Fatal("Render() error = nil, want a dangling-ref error")
+	}
+	want := `retirement ref "ADR-0002/testing/ghost" does not resolve to any rule in the log`
+	if !strings.Contains(err.Error(), want) {
+		t.Errorf("Render() error = %q, want it to contain %q", err.Error(), want)
+	}
+	if !strings.Contains(err.Error(), `field "supersedes-rules"`) {
+		t.Errorf("Render() error should name the originating list: %q", err.Error())
+	}
+}
+
+// TestFoldDanglingRefAnyStatus proves dangling detection resolves against
+// the WHOLE log (any status): a ref to a rule of a superseded ADR is not
+// dangling.
+func TestFoldDanglingRefAnyStatus(t *testing.T) {
+	a2 := mkADR(t, "ADR-0002", adr.StatusSuperseded, "",
+		"### testing\n\n#### old-tiers\nOld.")
+	a9 := mkADR(t, "ADR-0009", adr.StatusAccepted,
+		"supersedes-rules: [ADR-0002/testing/old-tiers]",
+		"### testing\n\n#### new-tiers\nNew.")
+
+	_, warns, err := render.Render(cfgWith("testing"), []adr.ADR{a2, a9})
+	if err != nil {
+		t.Fatalf("Render() error = %v, want nil (target exists, just not accepted)", err)
+	}
+	if len(warns) != 0 {
+		t.Errorf("Render() warnings = %q, want none", warns)
+	}
+}
+
+func TestFoldForwardOrSelfRefIsError(t *testing.T) {
+	t.Run("forward", func(t *testing.T) {
+		// ADR-0002 tries to retire a rule of the LATER ADR-0009.
+		a2 := mkADR(t, "ADR-0002", adr.StatusAccepted,
+			"supersedes-rules: [ADR-0009/testing/new-tiers]",
+			"### testing\n\n#### old-tiers\nOld.")
+		a9 := mkADR(t, "ADR-0009", adr.StatusAccepted, "",
+			"### testing\n\n#### new-tiers\nNew.")
+
+		_, _, err := render.Render(cfgWith("testing"), []adr.ADR{a2, a9})
+		if err == nil {
+			t.Fatal("Render() error = nil, want a forward-ref error")
+		}
+		if !strings.Contains(err.Error(), "may only retire rules of an earlier ADR") {
+			t.Errorf("Render() error = %q, want the earlier-ADR message", err.Error())
+		}
+	})
+	t.Run("self", func(t *testing.T) {
+		// ADR-0009 tries to retire its own rule.
+		a9 := mkADR(t, "ADR-0009", adr.StatusAccepted,
+			"supersedes-rules: [ADR-0009/testing/new-tiers]",
+			"### testing\n\n#### new-tiers\nNew.")
+
+		_, _, err := render.Render(cfgWith("testing"), []adr.ADR{a9})
+		if err == nil {
+			t.Fatal("Render() error = nil, want a self-ref error")
+		}
+		if !strings.Contains(err.Error(), "may only retire rules of an earlier ADR") {
+			t.Errorf("Render() error = %q, want the earlier-ADR message", err.Error())
+		}
+	})
+}
+
+func TestFoldDoubleRetireIsError(t *testing.T) {
+	a2 := mkADR(t, "ADR-0002", adr.StatusAccepted, "",
+		"### testing\n\n#### old-tiers\nOld.")
+	a8 := mkADR(t, "ADR-0008", adr.StatusAccepted,
+		"supersedes-rules: [ADR-0002/testing/old-tiers]",
+		"### testing\n\n#### mid-tiers\nMid.")
+	a9 := mkADR(t, "ADR-0009", adr.StatusAccepted,
+		"removes-rules: [ADR-0002/testing/old-tiers]", "")
+
+	_, _, err := render.Render(cfgWith("testing"), []adr.ADR{a2, a8, a9})
+	if err == nil {
+		t.Fatal("Render() error = nil, want a double-retire error")
+	}
+	if !strings.Contains(err.Error(), `already retired by ADR-0008`) {
+		t.Errorf("Render() error = %q, want it to name the first retirer (already retired by ADR-0008)", err.Error())
+	}
+}
+
+// TestFoldIntraADRDuplicateRef: the same ref listed twice within ONE ADR's
+// supersedes-rules is rejected (carried Task-3 review item).
+func TestFoldIntraADRDuplicateRef(t *testing.T) {
+	a2 := mkADR(t, "ADR-0002", adr.StatusAccepted, "",
+		"### testing\n\n#### old-tiers\nOld.")
+	a9 := mkADR(t, "ADR-0009", adr.StatusAccepted,
+		"supersedes-rules: [ADR-0002/testing/old-tiers, ADR-0002/testing/old-tiers]", "")
+
+	_, _, err := render.Render(cfgWith("testing"), []adr.ADR{a2, a9})
+	if err == nil {
+		t.Fatal("Render() error = nil, want an intra-ADR duplicate error")
+	}
+	want := `retirement ref "ADR-0002/testing/old-tiers": listed more than once by ADR-0009`
+	if !strings.Contains(err.Error(), want) {
+		t.Errorf("Render() error = %q, want it to contain %q", err.Error(), want)
+	}
+}
+
+// TestFoldCrossListDuplicateRef: one ADR listing the same ref in BOTH
+// supersedes-rules and removes-rules is rejected; the error names the list
+// the second occurrence came from.
+func TestFoldCrossListDuplicateRef(t *testing.T) {
+	a2 := mkADR(t, "ADR-0002", adr.StatusAccepted, "",
+		"### testing\n\n#### old-tiers\nOld.")
+	a9 := mkADR(t, "ADR-0009", adr.StatusAccepted,
+		"supersedes-rules: [ADR-0002/testing/old-tiers]\nremoves-rules: [ADR-0002/testing/old-tiers]", "")
+
+	_, _, err := render.Render(cfgWith("testing"), []adr.ADR{a2, a9})
+	if err == nil {
+		t.Fatal("Render() error = nil, want a cross-list duplicate error")
+	}
+	if !strings.Contains(err.Error(), "listed more than once by ADR-0009") {
+		t.Errorf("Render() error = %q, want the listed-more-than-once message", err.Error())
+	}
+	if !strings.Contains(err.Error(), `field "removes-rules"`) {
+		t.Errorf("Render() error should name the list the duplicate occurrence came from: %q", err.Error())
+	}
+}
+
+// TestFoldResurrectionWarns is A7: a no-longer-accepted retirer's
+// retirements stop applying — the target rule projects again, with exactly
+// one warning naming the retirer and the resurrected ref.
+func TestFoldResurrectionWarns(t *testing.T) {
+	a2 := mkADR(t, "ADR-0002", adr.StatusAccepted, "",
+		"### testing\n\n#### old-tiers\nOld.")
+	a9 := mkADR(t, "ADR-0009", adr.StatusSuperseded,
+		"supersedes-rules: [ADR-0002/testing/old-tiers]",
+		"### testing\n\n#### new-tiers\nNew.")
+
+	out, warns, err := render.Render(cfgWith("testing"), []adr.ADR{a2, a9})
+	if err != nil {
+		t.Fatalf("Render() error = %v", err)
+	}
+	got := string(out)
+	if !strings.Contains(got, "Old.") {
+		t.Errorf("resurrected rule old-tiers must project again:\n%s", got)
+	}
+	if strings.Contains(got, "New.") {
+		t.Errorf("superseded ADR-0009's own rule must not project:\n%s", got)
+	}
+	if len(warns) != 1 {
+		t.Fatalf("Render() warnings = %q, want exactly one", warns)
+	}
+	w := warns[0]
+	if !strings.Contains(w, "ADR-0009") || !strings.Contains(w, "ADR-0002/testing/old-tiers") {
+		t.Errorf("warning must name retirer and ref: %q", w)
+	}
+	if !strings.Contains(w, "resurrect") {
+		t.Errorf("warning must say the rule is resurrected: %q", w)
+	}
+}
+
+// TestFoldResurrectionSuppressedWhenReRetired: no warning when some
+// ACCEPTED ADR also retires the same ref — the rule does not actually
+// become visible, so there is nothing to warn about.
+func TestFoldResurrectionSuppressedWhenReRetired(t *testing.T) {
+	a2 := mkADR(t, "ADR-0002", adr.StatusAccepted, "",
+		"### testing\n\n#### old-tiers\nOld.")
+	a9 := mkADR(t, "ADR-0009", adr.StatusSuperseded,
+		"supersedes-rules: [ADR-0002/testing/old-tiers]",
+		"### testing\n\n#### new-tiers\nNew.")
+	a10 := mkADR(t, "ADR-0010", adr.StatusAccepted,
+		"supersedes-rules: [ADR-0002/testing/old-tiers]",
+		"### testing\n\n#### newest-tiers\nNewest.")
+
+	out, warns, err := render.Render(cfgWith("testing"), []adr.ADR{a2, a9, a10})
+	if err != nil {
+		t.Fatalf("Render() error = %v", err)
+	}
+	if strings.Contains(string(out), "Old.") {
+		t.Errorf("re-retired rule must stay masked:\n%s", out)
+	}
+	if len(warns) != 0 {
+		t.Errorf("Render() warnings = %q, want none (ref re-retired by accepted ADR-0010)", warns)
 	}
 }

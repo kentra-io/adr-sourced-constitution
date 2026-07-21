@@ -30,9 +30,14 @@ func renderFixture(t *testing.T, name string) []byte {
 		t.Fatalf("adr.ParseDir: %v", err)
 	}
 
-	out, err := render.Render(cfg, adrs)
+	out, warns, err := render.Render(cfg, adrs)
 	if err != nil {
 		t.Fatalf("render.Render: %v", err)
+	}
+	// No golden fixture should produce fold warnings; a warning here means a
+	// fixture regressed into an unintended resurrection.
+	if len(warns) != 0 {
+		t.Fatalf("render.Render warnings = %q, want none", warns)
 	}
 	return out
 }
@@ -87,14 +92,20 @@ func TestGoldenFixture1Determinism(t *testing.T) {
 		t.Fatalf("adr.ParseDir: %v", err)
 	}
 
-	first, err := render.Render(cfg, adrs)
+	first, firstWarns, err := render.Render(cfg, adrs)
 	if err != nil {
 		t.Fatalf("render.Render: %v", err)
 	}
+	if len(firstWarns) != 0 {
+		t.Fatalf("render.Render warnings = %q, want none from a golden fixture", firstWarns)
+	}
 	for i := 0; i < 100; i++ {
-		got, err := render.Render(cfg, adrs)
+		got, warns, err := render.Render(cfg, adrs)
 		if err != nil {
 			t.Fatalf("render.Render (run %d): %v", i, err)
+		}
+		if len(warns) != 0 {
+			t.Fatalf("render.Render warnings (run %d) = %q, want none from a golden fixture", i, warns)
 		}
 		if !bytes.Equal(got, first) {
 			t.Fatalf("render.Render is nondeterministic: run %d differs from run 0", i)
