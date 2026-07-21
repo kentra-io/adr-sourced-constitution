@@ -26,11 +26,8 @@ func supersedeCommand() *cli.Command {
 		ArgsUsage: "<id>",
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: "title", Required: true, Usage: "title of the superseding ADR"},
-			&cli.StringFlag{Name: "category", Usage: "category of the new ADR (defaults to the superseded ADR's category)"},
 			&cli.StringFlag{Name: "source", Usage: "source ref (required when sourceTracking.type != none)"},
-			&cli.StringFlag{Name: "body-file", Required: true, Usage: "path to the new ADR's MADR body, or - for stdin"},
-			&cli.StringFlag{Name: "rule", Usage: "standing-rule text for the superseding ADR; composed as a ## Rule section (makes it rule-bearing). Mutually exclusive with a body-file that carries its own ## Rule section"},
-			&cli.BoolFlag{Name: "new-category", Usage: "introduce --category into the vocabulary if it is unknown"},
+			&cli.StringFlag{Name: "body-file", Required: true, Usage: "path to the new ADR's MADR body (optionally including ## Rules), or - for stdin"},
 			approveFlag(),
 		},
 		Action: func(_ context.Context, cmd *cli.Command) error {
@@ -67,17 +64,9 @@ func runSupersede(cmd *cli.Command) error {
 
 	title := cmd.String("title")
 	source := cmd.String("source")
-	category := cmd.String("category")
-	if category == "" {
-		category = oldADR.Category // default to the superseded ADR's category
-	}
 
 	// --- validate up front ---
 	body, err := readBody(cmd.String("body-file"), m.stdin)
-	if err != nil {
-		return err
-	}
-	body, err = applyRuleFlag(cmd, body)
 	if err != nil {
 		return err
 	}
@@ -85,10 +74,6 @@ func runSupersede(cmd *cli.Command) error {
 		return err
 	}
 	if err := validateSource(m.cfg.SourceTracking, source); err != nil {
-		return err
-	}
-	isNewCategory, err := m.checkCategory(category, cmd.Bool("new-category"))
-	if err != nil {
 		return err
 	}
 
@@ -99,7 +84,6 @@ func runSupersede(cmd *cli.Command) error {
 	newFile := adr.Compose(adr.NewADR{
 		ID:         newID,
 		Title:      title,
-		Category:   category,
 		Date:       today(),
 		Source:     source,
 		Supersedes: oldID,
@@ -123,11 +107,6 @@ func runSupersede(cmd *cli.Command) error {
 	}
 
 	// --- ordered writes: new ADR, then old-ADR status patch, then regen ---
-	if isNewCategory {
-		if err := m.appendCategory(category); err != nil {
-			return err
-		}
-	}
 	newDest := filepath.Join(m.adrDir, adr.Filename(newID, title))
 	if err := atomicwrite.WriteFile(newDest, newFile, 0o644); err != nil {
 		return err

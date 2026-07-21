@@ -23,7 +23,6 @@ func TestParseWellFormed(t *testing.T) {
 	path := writeFile(t, dir, "ADR-0001-use-gofmt.md", `---
 id: ADR-0001
 title: Format all Go code with gofmt
-category: code-style
 date: 2026-07-01
 status: accepted
 source: FS-0042
@@ -58,9 +57,6 @@ None significant.
 	if got.Title != "Format all Go code with gofmt" {
 		t.Errorf("Title = %q", got.Title)
 	}
-	if got.Category != "code-style" {
-		t.Errorf("Category = %q", got.Category)
-	}
 	if got.Status != StatusAccepted {
 		t.Errorf("Status = %q", got.Status)
 	}
@@ -73,16 +69,15 @@ None significant.
 	}
 }
 
-// TestParseRuleBearing proves the rule-bearing model (plan §2.12): a "## Rule"
-// section is optional, and its presence with content makes the ADR
-// rule-bearing while its absence makes the ADR a catalog-only record.
+// TestParseRuleBearing proves the rule-bearing model (proposal D5/A1): a
+// "## Rules" section is optional, and its presence with valid entries makes
+// the ADR rule-bearing while its absence makes the ADR a record-only entry.
 func TestParseRuleBearing(t *testing.T) {
 	dir := t.TempDir()
 
 	ruleBody := `---
 id: ADR-0001
 title: A standing rule
-category: architecture
 date: 2026-07-01
 status: accepted
 ---
@@ -99,7 +94,11 @@ Why.
 
 The full decision, at length.
 
-## Rule
+## Rules
+
+### architecture
+
+#### do-the-thing
 
 Do the thing; do not do the other thing.
 `
@@ -109,16 +108,16 @@ Do the thing; do not do the other thing.
 		t.Fatalf("Parse() error = %v", err)
 	}
 	if !a.IsRuleBearing() {
-		t.Error("ADR with a ## Rule section should be rule-bearing")
+		t.Error("ADR with a ## Rules section should be rule-bearing")
 	}
-	if got := a.Rule(); got != "Do the thing; do not do the other thing." {
-		t.Errorf("Rule() = %q", got)
+	want := Rule{Category: "architecture", Slug: "do-the-thing", Text: "Do the thing; do not do the other thing."}
+	if len(a.Rules) != 1 || a.Rules[0] != want {
+		t.Errorf("Rules = %+v, want [%+v]", a.Rules, want)
 	}
 
 	recordBody := `---
 id: ADR-0002
 title: A catalog record
-category: architecture
 date: 2026-07-01
 status: accepted
 ---
@@ -141,10 +140,10 @@ A point-in-time record with no standing rule.
 		t.Fatalf("Parse() error = %v", err)
 	}
 	if rec.IsRuleBearing() {
-		t.Error("ADR with no ## Rule section must be a catalog-only record")
+		t.Error("ADR with no ## Rules section must be a record-only entry")
 	}
-	if rec.Rule() != "" {
-		t.Errorf("Rule() = %q, want empty", rec.Rule())
+	if len(rec.Rules) != 0 {
+		t.Errorf("Rules = %+v, want empty", rec.Rules)
 	}
 }
 
@@ -184,7 +183,6 @@ func TestParseMalformed(t *testing.T) {
 			content: `---
 id: ADR-0002
 title: [unterminated flow sequence
-category: architecture
 date: 2026-07-01
 status: accepted
 ---
@@ -204,7 +202,6 @@ Body.
 			filename: "ADR-0003-missing-title.md",
 			content: `---
 id: ADR-0003
-category: architecture
 date: 2026-07-01
 status: accepted
 ---
@@ -221,7 +218,6 @@ Body.
 			content: `---
 id: ADR-7
 title: Bad id format
-category: architecture
 date: 2026-07-01
 status: accepted
 ---
@@ -238,7 +234,6 @@ Body.
 			content: `---
 id: ADR-0005
 title: Unknown status
-category: architecture
 date: 2026-07-01
 status: proposed
 ---
@@ -247,7 +242,7 @@ status: proposed
 
 Body.
 `,
-			wantErr: `{file}:6: field "status": must be one of "accepted", "superseded", "deprecated" (got "proposed")`,
+			wantErr: `{file}:5: field "status": must be one of "accepted", "superseded", "deprecated" (got "proposed")`,
 		},
 		{
 			name:     "missing Decision Outcome",
@@ -255,7 +250,6 @@ Body.
 			content: `---
 id: ADR-0006
 title: Missing decision outcome section
-category: architecture
 date: 2026-07-01
 status: accepted
 ---
@@ -276,7 +270,6 @@ Options.
 			content: `---
 id: ADR-0007
 title: Bad date format
-category: architecture
 date: 07/01/2026
 status: accepted
 ---
@@ -285,7 +278,7 @@ status: accepted
 
 Body.
 `,
-			wantErr: `{file}:5: field "date": must be an ISO-8601 date YYYY-MM-DD (got "07/01/2026")`,
+			wantErr: `{file}:4: field "date": must be an ISO-8601 date YYYY-MM-DD (got "07/01/2026")`,
 		},
 		{
 			name:     "id does not match filename",
@@ -293,7 +286,6 @@ Body.
 			content: `---
 id: ADR-0009
 title: Frontmatter id does not match filename
-category: architecture
 date: 2026-07-01
 status: accepted
 ---
@@ -305,12 +297,11 @@ Body.
 			wantErr: `{file}:2: field "id": frontmatter id "ADR-0009" does not match filename-derived id "ADR-0008"`,
 		},
 		{
-			name:     "empty Rule section",
-			filename: "ADR-0009-empty-rule.md",
+			name:     "empty Rules section",
+			filename: "ADR-0009-empty-rules.md",
 			content: `---
 id: ADR-0009
-title: Empty rule section
-category: architecture
+title: Empty rules section
 date: 2026-07-01
 status: accepted
 ---
@@ -319,19 +310,18 @@ status: accepted
 
 Body.
 
-## Rule
+## Rules
 
 ` + "   " + `
 `,
-			wantErr: `{file}: field "Rule": the "## Rule" section is present but empty; give it a normative statement or remove it (a record-only ADR has no Rule section)`,
+			wantErr: `{file}: field "Rules": the "## Rules" section is present but empty; give it "### <category>" / "#### <slug>" rule entries or remove it (a record-only ADR has no Rules section)`,
 		},
 		{
-			name:     "duplicate Rule section",
-			filename: "ADR-0009-duplicate-rule.md",
+			name:     "duplicate Rules section",
+			filename: "ADR-0009-duplicate-rules.md",
 			content: `---
 id: ADR-0009
-title: Duplicate rule section
-category: architecture
+title: Duplicate rules section
 date: 2026-07-01
 status: accepted
 ---
@@ -340,23 +330,30 @@ status: accepted
 
 Body.
 
-## Rule
+## Rules
+
+### testing
+
+#### first-rule
 
 First rule.
 
-## Rule
+## Rules
+
+### testing
+
+#### second-rule
 
 Second rule.
 `,
-			wantErr: `{file}: field "Rule": the "## Rule" section appears more than once; a body may carry at most one "## Rule" section`,
+			wantErr: `{file}: field "Rules": the "## Rules" section appears more than once; a body may carry at most one`,
 		},
 		{
-			name:     "heading line in Rule section",
+			name:     "heading line in a rule text",
 			filename: "ADR-0009-heading-in-rule.md",
 			content: `---
 id: ADR-0009
-title: Heading in rule section
-category: architecture
+title: Heading in rule text
 date: 2026-07-01
 status: accepted
 ---
@@ -365,12 +362,16 @@ status: accepted
 
 Body.
 
-## Rule
+## Rules
+
+### testing
+
+#### real-rule
 
 real rule
 # Big Heading
 `,
-			wantErr: `{file}: field "Rule": rule text is plain prose and must not contain Markdown heading lines; found a line beginning with "#": # Big Heading`,
+			wantErr: `{file}: field "Rules": rule text is plain prose and must not contain Markdown heading lines; found: # Big Heading`,
 		},
 	}
 
@@ -403,6 +404,83 @@ real rule
 	}
 }
 
+func TestParseBytesRulesModel(t *testing.T) {
+	src := []byte(`---
+id: ADR-0004
+title: Testing discipline
+date: 2026-07-21
+status: accepted
+supersedes-rules: [ADR-0002/testing/old-tiers]
+removes-rules: [ADR-0002/testing/no-mutation]
+---
+
+## Context and Problem Statement
+
+Why.
+
+## Considered Options
+
+* one
+
+## Decision Outcome
+
+Chosen.
+
+## Rules
+
+### testing
+
+#### three-tier-tests
+Three tiers.
+
+#### no-mocking-unowned
+Never mock types you don't own.
+
+### architecture
+
+#### hex-core
+Hexagonal.
+`)
+	a, err := ParseBytes(src, "ADR-0004-testing-discipline.md")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !a.IsRuleBearing() || len(a.Rules) != 3 {
+		t.Fatalf("Rules = %+v", a.Rules)
+	}
+	if a.Rules[2] != (Rule{Category: "architecture", Slug: "hex-core", Text: "Hexagonal."}) {
+		t.Fatalf("rule order/content wrong: %+v", a.Rules[2])
+	}
+	if len(a.SupersedesRules) != 1 || a.SupersedesRules[0].String() != "ADR-0002/testing/old-tiers" {
+		t.Fatalf("SupersedesRules = %+v", a.SupersedesRules)
+	}
+	if len(a.RemovesRules) != 1 || a.RemovesRules[0].String() != "ADR-0002/testing/no-mutation" {
+		t.Fatalf("RemovesRules = %+v", a.RemovesRules)
+	}
+}
+
+func TestParseBytesBadRuleRefInFrontmatter(t *testing.T) {
+	src := []byte("---\nid: ADR-0002\ntitle: T\ndate: 2026-07-21\nstatus: accepted\nsupersedes-rules: [not-a-ref]\n---\n\n## Context and Problem Statement\n\nx\n\n## Considered Options\n\n* a\n\n## Decision Outcome\n\ny\n")
+	_, err := ParseBytes(src, "ADR-0002-t.md")
+	if err == nil || !strings.Contains(err.Error(), `field "supersedes-rules"`) {
+		t.Fatalf("err = %v, want supersedes-rules field error", err)
+	}
+}
+
+// category: is no longer part of the schema — a file WITHOUT it parses,
+// and a file WITH it still parses (unknown fields are ignored; the
+// in-house pre-v0.2 logs rely on this).
+func TestParseBytesNoCategoryField(t *testing.T) {
+	src := []byte("---\nid: ADR-0001\ntitle: T\ndate: 2026-07-21\nstatus: accepted\n---\n\n## Context and Problem Statement\n\nx\n\n## Considered Options\n\n* a\n\n## Decision Outcome\n\ny\n")
+	a, err := ParseBytes(src, "ADR-0001-t.md")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if a.IsRuleBearing() {
+		t.Fatal("record-only ADR must not be rule-bearing")
+	}
+}
+
 // TestParseCRLF proves parsing is line-ending-independent: a CRLF-authored
 // ADR yields the same model as its LF twin, with no \r bytes surviving
 // into any section content (which would otherwise leak into the rendered
@@ -411,7 +489,6 @@ func TestParseCRLF(t *testing.T) {
 	lf := `---
 id: ADR-0001
 title: CRLF handling
-category: architecture
 date: 2026-07-01
 status: accepted
 ---
@@ -462,7 +539,6 @@ func TestParseBOM(t *testing.T) {
 	content := "\xef\xbb\xbf" + `---
 id: ADR-0001
 title: BOM handling
-category: architecture
 date: 2026-07-01
 status: accepted
 ---

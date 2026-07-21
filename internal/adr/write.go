@@ -67,28 +67,8 @@ func ValidateBody(body []byte, file string) error {
 	if err := validateSections(sections, MandatorySections, file); err != nil {
 		return err
 	}
-	return validateRuleSection(sections, order, file)
-}
-
-// HasRuleSection reports whether a MADR body already carries a "## Rule"
-// section. The write path uses it to reject supplying both --rule and a
-// body-file that already carries its own Rule section (plan §2.12).
-func HasRuleSection(body []byte) bool {
-	sections, _ := ExtractSections(normalize(body))
-	_, present := sections[RuleSection]
-	return present
-}
-
-// AppendRuleSection appends a "## Rule" section carrying rule as the LAST
-// body section (plan §2.12: the CLI composes --rule at the canonical last
-// position). The body is normalized and its trailing blank lines trimmed so
-// the composed section is separated by exactly one blank line. An
-// empty/whitespace rule composes to an empty section that ValidateBody then
-// rejects — the CLI never writes it.
-func AppendRuleSection(body []byte, rule string) []byte {
-	base := strings.TrimRight(normalizeToString(string(body)), "\n")
-	stmt := strings.TrimSpace(normalizeToString(rule))
-	return []byte(base + "\n\n## " + RuleSection + "\n\n" + stmt + "\n")
+	_, err := validateAndParseRules(sections, order, file)
+	return err
 }
 
 // NewADR is the input to Compose: the fields a freshly accepted ADR needs.
@@ -98,25 +78,31 @@ func AppendRuleSection(body []byte, rule string) []byte {
 type NewADR struct {
 	ID         string
 	Title      string
-	Category   string
 	Date       string
 	Source     string // "" when sourceTracking.type is none
 	Supersedes string // "" unless created by `supersede`
-	Body       string // the validated MADR "## " sections
+
+	// SupersedesRules / RemovesRules are already-validated
+	// "ADR-NNNN/<category>/<slug>" ref strings for the frontmatter
+	// rule-retirement lists; omitted from the frontmatter when empty.
+	SupersedesRules []string
+	RemovesRules    []string
+
+	Body string // the validated MADR "## " sections
 }
 
 // Compose builds the full byte content of a new ADR file: a frontmatter
-// block followed by the body. Field order is fixed (id, title, category,
-// date, status, then the optional source/supersedes) so newly created ADRs
-// are uniform; the order is immaterial to correctness since parsing is
-// key-based, but a stable order keeps the log readable and diffs clean.
-// The output is always LF-terminated with a single trailing newline.
+// block followed by the body. Field order is fixed (id, title, date,
+// status, then the optional source/supersedes/supersedes-rules/
+// removes-rules) so newly created ADRs are uniform; the order is immaterial
+// to correctness since parsing is key-based, but a stable order keeps the
+// log readable and diffs clean. The output is always LF-terminated with a
+// single trailing newline.
 func Compose(n NewADR) []byte {
 	var b strings.Builder
 	b.WriteString("---\n")
 	b.WriteString("id: " + n.ID + "\n")
 	b.WriteString("title: " + yamlScalar(n.Title) + "\n")
-	b.WriteString("category: " + yamlScalar(n.Category) + "\n")
 	b.WriteString("date: " + n.Date + "\n")
 	b.WriteString("status: " + string(StatusAccepted) + "\n")
 	if n.Source != "" {
@@ -124,6 +110,12 @@ func Compose(n NewADR) []byte {
 	}
 	if n.Supersedes != "" {
 		b.WriteString("supersedes: " + n.Supersedes + "\n")
+	}
+	if len(n.SupersedesRules) > 0 {
+		b.WriteString("supersedes-rules: [" + strings.Join(n.SupersedesRules, ", ") + "]\n")
+	}
+	if len(n.RemovesRules) > 0 {
+		b.WriteString("removes-rules: [" + strings.Join(n.RemovesRules, ", ") + "]\n")
 	}
 	b.WriteString("---\n\n")
 	b.WriteString(strings.TrimSpace(normalizeToString(n.Body)))

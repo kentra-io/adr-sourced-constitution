@@ -33,7 +33,11 @@ func FuzzParseBytes(f *testing.F) {
 		// A fully valid, BOM-prefixed ADR (id matches the fixed fuzz
 		// path) so the happy path through parseMeta/ExtractSections/
 		// filenameID is in the baseline corpus.
-		"\xef\xbb\xbf---\nid: ADR-0001\ntitle: T\ncategory: c\ndate: 2026-07-01\nstatus: accepted\n---\n\n## Decision Outcome\n\nBody.\n",
+		"\xef\xbb\xbf---\nid: ADR-0001\ntitle: T\ndate: 2026-07-01\nstatus: accepted\n---\n\n## Decision Outcome\n\nBody.\n",
+		// A rule-bearing ADR under the h3/h4 Rules grammar, plus a
+		// rule-retirement frontmatter list, so the Rules pipeline is in
+		// the baseline corpus.
+		"---\nid: ADR-0001\ntitle: T\ndate: 2026-07-01\nstatus: accepted\nsupersedes-rules: [ADR-0002/testing/old-tiers]\n---\n\n## Decision Outcome\n\nBody.\n\n## Rules\n\n### testing\n\n#### t\n\ntext\n",
 	}
 	for _, s := range seeds {
 		f.Add([]byte(s))

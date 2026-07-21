@@ -1,7 +1,6 @@
 ---
 id: ADR-0009
 title: Model the constitution as an event-sourced ADR log, final form
-category: architecture
 date: 2026-06-20
 status: accepted
 source: FS-0009
@@ -29,7 +28,11 @@ of the ADRs with `status: accepted`.
 Supersedes ADR-0005; closes out the architecture question this ADR
 chain worked through.
 
-## Rule
+## Rules
+
+### architecture
+
+#### deterministic-projection
 
 Model the constitution as a deterministic projection of the accepted ADR
 set; never hand-author constitution.md.

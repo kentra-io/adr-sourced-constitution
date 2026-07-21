@@ -55,11 +55,12 @@ func TestLegalStatusTransition(t *testing.T) {
 // tests mutate one field at a time from.
 func baseADR() *adr.ADR {
 	return &adr.ADR{
-		ID: "ADR-0001", Title: "Title", Category: "architecture", Date: "2026-07-01",
+		ID: "ADR-0001", Title: "Title", Date: "2026-07-01",
 		Status: adr.StatusAccepted, Source: "bootstrap",
-		Sections:     map[string]string{"Decision Outcome": "y"},
-		SectionOrder: []string{"Decision Outcome"},
-		Path:         "constitution/adr/ADR-0001-title.md",
+		SupersedesRules: []adr.RuleRef{{ADRID: "ADR-0000", Category: "testing", Slug: "old"}},
+		Sections:        map[string]string{"Decision Outcome": "y"},
+		SectionOrder:    []string{"Decision Outcome"},
+		Path:            "constitution/adr/ADR-0001-title.md",
 	}
 }
 
@@ -92,10 +93,16 @@ func TestCompareLegal(t *testing.T) {
 			wantField: "title",
 		},
 		{
-			name:      "category changed",
-			mutate:    func(a *adr.ADR) { a.Category = "process" },
+			name:      "supersedes-rules changed",
+			mutate:    func(a *adr.ADR) { a.SupersedesRules[0].Slug = "other" },
 			wantKinds: []Kind{KindFrozenFieldChanged},
-			wantField: "category",
+			wantField: "supersedes-rules",
+		},
+		{
+			name:      "removes-rules acquired",
+			mutate:    func(a *adr.ADR) { a.RemovesRules = []adr.RuleRef{{ADRID: "ADR-0000", Category: "testing", Slug: "x"}} },
+			wantKinds: []Kind{KindFrozenFieldChanged},
+			wantField: "removes-rules",
 		},
 		{
 			name:      "date changed",
@@ -140,7 +147,7 @@ func TestCompareLegal(t *testing.T) {
 			name: "body AND a frozen field changed together yields both violations",
 			mutate: func(a *adr.ADR) {
 				a.Sections["Decision Outcome"] = "z"
-				a.Category = "process"
+				a.Title = "New Title"
 			},
 			wantKinds: []Kind{KindBodyChanged, KindFrozenFieldChanged},
 		},
@@ -153,7 +160,7 @@ func TestCompareLegal(t *testing.T) {
 			mutate: func(a *adr.ADR) {
 				a.Status = adr.StatusSuperseded
 				a.SupersededBy = "ADR-0002"          // legal transition -> no status violation
-				a.Category = "process"               // frozen field -> frozen_field_changed
+				a.Title = "New Title"                // frozen field -> frozen_field_changed
 				a.Sections["Decision Outcome"] = "z" // body -> body_changed
 			},
 			wantKinds: []Kind{KindBodyChanged, KindFrozenFieldChanged},

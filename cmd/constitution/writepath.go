@@ -10,7 +10,6 @@ import (
 	"github.com/urfave/cli/v3"
 	yaml "go.yaml.in/yaml/v3"
 
-	"github.com/kentra-io/adr-sourced-constitution/internal/adr"
 	"github.com/kentra-io/adr-sourced-constitution/internal/atomicwrite"
 	"github.com/kentra-io/adr-sourced-constitution/internal/config"
 )
@@ -73,36 +72,6 @@ func (m *mutContext) regen() error {
 	return regenAt(m.root, m.stdout, m.stderr)
 }
 
-// checkCategory validates a verb's --category against the configured
-// vocabulary (plan §2.5): an unknown category is a hard error unless
-// --new-category is given. It does NOT persist — it returns isNew so the
-// caller can defer the config write until after the consent gate, keeping
-// the "refuse ⇒ nothing written" invariant. Passing --new-category for a
-// category that already exists is a no-op (isNew=false).
-func (m *mutContext) checkCategory(category string, newCategory bool) (isNew bool, err error) {
-	for _, c := range m.cfg.Categories {
-		if c == category {
-			return false, nil
-		}
-	}
-	if !newCategory {
-		return false, fmt.Errorf(
-			"unknown category %q: not in the configured vocabulary %s; pass --new-category to introduce it",
-			category, formatCategories(m.cfg.Categories),
-		)
-	}
-	return true, nil
-}
-
-// appendCategory appends category to the vocabulary and atomically rewrites
-// constitution.yml. Called only after the consent gate has passed, so a
-// refused mutation never touches the config (plan §2.5, still an ordinary
-// ADR — no meta-record type).
-func (m *mutContext) appendCategory(category string) error {
-	m.cfg.Categories = append(m.cfg.Categories, category)
-	return persistConfig(filepath.Join(m.root, "constitution.yml"), m.cfg)
-}
-
 // readBody reads a MADR body from a file path, or from stdin when path is
 // "-" (plan §2.3).
 func readBody(path string, stdin io.Reader) ([]byte, error) {
@@ -110,31 +79,6 @@ func readBody(path string, stdin io.Reader) ([]byte, error) {
 		return io.ReadAll(stdin)
 	}
 	return os.ReadFile(path)
-}
-
-// applyRuleFlag reconciles the --rule flag with a body-file (plan §2.12,
-// shared by `adr new` and `supersede`). --rule composes a "## Rule" section
-// as the last body section, making the ADR rule-bearing. A body-file MAY
-// instead carry its own "## Rule" section; supplying BOTH is an error (the
-// intent is ambiguous). When neither is present the ADR is a catalog-only
-// record. The empty/whitespace-only check is deferred to adr.ValidateBody,
-// which the callers run next; the plain-prose check (no Markdown heading
-// lines) runs here on the raw flag value, before any composition, so a
-// heading-bearing rule is refused before a file is written rather than
-// silently truncated at projection time (plan §2.12).
-func applyRuleFlag(cmd *cli.Command, body []byte) ([]byte, error) {
-	if !cmd.IsSet("rule") {
-		return body, nil
-	}
-	rule := cmd.String("rule")
-	if err := adr.ValidateRuleText(rule, "--rule"); err != nil {
-		return nil, err
-	}
-	if adr.HasRuleSection(body) {
-		return nil, fmt.Errorf(
-			"both --rule and a --body-file that already contains a \"## Rule\" section were supplied; provide the rule exactly once (drop --rule, or remove the section from the body)")
-	}
-	return adr.AppendRuleSection(body, rule), nil
 }
 
 // validateSource enforces the source-ref contract (plan §2.8) against the
@@ -177,29 +121,15 @@ func validateSource(st config.SourceTracking, source string) error {
 }
 
 // persistConfig atomically rewrites constitution.yml from cfg. Used only by
-// --new-category, the one path that mutates config. v1 re-serializes the
-// struct (comments in a hand-authored config are not preserved) — an
-// acceptable tradeoff since the config is CLI-managed.
+// init's config authoring. It re-serializes the struct (comments in a
+// hand-authored config are not preserved) — an acceptable tradeoff since
+// the config is CLI-managed.
 func persistConfig(path string, cfg *config.Config) error {
 	data, err := yaml.Marshal(cfg)
 	if err != nil {
 		return err
 	}
 	return atomicwrite.WriteFile(path, data, 0o644)
-}
-
-// formatCategories renders the vocabulary as "[a, b, c]" for error messages,
-// matching the phrasing internal/render uses for the same check on the read
-// path.
-func formatCategories(categories []string) string {
-	out := "["
-	for i, c := range categories {
-		if i > 0 {
-			out += ", "
-		}
-		out += c
-	}
-	return out + "]"
 }
 
 // isTerminal reports whether f is an interactive character device. Used to

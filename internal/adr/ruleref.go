@@ -19,6 +19,20 @@ func (r RuleRef) String() string {
 	return r.ADRID + "/" + r.Category + "/" + r.Slug
 }
 
+// JoinRefs renders a rule-ref list as one canonical comma-joined string.
+// A ref ("ADR-NNNN/<category>/<slug>", kebab-case parts) can never contain
+// a comma, so the join is collision-free — two distinct lists can never
+// produce the same joined value. Used wherever a ref list must be treated
+// as a single comparable/hashable value (manifest canonicalization, the
+// guard's frozen-field comparison).
+func JoinRefs(refs []RuleRef) string {
+	parts := make([]string, len(refs))
+	for i, r := range refs {
+		parts[i] = r.String()
+	}
+	return strings.Join(parts, ",")
+}
+
 // ParseRuleRef parses and validates a rule ref. The error text is UX —
 // agents read it — so it names the failing part precisely.
 func ParseRuleRef(s string) (RuleRef, error) {

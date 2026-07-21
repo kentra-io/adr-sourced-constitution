@@ -21,10 +21,14 @@ var frozenFields = []struct {
 	get  func(*adr.ADR) string
 }{
 	{"title", func(a *adr.ADR) string { return a.Title }},
-	{"category", func(a *adr.ADR) string { return a.Category }},
 	{"date", func(a *adr.ADR) string { return a.Date }},
 	{"source", func(a *adr.ADR) string { return a.Source }},
 	{"supersedes", func(a *adr.ADR) string { return a.Supersedes }},
+	// The ref lists compare as adr.JoinRefs strings (collision-free; see its
+	// doc). The rules themselves live in the body, which compareLegal
+	// already covers via Sections.
+	{"supersedes-rules", func(a *adr.ADR) string { return adr.JoinRefs(a.SupersedesRules) }},
+	{"removes-rules", func(a *adr.ADR) string { return adr.JoinRefs(a.RemovesRules) }},
 }
 
 // compareLegal structurally compares the base-ref (old) and current (cur)

@@ -23,8 +23,8 @@ func scratchProject(t *testing.T) (root, hash string) {
 		t.Fatal(err)
 	}
 	mustWrite(t, filepath.Join(adrDir, "ADR-0001-first-rule.md"),
-		"---\nid: ADR-0001\ntitle: First rule\ncategory: architecture\ndate: 2026-07-01\nstatus: accepted\n---\n\n"+
-			"## Context and Problem Statement\n\nc\n\n## Considered Options\n\n- A\n- B\n\n## Decision Outcome\n\nAdopt A.\n\n## Rule\n\nAdopt A.\n")
+		"---\nid: ADR-0001\ntitle: First rule\ndate: 2026-07-01\nstatus: accepted\n---\n\n"+
+			"## Context and Problem Statement\n\nc\n\n## Considered Options\n\n- A\n- B\n\n## Decision Outcome\n\nAdopt A.\n\n## Rules\n\n### architecture\n\n#### first-rule\n\nAdopt A.\n")
 
 	mustWrite(t, filepath.Join(root, "constitution", "constitution.md"),
 		"# Constitution\n\n## Architecture\n\n### First rule\n\nAdopt A.\n")
@@ -123,11 +123,11 @@ func TestValidateSupersededADRIDIsInactive(t *testing.T) {
 		t.Fatal(err)
 	}
 	mustWrite(t, filepath.Join(adrDir, "ADR-0001-first-rule.md"),
-		"---\nid: ADR-0001\ntitle: First rule\ncategory: architecture\ndate: 2026-07-01\nstatus: superseded\nsuperseded-by: ADR-0002\n---\n\n"+
+		"---\nid: ADR-0001\ntitle: First rule\ndate: 2026-07-01\nstatus: superseded\nsuperseded-by: ADR-0002\n---\n\n"+
 			"## Context and Problem Statement\n\nc\n\n## Considered Options\n\n- A\n- B\n\n## Decision Outcome\n\nAdopt A.\n")
 	mustWrite(t, filepath.Join(adrDir, "ADR-0002-second-rule.md"),
-		"---\nid: ADR-0002\ntitle: Second rule\ncategory: architecture\ndate: 2026-07-02\nstatus: accepted\nsupersedes: ADR-0001\n---\n\n"+
-			"## Context and Problem Statement\n\nc\n\n## Considered Options\n\n- A\n- B\n\n## Decision Outcome\n\nAdopt B.\n\n## Rule\n\nAdopt B.\n")
+		"---\nid: ADR-0002\ntitle: Second rule\ndate: 2026-07-02\nstatus: accepted\nsupersedes: ADR-0001\n---\n\n"+
+			"## Context and Problem Statement\n\nc\n\n## Considered Options\n\n- A\n- B\n\n## Decision Outcome\n\nAdopt B.\n\n## Rules\n\n### architecture\n\n#### second-rule\n\nAdopt B.\n")
 	mustWrite(t, filepath.Join(root, "constitution", "constitution.md"),
 		"# Constitution\n\n## Architecture\n\n### Second rule\n\nAdopt B.\n")
 
@@ -163,7 +163,7 @@ func TestValidateSupersededADRIDIsInactive(t *testing.T) {
 }
 
 // TestValidateRecordOnlyADRIDIsRejected proves the M5.5 tightening (plan
-// §2.12): a citation to an active but record-only ADR (no ## Rule section)
+// §2.12): a citation to an active but record-only ADR (no ## Rules section)
 // fails — such ADRs never appear in constitution.md, so the gate cannot cite
 // one. The error must explain why.
 func TestValidateRecordOnlyADRIDIsRejected(t *testing.T) {
@@ -175,9 +175,9 @@ func TestValidateRecordOnlyADRIDIsRejected(t *testing.T) {
 	if err := os.MkdirAll(adrDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	// ADR-0001 is accepted but record-only (no ## Rule).
+	// ADR-0001 is accepted but record-only (no ## Rules).
 	mustWrite(t, filepath.Join(adrDir, "ADR-0001-record-only.md"),
-		"---\nid: ADR-0001\ntitle: Record only\ncategory: architecture\ndate: 2026-07-01\nstatus: accepted\n---\n\n"+
+		"---\nid: ADR-0001\ntitle: Record only\ndate: 2026-07-01\nstatus: accepted\n---\n\n"+
 			"## Context and Problem Statement\n\nc\n\n## Considered Options\n\n- A\n- B\n\n## Decision Outcome\n\nJust a record.\n")
 	mustWrite(t, filepath.Join(root, "constitution", "constitution.md"),
 		"# Constitution\n\nNo standing rules yet. Decision log: constitution/adr/.\n")

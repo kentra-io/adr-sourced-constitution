@@ -17,18 +17,20 @@ import (
 // atomically, then regen. All validation happens before the consent gate,
 // and the gate before any write, so a refusal or a bad input leaves the log
 // untouched.
+//
+// v0.2 interim (Rules model, M1 Task 3): the body-file may carry its own
+// "## Rules" section to make the ADR rule-bearing. The rule flags
+// (--rule/--supersedes-rule/--removes-rule/--new-category) and the
+// vocabulary-growth preflight land with the full CLI rework (M1 Task 5).
 func newCommand() *cli.Command {
 	return &cli.Command{
 		Name:      "new",
 		Usage:     "create a new accepted ADR from a MADR body",
 		ArgsUsage: " ", // no positional args
 		Flags: []cli.Flag{
-			&cli.StringFlag{Name: "title", Required: true, Usage: "ADR title (rendered as the rule heading)"},
-			&cli.StringFlag{Name: "category", Required: true, Usage: "category from the configured vocabulary"},
+			&cli.StringFlag{Name: "title", Required: true, Usage: "ADR title"},
 			&cli.StringFlag{Name: "source", Usage: "source ref (required when sourceTracking.type != none)"},
-			&cli.StringFlag{Name: "body-file", Required: true, Usage: "path to the MADR body (the ## sections), or - for stdin"},
-			&cli.StringFlag{Name: "rule", Usage: "standing-rule text; composed as a ## Rule section (makes the ADR rule-bearing, so it projects into constitution.md). Omit for a catalog-only record. Mutually exclusive with a body-file that carries its own ## Rule section"},
-			&cli.BoolFlag{Name: "new-category", Usage: "introduce --category into the vocabulary if it is unknown"},
+			&cli.StringFlag{Name: "body-file", Required: true, Usage: "path to the MADR body (the ## sections, optionally including ## Rules), or - for stdin"},
 			approveFlag(),
 		},
 		Action: func(_ context.Context, cmd *cli.Command) error {
@@ -44,15 +46,10 @@ func runNew(cmd *cli.Command) error {
 	}
 
 	title := cmd.String("title")
-	category := cmd.String("category")
 	source := cmd.String("source")
 
 	// --- validate everything up front (no writes, no prompt yet) ---
 	body, err := readBody(cmd.String("body-file"), m.stdin)
-	if err != nil {
-		return err
-	}
-	body, err = applyRuleFlag(cmd, body)
 	if err != nil {
 		return err
 	}
@@ -62,22 +59,17 @@ func runNew(cmd *cli.Command) error {
 	if err := validateSource(m.cfg.SourceTracking, source); err != nil {
 		return err
 	}
-	isNewCategory, err := m.checkCategory(category, cmd.Bool("new-category"))
-	if err != nil {
-		return err
-	}
 
 	_, id, err := adr.NextID(m.adrDir)
 	if err != nil {
 		return err
 	}
 	file := adr.Compose(adr.NewADR{
-		ID:       id,
-		Title:    title,
-		Category: category,
-		Date:     today(),
-		Source:   source,
-		Body:     string(body),
+		ID:     id,
+		Title:  title,
+		Date:   today(),
+		Source: source,
+		Body:   string(body),
 	})
 
 	// --- consent gate: last check before the first byte is written ---
@@ -86,11 +78,6 @@ func runNew(cmd *cli.Command) error {
 	}
 
 	// --- writes ---
-	if isNewCategory {
-		if err := m.appendCategory(category); err != nil {
-			return err
-		}
-	}
 	if err := os.MkdirAll(m.adrDir, 0o755); err != nil {
 		return err
 	}

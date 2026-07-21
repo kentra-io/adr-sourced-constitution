@@ -167,10 +167,11 @@ func verify(orig, patched []byte, intended func(o, p *adr.ADR) bool) error {
 // changes it), and the entire body.
 func sameFrozen(o, p *adr.ADR) bool {
 	return o.Title == p.Title &&
-		o.Category == p.Category &&
 		o.Date == p.Date &&
 		o.Source == p.Source &&
 		o.Supersedes == p.Supersedes &&
+		reflect.DeepEqual(o.SupersedesRules, p.SupersedesRules) &&
+		reflect.DeepEqual(o.RemovesRules, p.RemovesRules) &&
 		reflect.DeepEqual(o.Sections, p.Sections) &&
 		reflect.DeepEqual(o.SectionOrder, p.SectionOrder)
 }

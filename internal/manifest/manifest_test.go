@@ -21,7 +21,6 @@ func parse(t *testing.T, data, path string) adr.ADR {
 const acceptedADR = `---
 id: ADR-0001
 title: Use event sourcing
-category: architecture
 date: 2026-07-01
 status: accepted
 ---
@@ -73,7 +72,8 @@ func TestHashCRLFEqualsLF(t *testing.T) {
 }
 
 // TestHashDetectsFrozenEdits proves the guard's future value: an edit to
-// frozen content (the Decision Outcome, the category) does change the hash.
+// frozen content (the Decision Outcome, a rule-retirement list) does change
+// the hash.
 func TestHashDetectsFrozenEdits(t *testing.T) {
 	base := parse(t, acceptedADR, "ADR-0001-x.md")
 
@@ -82,9 +82,19 @@ func TestHashDetectsFrozenEdits(t *testing.T) {
 		t.Error("hash unchanged after a body edit; frozen content must be covered")
 	}
 
-	catEdit := parse(t, strings.Replace(acceptedADR, "category: architecture", "category: process", 1), "ADR-0001-x.md")
-	if Hash(base) == Hash(catEdit) {
-		t.Error("hash unchanged after a category edit; frozen frontmatter must be covered")
+	refEdit := parse(t, strings.Replace(acceptedADR, "status: accepted\n",
+		"status: accepted\nsupersedes-rules: [ADR-0000/testing/x]\n", 1), "ADR-0001-x.md")
+	if Hash(base) == Hash(refEdit) {
+		t.Error("hash unchanged after a supersedes-rules edit; frozen frontmatter must be covered")
+	}
+
+	remEdit := parse(t, strings.Replace(acceptedADR, "status: accepted\n",
+		"status: accepted\nremoves-rules: [ADR-0000/testing/x]\n", 1), "ADR-0001-x.md")
+	if Hash(base) == Hash(remEdit) {
+		t.Error("hash unchanged after a removes-rules edit; frozen frontmatter must be covered")
+	}
+	if Hash(refEdit) == Hash(remEdit) {
+		t.Error("supersedes-rules and removes-rules must canonicalize under distinct fields")
 	}
 }
 
@@ -108,24 +118,24 @@ func TestWrite(t *testing.T) {
 // under the earlier naive "name:value\n" scheme these two DIFFERENT ADRs
 // produced byte-identical canonical forms —
 //
-//	A: title = "T\ncategory:X", category = "c"
-//	B: title = "T",             category = "X\ncategory:c"
+//	A: title = "T\nsource:X", source = "c"
+//	B: title = "T",           source = "X\nsource:c"
 //
-// both flattening to "title:T\ncategory:X\ncategory:c\n". The
+// both flattening to "title:T\nsource:X\nsource:c\n". The
 // length-prefixed encoding pins each value's extent, so they must now
 // canonicalize (and hash) differently.
 func TestCanonicalizeInjection(t *testing.T) {
 	adrA := parse(t, "---\n"+
 		"id: ADR-0001\n"+
-		"title: \"T\\ncategory:X\"\n"+
-		"category: c\n"+
+		"title: \"T\\nsource:X\"\n"+
+		"source: c\n"+
 		"date: 2026-07-01\n"+
 		"status: accepted\n"+
 		"---\n\n## Decision Outcome\n\nx\n", "ADR-0001-x.md")
 	adrB := parse(t, "---\n"+
 		"id: ADR-0001\n"+
 		"title: T\n"+
-		"category: \"X\\ncategory:c\"\n"+
+		"source: \"X\\nsource:c\"\n"+
 		"date: 2026-07-01\n"+
 		"status: accepted\n"+
 		"---\n\n## Decision Outcome\n\nx\n", "ADR-0001-x.md")
@@ -135,8 +145,8 @@ func TestCanonicalizeInjection(t *testing.T) {
 	if adrA.Title == adrB.Title {
 		t.Fatal("fixture broken: titles should differ")
 	}
-	naiveA := "title:" + adrA.Title + "\ncategory:" + adrA.Category + "\n"
-	naiveB := "title:" + adrB.Title + "\ncategory:" + adrB.Category + "\n"
+	naiveA := "title:" + adrA.Title + "\nsource:" + adrA.Source + "\n"
+	naiveB := "title:" + adrB.Title + "\nsource:" + adrB.Source + "\n"
 	if naiveA != naiveB {
 		t.Fatalf("fixture broken: naive forms should collide:\n%q\n%q", naiveA, naiveB)
 	}

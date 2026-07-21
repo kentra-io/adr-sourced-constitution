@@ -16,11 +16,19 @@ import (
 	"github.com/kentra-io/adr-sourced-constitution/internal/config"
 )
 
-// CategorySection is one rendered category: its heading and the active
-// ADRs in it, sorted numerically by id.
+// CategorySection is one rendered category: its heading and the rule
+// entries in it, in ascending ADR-number order (then file order within an
+// ADR).
 type CategorySection struct {
-	Name string
-	ADRs []adr.ADR
+	Name    string
+	Entries []Entry
+}
+
+// Entry is one projected rule: the rule itself plus the ADR that carries
+// it (for the metadata line).
+type Entry struct {
+	Rule adr.Rule
+	ADR  adr.ADR
 }
 
 // ActiveSet returns the ADRs with status "accepted" — spec §5/§6: the
@@ -36,45 +44,42 @@ func ActiveSet(adrs []adr.ADR) []adr.ADR {
 	return active
 }
 
-// RuleBearing filters to the ADRs that carry a "## Rule" section — the
-// curated read model (plan §2.12): only rule-bearing active ADRs project into
-// constitution.md; catalog-only records stay in the log alone.
-func RuleBearing(adrs []adr.ADR) []adr.ADR {
-	out := make([]adr.ADR, 0, len(adrs))
-	for i := range adrs {
-		if adrs[i].IsRuleBearing() {
-			out = append(out, adrs[i])
-		}
-	}
-	return out
-}
-
-// ValidateCategories hard-errors on any ADR (active or not — the log is a
-// validated input in its entirety, per implementation-plan.md §2.5) whose
-// category isn't in the project's configured vocabulary.
+// ValidateCategories hard-errors on any rule of any ADR (active or not —
+// the log is a validated input in its entirety, per implementation-plan.md
+// §2.5) whose category isn't in the project's configured vocabulary.
 func ValidateCategories(cfg *config.Config, adrs []adr.ADR) error {
 	valid := make(map[string]bool, len(cfg.Categories))
 	for _, c := range cfg.Categories {
 		valid[c] = true
 	}
 	for _, a := range adrs {
-		if !valid[a.Category] {
-			return adr.NewValidationError(a.Path, 0, "category", fmt.Sprintf(
-				"not in the configured category vocabulary %s (got %q)",
-				formatVocabulary(cfg.Categories), a.Category,
-			))
+		for _, r := range a.Rules {
+			if !valid[r.Category] {
+				return adr.NewValidationError(a.Path, 0, "category", fmt.Sprintf(
+					"rule %s/%s: not in the configured category vocabulary %s (got %q)",
+					r.Category, r.Slug, formatVocabulary(cfg.Categories), r.Category,
+				))
+			}
 		}
 	}
 	return nil
 }
 
-// Group buckets the active set by category, in cfg.Categories order
-// (plan §3), each category's ADRs sorted ascending by numeric id.
-// Categories with zero active ADRs are omitted from the output.
+// Group buckets the active set's rules by their category, in
+// cfg.Categories order (plan §3). ADRs are sorted ascending by numeric id
+// first, and an ADR's rules keep their file order, so each category's
+// entries are ordered by (ADR number, position in file). Categories with
+// zero entries are omitted from the output. ADRs with no rules contribute
+// nothing — record-only ADRs stay in the log alone.
 func Group(cfg *config.Config, active []adr.ADR) []CategorySection {
-	byCategory := make(map[string][]adr.ADR, len(cfg.Categories))
-	for _, a := range active {
-		byCategory[a.Category] = append(byCategory[a.Category], a)
+	sorted := append([]adr.ADR(nil), active...)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Num < sorted[j].Num })
+
+	byCategory := make(map[string][]Entry, len(cfg.Categories))
+	for _, a := range sorted {
+		for _, r := range a.Rules {
+			byCategory[r.Category] = append(byCategory[r.Category], Entry{Rule: r, ADR: a})
+		}
 	}
 
 	sections := make([]CategorySection, 0, len(cfg.Categories))
@@ -83,8 +88,7 @@ func Group(cfg *config.Config, active []adr.ADR) []CategorySection {
 		if len(inCat) == 0 {
 			continue
 		}
-		sort.Slice(inCat, func(i, j int) bool { return inCat[i].Num < inCat[j].Num })
-		sections = append(sections, CategorySection{Name: cat, ADRs: inCat})
+		sections = append(sections, CategorySection{Name: cat, Entries: inCat})
 	}
 	return sections
 }
@@ -95,7 +99,7 @@ func Render(cfg *config.Config, adrs []adr.ADR) ([]byte, error) {
 	if err := ValidateCategories(cfg, adrs); err != nil {
 		return nil, err
 	}
-	sections := Group(cfg, RuleBearing(ActiveSet(adrs)))
+	sections := Group(cfg, ActiveSet(adrs))
 	return renderTemplate(sections)
 }
 

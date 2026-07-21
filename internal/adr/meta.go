@@ -13,35 +13,37 @@ import (
 // format, date format, status enum) happens explicitly below with
 // precise errors, rather than relying on yaml decode-time type errors.
 type rawMeta struct {
-	ID           string `yaml:"id"`
-	Title        string `yaml:"title"`
-	Category     string `yaml:"category"`
-	Date         string `yaml:"date"`
-	Status       string `yaml:"status"`
-	Source       string `yaml:"source"`
-	Supersedes   string `yaml:"supersedes"`
-	SupersededBy string `yaml:"superseded-by"`
+	ID              string   `yaml:"id"`
+	Title           string   `yaml:"title"`
+	Date            string   `yaml:"date"`
+	Status          string   `yaml:"status"`
+	Source          string   `yaml:"source"`
+	Supersedes      string   `yaml:"supersedes"`
+	SupersededBy    string   `yaml:"superseded-by"`
+	SupersedesRules []string `yaml:"supersedes-rules"`
+	RemovesRules    []string `yaml:"removes-rules"`
 }
 
 // meta is a validated rawMeta: every field has passed schema validation.
 type meta struct {
-	ID, Title, Category, Date        string
+	ID, Title, Date                  string
 	Status                           Status
 	Source, Supersedes, SupersededBy string
+	SupersedesRules, RemovesRules    []RuleRef
 }
 
 // requiredFrontmatterFields lists the mandatory frontmatter fields (spec
-// §4.1): id, title, category, date, status. `source` is conditionally
-// required by sourceTracking config (plan §2.8), which is a cross-cutting
-// concern the write path (M2's `adr new`) owns — not validated here.
-// `supersedes`/`superseded-by` are optional derived/authored fields.
+// §4.1): id, title, date, status. `source` is conditionally required by
+// sourceTracking config (plan §2.8), which is a cross-cutting concern the
+// write path (M2's `adr new`) owns — not validated here.
+// `supersedes`/`superseded-by`/`supersedes-rules`/`removes-rules` are
+// optional derived/authored fields.
 var requiredFrontmatterFields = []struct {
 	name string
 	get  func(rawMeta) string
 }{
 	{"id", func(m rawMeta) string { return m.ID }},
 	{"title", func(m rawMeta) string { return m.Title }},
-	{"category", func(m rawMeta) string { return m.Category }},
 	{"date", func(m rawMeta) string { return m.Date }},
 	{"status", func(m rawMeta) string { return m.Status }},
 }
@@ -89,9 +91,37 @@ func parseMeta(fm []byte, file string) (*meta, error) {
 		}
 	}
 
+	supRefs, err := parseRefList(raw.SupersedesRules, "supersedes-rules", fm, file)
+	if err != nil {
+		return nil, err
+	}
+	remRefs, err := parseRefList(raw.RemovesRules, "removes-rules", fm, file)
+	if err != nil {
+		return nil, err
+	}
+
 	return &meta{
-		ID: raw.ID, Title: raw.Title, Category: raw.Category, Date: raw.Date,
+		ID: raw.ID, Title: raw.Title, Date: raw.Date,
 		Status: status, Source: raw.Source, Supersedes: raw.Supersedes,
-		SupersededBy: raw.SupersededBy,
+		SupersededBy:    raw.SupersededBy,
+		SupersedesRules: supRefs, RemovesRules: remRefs,
 	}, nil
+}
+
+// parseRefList validates every entry of a frontmatter rule-ref list
+// (supersedes-rules / removes-rules), returning a precise *ParseError
+// naming the field and the malformed entry.
+func parseRefList(entries []string, field string, fm []byte, file string) ([]RuleRef, error) {
+	if len(entries) == 0 {
+		return nil, nil
+	}
+	refs := make([]RuleRef, 0, len(entries))
+	for _, e := range entries {
+		r, err := ParseRuleRef(strings.TrimSpace(e))
+		if err != nil {
+			return nil, &ParseError{File: file, Field: field, Line: fieldLine(fm, field), Msg: err.Error()}
+		}
+		refs = append(refs, r)
+	}
+	return refs, nil
 }
