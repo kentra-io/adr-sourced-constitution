@@ -4,13 +4,13 @@
 env CONSTITUTION_TODAY=2026-07-02
 
 # --- missing "## Considered Options": refuse with a precise error ---
-! exec constitution adr new --title 'Incomplete' --category architecture --body-file missing-options.md
+! exec constitution adr new --title 'Incomplete' --body-file missing-options.md
 stderr 'field "Considered Options": required section "## Considered Options" is missing'
 ! exists constitution/adr/ADR-0001-incomplete.md
 ! exists constitution/constitution.md
 
 # --- a complete body is accepted ---
-exec constitution adr new --title 'Complete' --category architecture --body-file complete.md
+exec constitution adr new --title 'Complete' --body-file complete.md
 stdout 'created .*ADR-0001-complete\.md'
 
 -- constitution.yml --

@@ -4,7 +4,7 @@
 
 env CONSTITUTION_TODAY=2026-07-02
 
-exec constitution init --principle 'Idempotent principle' --target claude --target agents
+exec constitution init --founding-file founding.md --target claude --target agents
 
 # snapshot every generated file
 cp constitution.yml snap.yml
@@ -21,7 +21,7 @@ cp .cursor/skills/constitution-gov/SKILL.md snap.skill.cursor
 # second run: identical flags. The existing config wins on a re-run, so the
 # config-shaping --target flags are ignored — init says so on stderr (flag
 # honesty), while still producing a byte-identical tree.
-exec constitution init --principle 'Idempotent principle' --target claude --target agents
+exec constitution init --founding-file founding.md --target claude --target agents
 stderr 'existing constitution.yml wins; ignoring --target'
 
 # every file byte-identical
@@ -38,3 +38,8 @@ cmp .cursor/skills/constitution-gov/SKILL.md snap.skill.cursor
 
 # no second founding ADR was seeded (idempotent seeding)
 ! exists constitution/adr/ADR-0002-idempotent-principle.md
+
+-- founding.md --
+## Idempotent principle
+
+The founding statement.

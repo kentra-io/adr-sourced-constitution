@@ -1,0 +1,70 @@
+# Two '#### <slug>' entries under one category project as two '###' entries
+# in that category's section, in file order (v0.2 per-rule projection).
+
+env CONSTITUTION_TODAY=2026-07-02
+
+exec constitution adr new --title 'Testing discipline' --body-file body.md
+stdout 'created .*ADR-0001-testing-discipline\.md'
+
+cmp constitution/constitution.md want-constitution.md
+
+-- constitution.yml --
+schemaVersion: 1
+consent:
+  policy: off
+sourceTracking:
+  type: none
+categories:
+  - testing
+
+-- body.md --
+## Context and Problem Statement
+
+x
+
+## Considered Options
+
+- a
+
+## Decision Outcome
+
+Adopt the discipline.
+
+## Rules
+
+### testing
+
+#### three-tiers
+Test in three tiers.
+
+#### no-mocking-unowned
+Never mock types you do not own.
+
+-- want-constitution.md --
+<!--
+  GENERATED FILE -- projection of the ADR log in constitution/adr/.
+  Do not hand-edit; changes will be overwritten by the next "constitution
+  regen". Only the rules (## Rules entries) of active ADRs project here; to
+  change a rule, add, supersede, or deprecate an ADR instead.
+-->
+
+# Constitution
+
+The source of truth for this project's standing technical decisions — how
+recurring problems are solved (architecture, mapping, testing, process) — so
+that requirements can stay functional and need not re-explain implementation
+choices.
+
+## testing
+
+### three-tiers
+
+Test in three tiers.
+
+ADR-0001 · 2026-07-02
+
+### no-mocking-unowned
+
+Never mock types you do not own.
+
+ADR-0001 · 2026-07-02

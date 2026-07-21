@@ -1,0 +1,73 @@
+# Resurrection semantics (v0.2 A7): retirements count only from currently-
+# accepted ADRs. Superseding a retirer WITHOUT re-retiring its refs makes the
+# retired rules project again, and regen warns once per resurrected rule, in
+# log order. The rules' text is back in constitution.md.
+
+env CONSTITUTION_TODAY=2026-07-02
+
+exec constitution adr new --title 'Testing discipline' --body-file body-1.md
+exec constitution adr new --title 'New discipline' --body-file body-2.md --rule 'testing/new-way: The new way.' --supersedes-rule ADR-0001/testing/old-tiers --supersedes-rule ADR-0001/testing/old-mocks
+! grep 'Old tiers.' constitution/constitution.md
+! grep 'Old mocks.' constitution/constitution.md
+
+# supersede the retirer WITHOUT re-retiring: both rules resurrect, one
+# warning each (in retirement-list order), and the texts are back.
+exec constitution supersede ADR-0002 --title 'Third way' --body-file body-2.md --rule 'testing/third-way: The third way.'
+stderr 'warning: ADR-0002 is no longer accepted; its retirement of ADR-0001/testing/old-tiers no longer applies'
+stderr 'warning: ADR-0002 is no longer accepted; its retirement of ADR-0001/testing/old-mocks no longer applies'
+stderr 'resurrected'
+grep 'Old tiers.' constitution/constitution.md
+grep 'Old mocks.' constitution/constitution.md
+! grep 'The new way.' constitution/constitution.md
+grep 'The third way.' constitution/constitution.md
+
+# an explicit regen re-prints the warnings (the projection still carries the
+# resurrected rules)
+exec constitution regen
+stderr 'ADR-0001/testing/old-tiers'
+stderr 'ADR-0001/testing/old-mocks'
+
+-- constitution.yml --
+schemaVersion: 1
+consent:
+  policy: off
+sourceTracking:
+  type: none
+categories:
+  - testing
+
+-- body-1.md --
+## Context and Problem Statement
+
+x
+
+## Considered Options
+
+- a
+
+## Decision Outcome
+
+Adopt the discipline.
+
+## Rules
+
+### testing
+
+#### old-tiers
+Old tiers.
+
+#### old-mocks
+Old mocks.
+
+-- body-2.md --
+## Context and Problem Statement
+
+x
+
+## Considered Options
+
+- a
+
+## Decision Outcome
+
+Replace the discipline.

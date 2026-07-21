@@ -1,11 +1,25 @@
-# --founding-category must name a category in the configured vocabulary; an
-# unknown one is a could-not-run error (exit 2) naming the bad value and the
-# allowed set. Locks the error-message contract (implementation-plan §8).
+# A founding-file rule may only use a category already in the configured
+# vocabulary (--category / the starter list): there is no --new-category at
+# init — the vocabulary was chosen seconds earlier, so an unknown category is
+# a typo, not growth. Could-not-run error (exit 2) naming the bad value and
+# the vocabulary; nothing is seeded.
 
 env CONSTITUTION_TODAY=2026-07-02
 
-exitcode 2 constitution init --principle P --founding-category bogus --category architecture --category process
-stderr '--founding-category "bogus" is not in the configured vocabulary \[architecture, process\]'
+exitcode 2 constitution init --founding-file principles.md --category architecture --category process
+stderr 'rule category "bogus" is not in the configured vocabulary \[architecture process\]'
 
 # no founding ADR was seeded
 ! exists constitution/adr/ADR-0001-p.md
+
+-- principles.md --
+## P
+
+The body.
+
+## Rules
+
+### bogus
+
+#### some-rule
+Some rule text.

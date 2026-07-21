@@ -1,21 +1,46 @@
-# '## Rule' may not be the FIRST heading of a founding file: "Rule" is a
-# reserved section name, not a principle title. This is a could-not-run error
-# (exit 2) that shows the expected structure. Nothing is seeded. Locks the
-# contract (implementation-plan §8).
+# '## Rules' may not be the FIRST heading of a founding file: "Rules" is a
+# reserved section name, not a principle title — it carries the standing
+# rules of the principle heading PRECEDING it. Two consecutive '## Rules'
+# are equally malformed. Both are could-not-run errors (exit 2); nothing is
+# seeded.
 
 env CONSTITUTION_TODAY=2026-07-02
 
-exitcode 2 constitution init --founding-file principles.md --founding-category architecture --category architecture
-stderr '"## Rule" may not be the first heading: "Rule" is a reserved section name, not a principle title; a founding file is one principle per "## " heading, with an optional nested "## Rule" beneath each'
+exitcode 2 constitution init --founding-file rules-first.md
+stderr '"## Rules" cannot be the first heading: a Rules section carries the standing rules of the principle heading preceding it'
+! exists constitution/adr/ADR-0001-real-principle.md
 
-# no founding ADR was seeded
-! exists constitution/adr/ADR-0001-rule.md
+exitcode 2 constitution init --founding-file double-rules.md
+stderr '"## Rules" directly after another "## Rules": each principle carries at most one Rules section'
+! exists constitution/adr/ADR-0001-real-principle.md
 
--- principles.md --
-## Rule
+-- rules-first.md --
+## Rules
 
+### testing
+
+#### some-rule
 Some rule text.
 
 ## Real Principle
 
 The body.
+
+-- double-rules.md --
+## Real Principle
+
+The body.
+
+## Rules
+
+### testing
+
+#### some-rule
+Some rule text.
+
+## Rules
+
+### testing
+
+#### another-rule
+More rule text.

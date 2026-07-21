@@ -1,0 +1,75 @@
+# Per-rule retirement (v0.2 A6): ADR-0002 supersedes one specific rule of
+# ADR-0001 and files a replacement; the projection drops exactly the retired
+# rule, keeps the ADR's other rules, and adds the replacement. The retired
+# ADR's file is never mutated.
+
+env CONSTITUTION_TODAY=2026-07-02
+
+exec constitution adr new --title 'Testing discipline' --body-file body-1.md
+stdout 'created .*ADR-0001-testing-discipline\.md'
+grep 'Two tiers only.' constitution/constitution.md
+grep 'Prefer fakes.' constitution/constitution.md
+grep 'Coverage matters.' constitution/constitution.md
+
+cp constitution/adr/ADR-0001-testing-discipline.md before.md
+
+exec constitution adr new --title 'Three tiers' --body-file body-2.md --rule 'testing/three-tiers: Three tiers now.' --supersedes-rule ADR-0001/testing/two-tiers
+stdout 'created .*ADR-0002-three-tiers\.md'
+grep 'supersedes-rules: \[ADR-0001/testing/two-tiers\]' constitution/adr/ADR-0002-three-tiers.md
+
+# exactly the retired rule is gone; the siblings and the replacement project
+! grep 'Two tiers only.' constitution/constitution.md
+grep 'Prefer fakes.' constitution/constitution.md
+grep 'Coverage matters.' constitution/constitution.md
+grep 'Three tiers now.' constitution/constitution.md
+
+# retirement never mutates the retired file
+cmp constitution/adr/ADR-0001-testing-discipline.md before.md
+
+-- constitution.yml --
+schemaVersion: 1
+consent:
+  policy: off
+sourceTracking:
+  type: none
+categories:
+  - testing
+
+-- body-1.md --
+## Context and Problem Statement
+
+x
+
+## Considered Options
+
+- a
+
+## Decision Outcome
+
+Adopt the discipline.
+
+## Rules
+
+### testing
+
+#### two-tiers
+Two tiers only.
+
+#### prefer-fakes
+Prefer fakes.
+
+#### coverage
+Coverage matters.
+
+-- body-2.md --
+## Context and Problem Statement
+
+x
+
+## Considered Options
+
+- a
+
+## Decision Outcome
+
+Move to three tiers.

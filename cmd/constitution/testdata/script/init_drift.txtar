@@ -5,20 +5,20 @@
 
 env CONSTITUTION_TODAY=2026-07-02
 
-exec constitution init --principle 'P1' --target claude --target agents
+exec constitution init --target claude --target agents
 
 # Replace CLAUDE.md with a version that keeps the markers but drifts the
 # interior and adds user content outside the block.
 cp drifted-claude.md CLAUDE.md
 
 # --- non-interactive, no --force: refuse, nothing rewritten ---
-! exec constitution init --principle 'P1' --target claude --target agents
+! exec constitution init --target claude --target agents
 stderr 'drifted from what'
 stderr 'refusing to overwrite'
 grep 'HACKED' CLAUDE.md
 
 # --- --force: rewrite the interior only; user content outside preserved ---
-exec constitution init --principle 'P1' --target claude --target agents --force
+exec constitution init --target claude --target agents --force
 ! grep 'HACKED' CLAUDE.md
 grep '@constitution/constitution.md' CLAUDE.md
 grep 'MY CUSTOM HEADER' CLAUDE.md

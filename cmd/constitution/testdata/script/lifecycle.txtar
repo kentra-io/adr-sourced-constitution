@@ -5,18 +5,18 @@
 env CONSTITUTION_TODAY=2026-07-02
 
 # --- adr new (off policy: no consent gate) ---
-exec constitution adr new --title 'Model as an event-sourced log' --category architecture --body-file body-a.md
+exec constitution adr new --title 'Model as an event-sourced log' --body-file body-a.md
 stdout 'created .*ADR-0001-model-as-an-event-sourced-log\.md'
 exists constitution/adr/ADR-0001-model-as-an-event-sourced-log.md
 exists constitution/adr/.manifest.sha256
 
 # --- a second, unrelated ADR ---
-exec constitution adr new --title 'Use trunk based development' --category process --body-file body-b.md
+exec constitution adr new --title 'Use trunk based development' --body-file body-b.md
 stdout 'created .*ADR-0002-use-trunk-based-development\.md'
 
 # --- supersede ADR-0001 (new ADR gets supersedes:, old flips to superseded).
 # The superseding ADR is made rule-bearing via --rule, so it projects. ---
-exec constitution supersede ADR-0001 --title 'Refined event sourcing' --body-file body-c.md --rule 'Use a refined event-sourced log.'
+exec constitution supersede ADR-0001 --title 'Refined event sourcing' --body-file body-c.md --rule 'architecture/refined-log: Use a refined event-sourced log.'
 stdout 'superseded ADR-0001'
 exists constitution/adr/ADR-0003-refined-event-sourcing.md
 grep 'status: superseded' constitution/adr/ADR-0001-model-as-an-event-sourced-log.md
@@ -100,15 +100,20 @@ Use a refined event-sourced log.
 <!--
   GENERATED FILE -- projection of the ADR log in constitution/adr/.
   Do not hand-edit; changes will be overwritten by the next "constitution
-  regen". Only rule-bearing (## Rule) active ADRs project here; to change a
-  rule, add, supersede, or deprecate an ADR instead.
+  regen". Only the rules (## Rules entries) of active ADRs project here; to
+  change a rule, add, supersede, or deprecate an ADR instead.
 -->
 
 # Constitution
 
+The source of truth for this project's standing technical decisions — how
+recurring problems are solved (architecture, mapping, testing, process) — so
+that requirements can stay functional and need not re-explain implementation
+choices.
+
 ## architecture
 
-### Refined event sourcing
+### refined-log
 
 Use a refined event-sourced log.
 

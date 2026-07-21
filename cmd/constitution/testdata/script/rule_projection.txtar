@@ -1,61 +1,62 @@
-# Rule-bearing projection end-to-end (plan §2.12): --rule composes a ## Rule
-# section that projects; a body-file MAY carry its own ## Rule; supplying both
-# is an error; a record-only ADR (no rule) stays in the log but never projects;
-# malformed rule input is rejected, never silently swallowed (empty rule,
-# duplicate ## Rule sections, and a rule carrying a Markdown heading line all
-# fail with nothing written); regen warns (never blocks) on a Rule longer than
-# 5 lines.
+# Rule-bearing projection end-to-end (plan §2.12, v0.2 Rules grammar): --rule
+# composes a ## Rules section that projects per rule; a body-file MAY carry its
+# own ## Rules; supplying both is an error; a record-only ADR (no rules) stays
+# in the log but never projects; malformed rule input is rejected, never
+# silently swallowed (bad flag shape, duplicate ## Rules sections, a rule text
+# carrying a Markdown heading line — all fail with nothing written); regen
+# warns (never blocks) on a rule text longer than 5 lines.
 
 env CONSTITUTION_TODAY=2026-07-02
 
 # --- --rule happy path: the ADR projects with the rule text verbatim ---
-exec constitution adr new --title 'Format with gofmt' --category architecture --body-file body.md --rule 'Format all Go code with gofmt.'
+exec constitution adr new --title 'Format with gofmt' --body-file body.md --rule 'architecture/gofmt-all: Format all Go code with gofmt.'
 stdout 'created .*ADR-0001-format-with-gofmt\.md'
-grep '## Rule' constitution/adr/ADR-0001-format-with-gofmt.md
+grep '## Rules' constitution/adr/ADR-0001-format-with-gofmt.md
 grep 'Format all Go code with gofmt\.' constitution/constitution.md
-grep '### Format with gofmt' constitution/constitution.md
-# The Decision Outcome must NOT project — only the Rule does.
+grep '### gofmt-all' constitution/constitution.md
+# The Decision Outcome must NOT project — only the rules do.
 ! grep 'The full decision text.' constitution/constitution.md
 
-# --- record-only default: no --rule, no ## Rule in the body -> not projected ---
-exec constitution adr new --title 'A point-in-time record' --category architecture --body-file body.md
+# --- record-only default: no --rule, no ## Rules in the body -> not projected ---
+exec constitution adr new --title 'A point-in-time record' --body-file body.md
 stdout 'created .*ADR-0002-a-point-in-time-record\.md'
 ! grep 'ADR-0002' constitution/constitution.md
 ! grep 'A point-in-time record' constitution/constitution.md
 
-# --- body-file carries its own ## Rule section -> projects, no --rule needed ---
-exec constitution adr new --title 'Rule from body' --category architecture --body-file body-with-rule.md
+# --- body-file carries its own ## Rules section -> projects, no --rule needed ---
+exec constitution adr new --title 'Rule from body' --body-file body-with-rules.md
 stdout 'created .*ADR-0003-rule-from-body\.md'
 grep 'Rule authored inside the body file\.' constitution/constitution.md
+grep '### body-rule' constitution/constitution.md
 
-# --- both --rule AND a body-file ## Rule -> error, nothing written ---
-! exec constitution adr new --title 'Ambiguous' --category architecture --body-file body-with-rule.md --rule 'A second rule.'
+# --- both --rule AND a body-file ## Rules -> error, nothing written ---
+! exec constitution adr new --title 'Ambiguous' --body-file body-with-rules.md --rule 'architecture/second: A second rule.'
 stderr 'both --rule and a --body-file'
 ! exists constitution/adr/ADR-0004-ambiguous.md
 
-# --- empty --rule -> validation error, nothing written ---
-! exec constitution adr new --title 'Blank rule' --category architecture --body-file body.md --rule '   '
-stderr 'the "## Rule" section is present but empty'
+# --- malformed --rule (not "<category>/<slug>: <text>") -> error, nothing written ---
+! exec constitution adr new --title 'Blank rule' --body-file body.md --rule '   '
+stderr 'must be "<category>/<slug>: <text>"'
 ! exists constitution/adr/ADR-0004-blank-rule.md
 
-# --- body-file with two ## Rule sections -> rejected, nothing written ---
-! exec constitution adr new --title 'Duplicate rule' --category architecture --body-file body-dup-rule.md
-stderr 'the "## Rule" section appears more than once; a body may carry at most one'
-! exists constitution/adr/ADR-0004-duplicate-rule.md
+# --- body-file with two ## Rules sections -> rejected, nothing written ---
+! exec constitution adr new --title 'Duplicate rules' --body-file body-dup-rules.md
+stderr 'the "## Rules" section appears more than once; a body may carry at most one'
+! exists constitution/adr/ADR-0004-duplicate-rules.md
 
-# --- --rule carrying a Markdown heading line -> rejected before any write ---
+# --- rule text carrying a Markdown heading line -> rejected before any write ---
 # (the adr/ dir is unchanged: the next id, ADR-0004, is never allocated).
-! exec constitution adr new --title 'Heading rule' --category architecture --body-file body.md --rule '# Big Heading'
-stderr 'rule text is plain prose and must not contain Markdown heading lines; found a line beginning with "#": # Big Heading'
+! exec constitution adr new --title 'Heading rule' --body-file body-heading-rule.md
+stderr 'must not contain Markdown heading lines'
 ! exists constitution/adr/ADR-0004-heading-rule.md
 
-# --- regen warns (does not block) on a >5-line Rule section ---
-exec constitution adr new --title 'Long rule' --category architecture --body-file body-long-rule.md
-stderr 'ADR-0004 has a 6-line Rule section'
+# --- regen warns (does not block) on a rule text longer than 5 lines ---
+exec constitution adr new --title 'Long rule' --body-file body-long-rule.md
+stderr 'ADR-0004/architecture/long-rule has a 6-line rule text'
 exec constitution regen
 stdout 'wrote'
-stderr 'ADR-0004 has a 6-line Rule section'
-grep '### Long rule' constitution/constitution.md
+stderr 'ADR-0004/architecture/long-rule has a 6-line rule text'
+grep '### long-rule' constitution/constitution.md
 
 -- constitution.yml --
 schemaVersion: 1
@@ -79,7 +80,7 @@ x
 
 The full decision text.
 
--- body-with-rule.md --
+-- body-with-rules.md --
 ## Context and Problem Statement
 
 x
@@ -92,11 +93,14 @@ x
 
 The full decision text.
 
-## Rule
+## Rules
 
+### architecture
+
+#### body-rule
 Rule authored inside the body file.
 
--- body-dup-rule.md --
+-- body-dup-rules.md --
 ## Context and Problem Statement
 
 x
@@ -109,13 +113,40 @@ x
 
 The full decision text.
 
-## Rule
+## Rules
 
+### architecture
+
+#### first
 First rule.
 
-## Rule
+## Rules
 
+### architecture
+
+#### second
 Second rule.
+
+-- body-heading-rule.md --
+## Context and Problem Statement
+
+x
+
+## Considered Options
+
+- a
+
+## Decision Outcome
+
+The full decision text.
+
+## Rules
+
+### architecture
+
+#### heading-rule
+Rule text with a stray heading:
+##### sub-heading
 
 -- body-long-rule.md --
 ## Context and Problem Statement
@@ -130,8 +161,11 @@ x
 
 The full decision text.
 
-## Rule
+## Rules
 
+### architecture
+
+#### long-rule
 line one
 line two
 line three

@@ -6,17 +6,17 @@
 
 env CONSTITUTION_TODAY=2026-07-02
 
-exec constitution init --principle 'P1' --target claude
+exec constitution init --target claude
 
 # poison the CLI's drift bookkeeping
 cp corrupt.state constitution/.state
 
 # adr new triggers regen -> Refresh -> LoadState (degrades, warns) but succeeds
-exec constitution adr new --title 'New rule' --category architecture --body-file body.md --approve
-stdout 'created .*ADR-0002-new-rule\.md'
+exec constitution adr new --title 'New rule' --body-file body.md --approve
+stdout 'created .*ADR-0001-new-rule\.md'
 stdout 'wrote .*constitution\.md'
 stderr 'empty drift state'
-exists constitution/adr/ADR-0002-new-rule.md
+exists constitution/adr/ADR-0001-new-rule.md
 
 -- corrupt.state --
 schemaVersion: [1

@@ -10,8 +10,8 @@ env GIT_COMMITTER_EMAIL=guard-test@example.com
 env GIT_CONFIG_NOSYSTEM=1
 
 exec git init -q -b main
-exec constitution adr new --title 'First rule' --category architecture --body-file body.md
-exec constitution adr new --title 'Second rule' --category process --body-file body.md
+exec constitution adr new --title 'First rule' --body-file body.md
+exec constitution adr new --title 'Second rule' --body-file body.md
 exec git add -A
 exec git commit -q -m init
 

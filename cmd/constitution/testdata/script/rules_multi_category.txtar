@@ -1,0 +1,104 @@
+# One ADR carrying rules in four categories projects one entry per rule into
+# four populated sections, ordered by the configured vocabulary (not by rule
+# order in the file), each citing the same carrying ADR (v0.2 D5/A1).
+
+env CONSTITUTION_TODAY=2026-07-02
+
+exec constitution adr new --title 'House rules' --body-file body.md
+stdout 'created .*ADR-0001-house-rules\.md'
+
+cmp constitution/constitution.md want-constitution.md
+
+-- constitution.yml --
+schemaVersion: 1
+consent:
+  policy: off
+sourceTracking:
+  type: none
+categories:
+  - architecture
+  - code-style
+  - testing
+  - process
+
+-- body.md --
+## Context and Problem Statement
+
+x
+
+## Considered Options
+
+- a
+
+## Decision Outcome
+
+Adopt the house rules.
+
+## Rules
+
+### process
+
+#### trunk-based
+Commit to trunk behind feature flags.
+
+### architecture
+
+#### hex-core
+Structure services as hexagonal.
+
+### testing
+
+#### three-tiers
+Test in three tiers.
+
+### code-style
+
+#### gofmt-all
+Format all Go code with gofmt.
+
+-- want-constitution.md --
+<!--
+  GENERATED FILE -- projection of the ADR log in constitution/adr/.
+  Do not hand-edit; changes will be overwritten by the next "constitution
+  regen". Only the rules (## Rules entries) of active ADRs project here; to
+  change a rule, add, supersede, or deprecate an ADR instead.
+-->
+
+# Constitution
+
+The source of truth for this project's standing technical decisions — how
+recurring problems are solved (architecture, mapping, testing, process) — so
+that requirements can stay functional and need not re-explain implementation
+choices.
+
+## architecture
+
+### hex-core
+
+Structure services as hexagonal.
+
+ADR-0001 · 2026-07-02
+
+## code-style
+
+### gofmt-all
+
+Format all Go code with gofmt.
+
+ADR-0001 · 2026-07-02
+
+## testing
+
+### three-tiers
+
+Test in three tiers.
+
+ADR-0001 · 2026-07-02
+
+## process
+
+### trunk-based
+
+Commit to trunk behind feature flags.
+
+ADR-0001 · 2026-07-02
