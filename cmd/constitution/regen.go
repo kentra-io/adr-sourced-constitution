@@ -24,9 +24,9 @@ import (
 // §2.1): regen warns, it does not block.
 const lineWarningThreshold = 200
 
-// ruleLineWarningThreshold is the per-Rule length guideline (plan §2.12): a
+// ruleLineWarningThreshold is the per-rule length guideline (plan §2.12): a
 // standing rule should read as a 1–3 line normative statement. regen warns
-// (never blocks) when a rule-bearing active ADR's Rule section exceeds this.
+// (never blocks) for each rule of an active ADR whose text exceeds this.
 const ruleLineWarningThreshold = 5
 
 func regenCommand() *cli.Command {
@@ -86,7 +86,7 @@ func regenCore(root string, cfg *config.Config, stdout, stderr io.Writer) error 
 		return err
 	}
 
-	out, err := render.Render(cfg, adrs)
+	out, foldWarnings, err := render.Render(cfg, adrs)
 	if err != nil {
 		return err
 	}
@@ -100,6 +100,14 @@ func regenCore(root string, cfg *config.Config, stdout, stderr io.Writer) error 
 
 	if err := manifest.Write(adrDir, adrs); err != nil {
 		return err
+	}
+
+	// Fold warnings (currently: A7 rule resurrections) surface after a
+	// successful render — they describe the projection just written.
+	for _, w := range foldWarnings {
+		if _, err := fmt.Fprintf(stderr, "warning: %s\n", w); err != nil {
+			return err
+		}
 	}
 
 	if lines := bytes.Count(out, []byte("\n")); lines > lineWarningThreshold {
@@ -116,22 +124,25 @@ func regenCore(root string, cfg *config.Config, stdout, stderr io.Writer) error 
 	return err
 }
 
-// warnLongRules warns (stderr, never blocks) for each rule-bearing active ADR
-// whose Rule section runs longer than ruleLineWarningThreshold lines (plan
-// §2.12) — a standing rule should be a terse 1–3 line statement. Only the
-// ADRs that actually project (accepted + rule-bearing) are checked; a frozen
-// Rule on a superseded record is not the author's live concern.
+// warnLongRules warns (stderr, never blocks) for each rule of an active ADR
+// whose text runs longer than ruleLineWarningThreshold lines (plan §2.12) —
+// a standing rule should be a terse 1–3 line statement. Rules of accepted
+// ADRs are checked — including ones a later ADR retires, so a retired rule
+// may still be warned about; a frozen rule on a superseded record is not
+// the author's live concern.
 func warnLongRules(stderr io.Writer, adrs []adr.ADR) error {
 	for i := range adrs {
 		a := &adrs[i]
-		if a.Status != adr.StatusAccepted || !a.IsRuleBearing() {
+		if a.Status != adr.StatusAccepted {
 			continue
 		}
-		if n := strings.Count(a.Rule(), "\n") + 1; n > ruleLineWarningThreshold {
-			if _, err := fmt.Fprintf(stderr,
-				"warning: %s has a %d-line Rule section, exceeding the %d-line guideline; keep standing rules to a terse statement (plan §2.12)\n",
-				a.ID, n, ruleLineWarningThreshold); err != nil {
-				return err
+		for _, r := range a.Rules {
+			if n := strings.Count(r.Text, "\n") + 1; n > ruleLineWarningThreshold {
+				if _, err := fmt.Fprintf(stderr,
+					"warning: %s/%s/%s has a %d-line rule text, exceeding the %d-line guideline; keep standing rules to a terse statement (plan §2.12)\n",
+					a.ID, r.Category, r.Slug, n, ruleLineWarningThreshold); err != nil {
+					return err
+				}
 			}
 		}
 	}

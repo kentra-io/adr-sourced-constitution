@@ -4,7 +4,7 @@
 
 env CONSTITUTION_TODAY=2026-07-02
 
-exitcode 2 constitution init --principle 'P1' --target claude
+exitcode 2 constitution init --target claude
 stderr 'BEGIN marker present without a matching END'
 
 # pre-flight refused before any writes

@@ -125,8 +125,10 @@ func parseAny(data []byte) (*adr.ADR, bool) {
 
 func assertSameExceptStatus(t *testing.T, a, b *adr.ADR) {
 	t.Helper()
-	if a.ID != b.ID || a.Title != b.Title || a.Category != b.Category ||
-		a.Date != b.Date || a.Source != b.Source || a.Supersedes != b.Supersedes {
+	if a.ID != b.ID || a.Title != b.Title ||
+		a.Date != b.Date || a.Source != b.Source || a.Supersedes != b.Supersedes ||
+		!reflect.DeepEqual(a.SupersedesRules, b.SupersedesRules) ||
+		!reflect.DeepEqual(a.RemovesRules, b.RemovesRules) {
 		t.Fatalf("frozen frontmatter changed:\n%+v\n%+v", a, b)
 	}
 	if !reflect.DeepEqual(a.Sections, b.Sections) {

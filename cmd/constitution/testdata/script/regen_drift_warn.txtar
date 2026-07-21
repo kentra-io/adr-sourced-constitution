@@ -5,7 +5,7 @@
 
 env CONSTITUTION_TODAY=2026-07-02
 
-exec constitution init --principle 'P1' --target claude
+exec constitution init --target claude
 
 # drift the managed block interior
 cp drifted-claude.md CLAUDE.md

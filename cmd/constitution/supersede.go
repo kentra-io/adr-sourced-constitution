@@ -15,10 +15,13 @@ import (
 
 // supersedeCommand implements `constitution supersede <id>` (spec §5.2,
 // plan §4): write a new ADR that supersedes <id>, then flip <id>'s status to
-// superseded with a derived superseded-by back-link. The two writes are
-// ordered — new ADR first, then the status patch — so a crash between them
-// leaves a log that still parses and that regen converges (plan §3, "the log
-// is truth"). No transaction; recovery is a regen.
+// superseded with a derived superseded-by back-link. The new ADR carries the
+// same rule surface as `adr new` (--rule/--supersedes-rule/--removes-rule/
+// --new-category): superseding a rule-bearing ADR is exactly where its rules
+// get retired or replaced. The two writes are ordered — new ADR first, then
+// the status patch — so a crash between them leaves a log that still parses
+// and that regen converges (plan §3, "the log is truth"). No transaction;
+// recovery is a regen.
 func supersedeCommand() *cli.Command {
 	return &cli.Command{
 		Name:      "supersede",
@@ -26,11 +29,12 @@ func supersedeCommand() *cli.Command {
 		ArgsUsage: "<id>",
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: "title", Required: true, Usage: "title of the superseding ADR"},
-			&cli.StringFlag{Name: "category", Usage: "category of the new ADR (defaults to the superseded ADR's category)"},
 			&cli.StringFlag{Name: "source", Usage: "source ref (required when sourceTracking.type != none)"},
-			&cli.StringFlag{Name: "body-file", Required: true, Usage: "path to the new ADR's MADR body, or - for stdin"},
-			&cli.StringFlag{Name: "rule", Usage: "standing-rule text for the superseding ADR; composed as a ## Rule section (makes it rule-bearing). Mutually exclusive with a body-file that carries its own ## Rule section"},
-			&cli.BoolFlag{Name: "new-category", Usage: "introduce --category into the vocabulary if it is unknown"},
+			&cli.StringFlag{Name: "body-file", Required: true, Usage: "path to the new ADR's MADR body (the ## sections), or - for stdin; may carry its own ## Rules section"},
+			&cli.StringSliceFlag{Name: "rule", Usage: "a standing rule as \"<category>/<slug>: <text>\" (repeatable); composed into a ## Rules section. Mutually exclusive with a body-file that carries its own ## Rules"},
+			&cli.StringSliceFlag{Name: "supersedes-rule", Usage: "retire a prior rule this ADR replaces: \"ADR-NNNN/<category>/<slug>\" (repeatable)"},
+			&cli.StringSliceFlag{Name: "removes-rule", Usage: "retire a prior rule nothing replaces: \"ADR-NNNN/<category>/<slug>\" (repeatable)"},
+			&cli.StringSliceFlag{Name: "new-category", Usage: "introduce a category into the vocabulary if a rule uses an unknown one (repeatable)"},
 			approveFlag(),
 		},
 		Action: func(_ context.Context, cmd *cli.Command) error {
@@ -67,27 +71,33 @@ func runSupersede(cmd *cli.Command) error {
 
 	title := cmd.String("title")
 	source := cmd.String("source")
-	category := cmd.String("category")
-	if category == "" {
-		category = oldADR.Category // default to the superseded ADR's category
-	}
 
 	// --- validate up front ---
 	body, err := readBody(cmd.String("body-file"), m.stdin)
 	if err != nil {
 		return err
 	}
-	body, err = applyRuleFlag(cmd, body)
+	ruleFlags := cmd.StringSlice("rule")
+	if len(ruleFlags) > 0 && hasRulesSection(body) {
+		return fmt.Errorf(
+			"both --rule and a --body-file that already contains a \"## Rules\" section were supplied; provide the rules exactly once (drop --rule, or remove the section from the body)")
+	}
+	body, err = composeRulesSection(body, ruleFlags)
 	if err != nil {
 		return err
 	}
-	if err := adr.ValidateBody(body, "--body-file"); err != nil {
+	label := bodyLabel(ruleFlags)
+	if err := adr.ValidateBody(body, label); err != nil {
 		return err
 	}
 	if err := validateSource(m.cfg.SourceTracking, source); err != nil {
 		return err
 	}
-	isNewCategory, err := m.checkCategory(category, cmd.Bool("new-category"))
+	supersedesRules, err := ruleRefFlags("supersedes-rule", cmd.StringSlice("supersedes-rule"))
+	if err != nil {
+		return err
+	}
+	removesRules, err := ruleRefFlags("removes-rule", cmd.StringSlice("removes-rule"))
 	if err != nil {
 		return err
 	}
@@ -97,14 +107,27 @@ func runSupersede(cmd *cli.Command) error {
 		return err
 	}
 	newFile := adr.Compose(adr.NewADR{
-		ID:         newID,
-		Title:      title,
-		Category:   category,
-		Date:       today(),
-		Source:     source,
-		Supersedes: oldID,
-		Body:       string(body),
+		ID:              newID,
+		Title:           title,
+		Date:            today(),
+		Source:          source,
+		Supersedes:      oldID,
+		SupersedesRules: supersedesRules,
+		RemovesRules:    removesRules,
+		Body:            string(body),
 	})
+
+	// Full parse of the composed record before anything else happens.
+	newParsed, err := adr.ParseBytesUnnamed(newFile, label)
+	if err != nil {
+		return err
+	}
+
+	// Vocabulary: every rule category must be configured or explicitly new.
+	toAppend, err := m.resolveNewCategories(newParsed, cmd.StringSlice("new-category"))
+	if err != nil {
+		return err
+	}
 
 	// Read the old ADR's raw bytes and compute its status patch now, so the
 	// only work left after the consent gate is the sequence of writes.
@@ -117,16 +140,38 @@ func runSupersede(cmd *cli.Command) error {
 		return fmt.Errorf("supersede: patch %s: %w", oldPath, err)
 	}
 
+	// Fold preflight on the log as it will exist AFTER both writes: the old
+	// ADR with its status flipped (its own retirements stop applying — A7)
+	// plus the new one appended.
+	patchedParsed, err := adr.ParseBytesUnnamed(patchedOld, oldPath)
+	if err != nil {
+		return fmt.Errorf("supersede: patch %s: %w", oldPath, err)
+	}
+	existing, err := m.parseLog()
+	if err != nil {
+		return err
+	}
+	preflight := make([]adr.ADR, 0, len(existing)+1)
+	for i := range existing {
+		if existing[i].ID == oldADR.ID {
+			preflight = append(preflight, *patchedParsed)
+			continue
+		}
+		preflight = append(preflight, existing[i])
+	}
+	preflight = append(preflight, *newParsed)
+	if err := m.preflightFold(preflight, toAppend); err != nil {
+		return err
+	}
+
 	// --- consent gate ---
 	if err := m.gate().confirm(fmt.Sprintf("supersede %s with %s", oldID, newID)); err != nil {
 		return err
 	}
 
-	// --- ordered writes: new ADR, then old-ADR status patch, then regen ---
-	if isNewCategory {
-		if err := m.appendCategory(category); err != nil {
-			return err
-		}
+	// --- ordered writes: config growth, new ADR, old-ADR status patch, regen ---
+	if err := m.appendCategories(toAppend); err != nil {
+		return err
 	}
 	newDest := filepath.Join(m.adrDir, adr.Filename(newID, title))
 	if err := atomicwrite.WriteFile(newDest, newFile, 0o644); err != nil {

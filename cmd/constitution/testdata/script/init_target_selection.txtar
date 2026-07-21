@@ -4,7 +4,7 @@
 
 env CONSTITUTION_TODAY=2026-07-02
 
-exec constitution init --principle 'P1' --target agents
+exec constitution init --target agents
 
 exists AGENTS.md
 grep 'governing constitution and takes precedence' AGENTS.md
@@ -12,7 +12,7 @@ grep 'governing constitution and takes precedence' AGENTS.md
 
 # the config's instruction targets are honored on re-runs: a second init (no
 # --target flags) reads the config and still touches only AGENTS.md
-exec constitution init --principle 'P1'
+exec constitution init
 ! exists CLAUDE.md
 
 # skills fan-out is independent of instruction targets: default is all trees

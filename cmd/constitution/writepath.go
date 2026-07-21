@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 
 	"github.com/urfave/cli/v3"
 	yaml "go.yaml.in/yaml/v3"
@@ -13,6 +14,7 @@ import (
 	"github.com/kentra-io/adr-sourced-constitution/internal/adr"
 	"github.com/kentra-io/adr-sourced-constitution/internal/atomicwrite"
 	"github.com/kentra-io/adr-sourced-constitution/internal/config"
+	"github.com/kentra-io/adr-sourced-constitution/internal/render"
 )
 
 // bootstrapSource is the reserved source value founding ADRs use (plan
@@ -73,36 +75,6 @@ func (m *mutContext) regen() error {
 	return regenAt(m.root, m.stdout, m.stderr)
 }
 
-// checkCategory validates a verb's --category against the configured
-// vocabulary (plan §2.5): an unknown category is a hard error unless
-// --new-category is given. It does NOT persist — it returns isNew so the
-// caller can defer the config write until after the consent gate, keeping
-// the "refuse ⇒ nothing written" invariant. Passing --new-category for a
-// category that already exists is a no-op (isNew=false).
-func (m *mutContext) checkCategory(category string, newCategory bool) (isNew bool, err error) {
-	for _, c := range m.cfg.Categories {
-		if c == category {
-			return false, nil
-		}
-	}
-	if !newCategory {
-		return false, fmt.Errorf(
-			"unknown category %q: not in the configured vocabulary %s; pass --new-category to introduce it",
-			category, formatCategories(m.cfg.Categories),
-		)
-	}
-	return true, nil
-}
-
-// appendCategory appends category to the vocabulary and atomically rewrites
-// constitution.yml. Called only after the consent gate has passed, so a
-// refused mutation never touches the config (plan §2.5, still an ordinary
-// ADR — no meta-record type).
-func (m *mutContext) appendCategory(category string) error {
-	m.cfg.Categories = append(m.cfg.Categories, category)
-	return persistConfig(filepath.Join(m.root, "constitution.yml"), m.cfg)
-}
-
 // readBody reads a MADR body from a file path, or from stdin when path is
 // "-" (plan §2.3).
 func readBody(path string, stdin io.Reader) ([]byte, error) {
@@ -112,29 +84,171 @@ func readBody(path string, stdin io.Reader) ([]byte, error) {
 	return os.ReadFile(path)
 }
 
-// applyRuleFlag reconciles the --rule flag with a body-file (plan §2.12,
-// shared by `adr new` and `supersede`). --rule composes a "## Rule" section
-// as the last body section, making the ADR rule-bearing. A body-file MAY
-// instead carry its own "## Rule" section; supplying BOTH is an error (the
-// intent is ambiguous). When neither is present the ADR is a catalog-only
-// record. The empty/whitespace-only check is deferred to adr.ValidateBody,
-// which the callers run next; the plain-prose check (no Markdown heading
-// lines) runs here on the raw flag value, before any composition, so a
-// heading-bearing rule is refused before a file is written rather than
-// silently truncated at projection time (plan §2.12).
-func applyRuleFlag(cmd *cli.Command, body []byte) ([]byte, error) {
-	if !cmd.IsSet("rule") {
+// hasRulesSection reports whether a raw MADR body already carries a
+// "## Rules" section (the replacement for the pre-v0.2 HasRuleSection).
+// Used to reject the ambiguous "--rule AND a body-file with its own Rules"
+// combination before any composition happens.
+func hasRulesSection(body []byte) bool {
+	sections, _ := adr.ExtractSections(body)
+	_, ok := sections[adr.RulesSection]
+	return ok
+}
+
+// composeRulesSection turns repeated --rule values ("<cat>/<slug>: text")
+// into a "## Rules" section appended to body. Flags are grouped by category
+// in first-appearance order, and within a category rules keep flag order —
+// so non-consecutive repeats of a category ("a/x", "b/y", "a/z") compose a
+// single "### a" section rather than a re-opened one the grammar would
+// reject. Returns body unchanged when no flags. Kebab-case, duplicate-slug,
+// and vocabulary validation all happen downstream (ValidateBody / the fold
+// preflight) — only the flag's "<category>/<slug>: <text>" shape is checked
+// here.
+func composeRulesSection(body []byte, ruleFlags []string) ([]byte, error) {
+	if len(ruleFlags) == 0 {
 		return body, nil
 	}
-	rule := cmd.String("rule")
-	if err := adr.ValidateRuleText(rule, "--rule"); err != nil {
+	type flagRule struct{ slug, text string }
+	var order []string
+	grouped := map[string][]flagRule{}
+	for _, f := range ruleFlags {
+		head, text, ok := strings.Cut(f, ":")
+		parts := strings.Split(strings.TrimSpace(head), "/")
+		if !ok || len(parts) != 2 || strings.TrimSpace(text) == "" {
+			return nil, fmt.Errorf("--rule %q: must be \"<category>/<slug>: <text>\"", f)
+		}
+		cat, slug := strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1])
+		if _, seen := grouped[cat]; !seen {
+			order = append(order, cat)
+		}
+		grouped[cat] = append(grouped[cat], flagRule{slug: slug, text: strings.TrimSpace(text)})
+	}
+	var b strings.Builder
+	b.WriteString("\n\n## " + adr.RulesSection + "\n")
+	for _, cat := range order {
+		b.WriteString("\n### " + cat + "\n")
+		for _, r := range grouped[cat] {
+			b.WriteString("\n#### " + r.slug + "\n" + r.text + "\n")
+		}
+	}
+	base := strings.TrimRight(string(body), "\n")
+	return []byte(base + b.String()), nil
+}
+
+// bodyLabel names the error source for the composed body in validation and
+// parse errors: the body-file alone, or the --rule-composed combination when
+// rule flags contributed — so a grammar error in a --rule value is not
+// misattributed to the body-file the user wrote.
+func bodyLabel(ruleFlags []string) string {
+	if len(ruleFlags) > 0 {
+		return "--body-file (with --rule composed \"## Rules\")"
+	}
+	return "--body-file"
+}
+
+// ruleRefFlags validates each repeated retirement-ref flag value
+// ("ADR-NNNN/<category>/<slug>") up front, so a malformed ref fails with
+// the flag's name rather than surfacing later from the composed file's
+// frontmatter parse. Semantic checks (dangling/forward/self/double-retire)
+// are the fold preflight's job. Returns the raw strings for Compose.
+func ruleRefFlags(flagName string, values []string) ([]string, error) {
+	for _, v := range values {
+		if _, err := adr.ParseRuleRef(v); err != nil {
+			return nil, fmt.Errorf("--%s: %w", flagName, err)
+		}
+	}
+	return values, nil
+}
+
+// resolveNewCategories checks every rule category of the parsed ADR against
+// the configured vocabulary (plan §2.5): an unknown category is a hard
+// error unless it was explicitly introduced with --new-category. It does
+// NOT persist — it returns the categories to append so the caller can defer
+// the config write until after the consent gate, keeping the
+// "refuse ⇒ nothing written" invariant. A --new-category no rule of this
+// ADR uses is an error (vocabulary growth stays coupled to the rule that
+// needs it — and a typo'd category surfaces instead of silently landing in
+// the config); one that names an already-configured category a rule uses is
+// a forgiving no-op.
+func (m *mutContext) resolveNewCategories(parsed *adr.ADR, newCategories []string) (toAppend []string, err error) {
+	newCats := make(map[string]bool, len(newCategories))
+	for _, c := range newCategories {
+		if c == "" {
+			return nil, fmt.Errorf("--new-category entries must not be empty")
+		}
+		if newCats[c] {
+			return nil, fmt.Errorf("--new-category %q given more than once", c)
+		}
+		newCats[c] = true
+	}
+	existing := make(map[string]bool, len(m.cfg.Categories))
+	for _, c := range m.cfg.Categories {
+		existing[c] = true
+	}
+	used := map[string]bool{}
+	appended := map[string]bool{}
+	for _, r := range parsed.Rules {
+		if newCats[r.Category] {
+			used[r.Category] = true
+		}
+		if existing[r.Category] {
+			continue
+		}
+		if !newCats[r.Category] {
+			return nil, fmt.Errorf(
+				"rule category %q is not in the configured vocabulary %v; pass --new-category %s to introduce it",
+				r.Category, m.cfg.Categories, r.Category)
+		}
+		if !appended[r.Category] {
+			appended[r.Category] = true
+			toAppend = append(toAppend, r.Category)
+		}
+	}
+	for _, c := range newCategories {
+		if !used[c] {
+			return nil, fmt.Errorf(
+				"--new-category %q is not used by any rule of this ADR; drop the flag or file a rule under it", c)
+		}
+	}
+	return toAppend, nil
+}
+
+// parseLog reads the full ADR log for the fold preflight. A repo whose
+// adr/ directory does not exist yet simply has an empty log (`adr new`
+// creates the directory only after the consent gate).
+func (m *mutContext) parseLog() ([]adr.ADR, error) {
+	adrs, err := adr.ParseDir(m.adrDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
 		return nil, err
 	}
-	if adr.HasRuleSection(body) {
-		return nil, fmt.Errorf(
-			"both --rule and a --body-file that already contains a \"## Rule\" section were supplied; provide the rule exactly once (drop --rule, or remove the section from the body)")
+	return adrs, nil
+}
+
+// preflightFold renders the log as it would exist after the mutation —
+// with the vocabulary grown by toAppend — so dangling/forward/self/
+// double-retire refs are caught BEFORE the consent gate: a refusal or bad
+// input never leaves an invalid log (proposal §2). Warnings (rule
+// resurrections) are deliberately suppressed here: the post-write regen
+// renders the same projection and prints them once.
+func (m *mutContext) preflightFold(adrs []adr.ADR, toAppend []string) error {
+	preCfg := *m.cfg
+	preCfg.Categories = append(append([]string(nil), m.cfg.Categories...), toAppend...)
+	_, _, err := render.Render(&preCfg, adrs)
+	return err
+}
+
+// appendCategories appends the vocabulary growth --new-category authorized
+// and atomically rewrites constitution.yml. Called only after the consent
+// gate has passed, so a refused mutation never touches the config (plan
+// §2.5 — vocabulary growth is still an ordinary ADR write, no meta-record).
+func (m *mutContext) appendCategories(cats []string) error {
+	if len(cats) == 0 {
+		return nil
 	}
-	return adr.AppendRuleSection(body, rule), nil
+	m.cfg.Categories = append(m.cfg.Categories, cats...)
+	return persistConfig(filepath.Join(m.root, "constitution.yml"), m.cfg)
 }
 
 // validateSource enforces the source-ref contract (plan §2.8) against the
@@ -176,30 +290,17 @@ func validateSource(st config.SourceTracking, source string) error {
 	return nil
 }
 
-// persistConfig atomically rewrites constitution.yml from cfg. Used only by
-// --new-category, the one path that mutates config. v1 re-serializes the
-// struct (comments in a hand-authored config are not preserved) — an
-// acceptable tradeoff since the config is CLI-managed.
+// persistConfig atomically rewrites constitution.yml from cfg. Used by
+// init's config authoring and by appendCategories' vocabulary growth. It
+// re-serializes the struct (comments in a hand-authored or hand-tuned
+// config are not preserved) — an acceptable tradeoff since the config is
+// CLI-managed.
 func persistConfig(path string, cfg *config.Config) error {
 	data, err := yaml.Marshal(cfg)
 	if err != nil {
 		return err
 	}
 	return atomicwrite.WriteFile(path, data, 0o644)
-}
-
-// formatCategories renders the vocabulary as "[a, b, c]" for error messages,
-// matching the phrasing internal/render uses for the same check on the read
-// path.
-func formatCategories(categories []string) string {
-	out := "["
-	for i, c := range categories {
-		if i > 0 {
-			out += ", "
-		}
-		out += c
-	}
-	return out + "]"
 }
 
 // isTerminal reports whether f is an interactive character device. Used to

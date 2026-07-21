@@ -11,14 +11,15 @@
 // # Canonicalization (the load-bearing decision)
 //
 // The hash covers only the fields that are *immutable* once an ADR is
-// accepted: the body and the frozen frontmatter fields (id, title,
-// category, date, source, supersedes). It deliberately EXCLUDES status and
-// superseded-by — the two fields a legal status transition may change (spec
-// §5.3). The consequence is exactly what the immutability model wants: a
-// legal supersede/deprecate does not alter the target ADR's manifest hash,
-// so the manifest changes only by *gaining* the new ADR's line, while any
-// illegal edit to frozen content (a reworded Decision Outcome, a changed
-// category) does change the hash and is therefore detectable.
+// accepted: the body and the frozen frontmatter fields (id, title, date,
+// source, supersedes, supersedes-rules, removes-rules). It deliberately
+// EXCLUDES status and superseded-by — the two fields a legal status
+// transition may change (spec §5.3). The consequence is exactly what the
+// immutability model wants: a legal supersede/deprecate does not alter the
+// target ADR's manifest hash, so the manifest changes only by *gaining* the
+// new ADR's line, while any illegal edit to frozen content (a reworded
+// Decision Outcome, a retargeted supersedes-rules list) does change the
+// hash and is therefore detectable.
 //
 // Canonicalization runs off the parsed model, not the raw bytes, so it is
 // inherently line-ending- and BOM-independent: a CRLF-authored ADR and its
@@ -54,21 +55,24 @@ const FileName = ".manifest.sha256"
 // both) cannot shift a boundary, so two distinct field/section tuples can
 // never produce the same canonical bytes — the length pins each value's
 // exact extent. A naive "name:value\n" scheme is forgeable: title
-// "T\ncategory:X" with category "c" and title "T" with category
-// "X\ncategory:c" would collide (asserted in TestCanonicalizeInjection).
+// "T\nsource:X" with source "c" and title "T" with source "X\nsource:c"
+// would collide (asserted in TestCanonicalizeInjection).
 func Canonicalize(a adr.ADR) []byte {
 	var b bytes.Buffer
 	field := func(name, value string) {
 		fmt.Fprintf(&b, "%s %d:%s\n", name, len(value), value)
 	}
 	// Frozen frontmatter fields, fixed order. status and superseded-by are
-	// intentionally absent (see package doc).
+	// intentionally absent (see package doc). The rule-retirement ref lists
+	// are frozen too; refs cannot contain commas, so a comma join is
+	// unambiguous inside the length-prefixed value.
 	field("id", a.ID)
 	field("title", a.Title)
-	field("category", a.Category)
 	field("date", a.Date)
 	field("source", a.Source)
 	field("supersedes", a.Supersedes)
+	field("supersedes-rules", adr.JoinRefs(a.SupersedesRules))
+	field("removes-rules", adr.JoinRefs(a.RemovesRules))
 	// Body sections in the order they appeared in the file, normalized to
 	// heading + trimmed content (exactly the model the parser exposes). The
 	// section count pins the structure; each heading/content pair is

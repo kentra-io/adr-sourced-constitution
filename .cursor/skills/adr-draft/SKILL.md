@@ -10,6 +10,10 @@ architectural choice, a convention, a policy — and it should become an ADR in
 this repo's constitution. You draft the record; **the human accepts it; the CLI
 writes it.** You never write into `constitution/adr/` yourself.
 
+If the `constitution` binary is not on PATH, install the prebuilt release —
+`curl -sSfL https://raw.githubusercontent.com/kentra-io/adr-sourced-constitution/main/install.sh | sh`
+— do **not** build from source or install a Go toolchain.
+
 ## The consent checkpoint — read this first
 
 Do **not** add `constitution adr new` (or `supersede`, `deprecate`) to any

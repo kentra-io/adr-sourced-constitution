@@ -8,7 +8,7 @@
 
 env CONSTITUTION_TODAY=2026-07-02
 
-exec constitution init --principle 'All code must have tests'
+exec constitution init --founding-file founding.md
 stdout 'init: constitution ready'
 
 grep 'status: accepted' constitution/adr/ADR-0001-all-code-must-have-tests.md
@@ -18,6 +18,11 @@ exec constitution regen
 ! stderr .
 exec constitution guard
 stdout 'clean'
+
+-- founding.md --
+## All code must have tests
+
+Every change ships with tests, no exceptions.
 
 -- constitution.yml --
 schemaVersion: 1

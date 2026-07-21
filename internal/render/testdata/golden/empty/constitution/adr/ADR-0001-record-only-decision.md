@@ -1,7 +1,6 @@
 ---
 id: ADR-0001
 title: A point-in-time record with no standing rule
-category: architecture
 date: 2026-07-01
 status: accepted
 ---
@@ -18,5 +17,5 @@ standing rule for future planning.
 
 ## Decision Outcome
 
-Recorded for the log; it establishes no rule, so it has no `## Rule`
+Recorded for the log; it establishes no rule, so it has no `## Rules`
 section and never projects into constitution.md.

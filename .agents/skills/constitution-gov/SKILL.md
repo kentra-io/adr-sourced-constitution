@@ -18,6 +18,11 @@ it into context now:
 cat constitution/constitution.md
 ```
 
+If the `constitution` binary is not on PATH (some steps below shell out to it),
+install the prebuilt release —
+`curl -sSfL https://raw.githubusercontent.com/kentra-io/adr-sourced-constitution/main/install.sh | sh`
+— do **not** build from source or install a Go toolchain.
+
 Do this at the start of every planning or architectural task, even if a pointer
 already imported it — reading it directly is how you stay governed regardless of
 which agent framework you are running under.

@@ -45,37 +45,24 @@ func ExtractSections(body []byte) (sections map[string]string, order []string) {
 	return sections, order
 }
 
-// validateRuleSection enforces the rule-bearing contract (plan §2.12): a
-// "## Rule" section MAY be absent (the ADR is then a catalog-only record),
-// but if present it must appear exactly once, must not be empty or
-// whitespace-only, and must be plain prose — no line may begin with a
-// Markdown heading marker. A rule is 1–3 lines of prose; malformed rule
-// input is rejected here, never silently swallowed (a duplicate heading would
-// let the last one silently win the projection; a heading line would either
-// inject an outline entry into constitution.md or be swallowed as a section
-// delimiter). Presence with valid content is what makes an ADR project into
-// constitution.md. order is the heading order ExtractSections returns; it is
-// needed because the sections map collapses a duplicate heading to one entry.
-func validateRuleSection(sections map[string]string, order []string, file string) error {
-	if countHeadings(order, RuleSection) > 1 {
-		return &ParseError{
-			File:  file,
-			Field: RuleSection,
-			Msg:   "the \"## Rule\" section appears more than once; a body may carry at most one \"## Rule\" section",
-		}
+// validateAndParseRules extracts + validates the optional Rules section of
+// an already-extracted body. Shared by the read path (parseBytesCore) and
+// the write path (ValidateBody) so valid-on-write and valid-on-read can
+// never drift. A "## Rules" section MAY be absent (the ADR is then a
+// record-only entry); when present it must appear exactly once (order is
+// the heading order ExtractSections returns — the sections map collapses a
+// duplicate heading to one entry) and must satisfy the strict h3/h4 rules
+// grammar (ParseRulesSection).
+func validateAndParseRules(sections map[string]string, order []string, file string) ([]Rule, error) {
+	if countHeadings(order, RulesSection) > 1 {
+		return nil, &ParseError{File: file, Field: RulesSection,
+			Msg: "the \"## Rules\" section appears more than once; a body may carry at most one"}
 	}
-	content, present := sections[RuleSection]
+	content, present := sections[RulesSection]
 	if !present {
-		return nil
+		return nil, nil
 	}
-	if strings.TrimSpace(content) == "" {
-		return &ParseError{
-			File:  file,
-			Field: RuleSection,
-			Msg:   "the \"## Rule\" section is present but empty; give it a normative statement or remove it (a record-only ADR has no Rule section)",
-		}
-	}
-	return ruleTextError(content, file, RuleSection)
+	return ParseRulesSection(content, file)
 }
 
 // countHeadings reports how many times name appears in a heading-order slice.
@@ -87,34 +74,6 @@ func countHeadings(order []string, name string) int {
 		}
 	}
 	return n
-}
-
-// ValidateRuleText enforces the plain-prose Rule contract (plan §2.12) on a
-// raw rule statement supplied outside a parsed body — the `--rule` flag. A
-// Rule is 1–3 lines of plain prose; no line may begin with a Markdown heading
-// marker ('#'). This is validated on the raw flag value because composing a
-// "## Rule" section from heading-bearing text would otherwise split the text
-// across sections (silently truncating the rule) before the section-based
-// validators could see it. file locates the error (e.g. "--rule").
-func ValidateRuleText(text, file string) error {
-	return ruleTextError(text, file, "")
-}
-
-// ruleTextError returns a *ParseError for the first line of text that begins
-// with a Markdown heading marker ('#', ignoring up to leading indentation),
-// or nil when every line is plain prose. field is the section name for the
-// error's location ("Rule" on a parsed body) or "" for a raw flag value.
-func ruleTextError(text, file, field string) error {
-	for _, line := range strings.Split(text, "\n") {
-		if strings.HasPrefix(strings.TrimLeft(line, " \t"), "#") {
-			return &ParseError{
-				File:  file,
-				Field: field,
-				Msg:   "rule text is plain prose and must not contain Markdown heading lines; found a line beginning with \"#\": " + strings.TrimSpace(line),
-			}
-		}
-	}
-	return nil
 }
 
 // validateSections checks that every section in `required` is present in

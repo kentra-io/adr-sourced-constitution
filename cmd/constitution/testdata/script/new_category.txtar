@@ -1,22 +1,32 @@
-# Category governance (plan §2.5): an unknown category hard-errors unless
-# --new-category is passed, which appends it to the config and proceeds.
+# Category governance (plan §2.5, v0.2): a rule category outside the
+# configured vocabulary hard-errors unless --new-category introduces it,
+# which appends it to the config and proceeds; a --new-category no rule
+# uses is itself an error (typos surface instead of silently landing in
+# the config).
 
 env CONSTITUTION_TODAY=2026-07-02
 
-# --- unknown category without the flag: refuse, nothing written ---
-! exec constitution adr new --title 'A test rule' --category testing --body-file body.md
-stderr 'unknown category "testing"'
-stderr 'pass --new-category to introduce it'
+# --- unknown rule category without the flag: refuse, nothing written ---
+! exec constitution adr new --title 'A test rule' --body-file body.md --rule 'testing/first-rule: Test first.'
+stderr 'rule category "testing" is not in the configured vocabulary'
+stderr 'pass --new-category testing to introduce it'
 ! exists constitution/adr/ADR-0001-a-test-rule.md
 
 # --- with --new-category: proceeds and the vocabulary now includes it ---
-exec constitution adr new --title 'A test rule' --category testing --body-file body.md --new-category
+exec constitution adr new --title 'A test rule' --body-file body.md --rule 'testing/first-rule: Test first.' --new-category testing
 stdout 'created .*ADR-0001-a-test-rule\.md'
-grep 'category: testing' constitution/adr/ADR-0001-a-test-rule.md
+grep '#### first-rule' constitution/adr/ADR-0001-a-test-rule.md
+grep '- testing' constitution.yml
 
-# The category is now known, so a second testing ADR needs no flag.
-exec constitution adr new --title 'Another test rule' --category testing --body-file body.md
+# The category is now known, so a second testing rule needs no flag.
+exec constitution adr new --title 'Another test rule' --body-file body.md --rule 'testing/second-rule: Test twice.'
 stdout 'created .*ADR-0002-another-test-rule\.md'
+
+# --- a --new-category no rule of the ADR uses: refuse, nothing written ---
+! exec constitution adr new --title 'Unused category' --body-file body.md --rule 'testing/third-rule: Test thrice.' --new-category security
+stderr '--new-category "security" is not used by any rule'
+! exists constitution/adr/ADR-0003-unused-category.md
+! grep '- security' constitution.yml
 
 -- constitution.yml --
 schemaVersion: 1

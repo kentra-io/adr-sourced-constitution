@@ -1,7 +1,6 @@
 ---
 id: ADR-0002
 title: A once-standing rule since deprecated
-category: process
 date: 2026-07-02
 status: deprecated
 ---
@@ -19,7 +18,11 @@ This rule was in force, then retired without a replacement.
 
 Deprecated; it no longer governs.
 
-## Rule
+## Rules
 
-Deprecated rules do not project, even though the Rule section is frozen
+### process
+
+#### deprecated-rule
+
+Deprecated rules do not project, even though the Rules section is frozen
 in the record.

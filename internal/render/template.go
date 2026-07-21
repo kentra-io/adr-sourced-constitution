@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"strings"
 	"text/template"
-
-	"github.com/kentra-io/adr-sourced-constitution/internal/adr"
 )
 
 // header is static (no template data), so it's a plain constant rather
@@ -15,35 +13,44 @@ import (
 const header = `<!--
   GENERATED FILE -- projection of the ADR log in constitution/adr/.
   Do not hand-edit; changes will be overwritten by the next "constitution
-  regen". Only rule-bearing (## Rule) active ADRs project here; to change a
-  rule, add, supersede, or deprecate an ADR instead.
+  regen". Only the rules (## Rules entries) of active ADRs project here; to
+  change a rule, add, supersede, or deprecate an ADR instead.
 -->
 
 # Constitution
 `
 
-// placeholderLine is the sole body line when no active ADR is rule-bearing
-// (plan §2.12): the constitution is empty of standing rules, and the reader
-// is pointed at the decision log.
+// preamble is the D2 goal statement (proposal v0.2): every rendered
+// constitution states what the document is for, so any agent reading it
+// knows what belongs in it.
+const preamble = `The source of truth for this project's standing technical decisions — how
+recurring problems are solved (architecture, mapping, testing, process) — so
+that requirements can stay functional and need not re-explain implementation
+choices.
+`
+
+// placeholderLine is the sole body line when no active ADR carries a rule:
+// the constitution is empty of standing rules, and the reader is pointed at
+// the decision log.
 const placeholderLine = "No standing rules yet. Decision log: constitution/adr/."
 
-// adrTmplText renders one rule-bearing ADR's projected entry: title as a rule
-// heading, the Rule section body verbatim, then a metadata line (plan §2.12,
-// §4). The Decision Outcome no longer projects. Blank-line spacing *between*
-// entries/categories is assembled in Go (renderTemplate) rather than fought
-// over in template whitespace-trim syntax, so it stays byte-exact.
-const adrTmplText = `### {{.Title}}
+// entryTmplText renders one projected rule entry: its slug as the rule
+// heading, the rule text verbatim, then the carrying ADR's metadata line.
+// Blank-line spacing *between* entries/categories is assembled in Go
+// (renderTemplate) rather than fought over in template whitespace-trim
+// syntax, so it stays byte-exact.
+const entryTmplText = `### {{.Slug}}
 
-{{.Rule}}
+{{.Text}}
 
 {{.MetaLine}}
 `
 
-var adrTmpl = template.Must(template.New("adr").Parse(adrTmplText))
+var entryTmpl = template.Must(template.New("entry").Parse(entryTmplText))
 
-type tmplADR struct {
-	Title    string
-	Rule     string
+type tmplEntry struct {
+	Slug     string
+	Text     string
 	MetaLine string
 }
 
@@ -52,37 +59,38 @@ type tmplADR struct {
 func renderTemplate(sections []CategorySection) ([]byte, error) {
 	catChunks := make([]string, 0, len(sections))
 	for _, s := range sections {
-		adrChunks := make([]string, 0, len(s.ADRs))
-		for _, a := range s.ADRs {
-			data := tmplADR{
-				Title:    a.Title,
-				Rule:     a.Rule(),
-				MetaLine: metaLine(a),
+		entryChunks := make([]string, 0, len(s.Entries))
+		for _, e := range s.Entries {
+			data := tmplEntry{
+				Slug:     e.Rule.Slug,
+				Text:     e.Rule.Text,
+				MetaLine: metaLine(e),
 			}
 			var buf bytes.Buffer
-			if err := adrTmpl.Execute(&buf, data); err != nil {
-				return nil, fmt.Errorf("render constitution.md: ADR %s: %w", a.ID, err)
+			if err := entryTmpl.Execute(&buf, data); err != nil {
+				return nil, fmt.Errorf("render constitution.md: rule %s/%s/%s: %w",
+					e.ADR.ID, e.Rule.Category, e.Rule.Slug, err)
 			}
-			adrChunks = append(adrChunks, strings.TrimRight(buf.String(), "\n"))
+			entryChunks = append(entryChunks, strings.TrimRight(buf.String(), "\n"))
 		}
-		catChunks = append(catChunks, "## "+s.Name+"\n\n"+strings.Join(adrChunks, "\n\n"))
+		catChunks = append(catChunks, "## "+s.Name+"\n\n"+strings.Join(entryChunks, "\n\n"))
 	}
 
 	body := strings.Join(catChunks, "\n\n")
 	if body == "" {
-		// No rule-bearing active ADR: render the placeholder (plan §2.12).
+		// No projected rule from any active ADR: render the placeholder.
 		body = placeholderLine
 	}
-	return []byte(header + "\n" + body + "\n"), nil
+	return []byte(header + "\n" + preamble + "\n" + body + "\n"), nil
 }
 
-// metaLine formats an active ADR's metadata line: "ADR-0007 · 2026-07-01
-// · source FS-0042", omitting the source segment when absent
-// (implementation-plan.md §4).
-func metaLine(a adr.ADR) string {
-	line := a.ID + " · " + a.Date
-	if a.Source != "" {
-		line += " · source " + a.Source
+// metaLine formats a projected entry's metadata line from its carrying
+// ADR: "ADR-0007 · 2026-07-01 · source FS-0042", omitting the source
+// segment when absent (implementation-plan.md §4).
+func metaLine(e Entry) string {
+	line := e.ADR.ID + " · " + e.ADR.Date
+	if e.ADR.Source != "" {
+		line += " · source " + e.ADR.Source
 	}
 	return line
 }

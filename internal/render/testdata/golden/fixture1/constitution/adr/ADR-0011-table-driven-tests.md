@@ -1,7 +1,6 @@
 ---
 id: ADR-0011
 title: Prefer table-driven tests
-category: testing
 date: 2026-06-22
 status: accepted
 source: FS-0011
@@ -22,6 +21,14 @@ gaps than a single table of cases.
 Prefer table-driven tests with named `t.Run` subtests for anything with
 more than two similar cases.
 
-## Rule
+## Rules
+
+### testing
+
+#### table-driven-tests
 
 Prefer table-driven tests with named subtests beyond two similar cases.
+
+#### named-subtests
+
+Name every subtest case; anonymous t.Run blocks must not merge.

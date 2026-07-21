@@ -1,7 +1,6 @@
 ---
 id: ADR-0008
 title: Store all timestamps in UTC
-category: data
 date: 2026-06-13
 status: accepted
 source: FS-0008

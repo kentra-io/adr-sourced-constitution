@@ -1,7 +1,6 @@
 ---
 id: ADR-0006
 title: Require golden tests for the regen projection
-category: testing
 date: 2026-06-11
 status: accepted
 source: FS-0006
@@ -22,6 +21,10 @@ systems; that's hard to eyeball-review.
 Every change to the projection ships a golden fixture asserting the
 exact rendered bytes.
 
-## Rule
+## Rules
+
+### testing
+
+#### golden-tests
 
 Every projection change ships a byte-exact golden fixture.

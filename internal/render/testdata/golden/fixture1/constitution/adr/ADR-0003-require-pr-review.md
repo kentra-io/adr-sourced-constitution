@@ -1,7 +1,6 @@
 ---
 id: ADR-0003
 title: Require PR review before merging an ADR
-category: process
 date: 2026-06-03
 status: accepted
 source: FS-0003

@@ -1,7 +1,6 @@
 ---
 id: ADR-0004
 title: Hold a weekly cross-team design sync
-category: process
 date: 2026-06-04
 status: deprecated
 source: FS-0004

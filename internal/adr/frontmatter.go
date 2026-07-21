@@ -59,7 +59,7 @@ func SplitFrontmatter(data []byte) (frontmatter, body []byte, err error) {
 
 // fieldLine returns the absolute (whole-file) 1-based line number of the
 // frontmatter field named `field` (a top-level "field: value" line), or 0
-// if it can't be found. Used to make id/date/status/category validation
+// if it can't be found. Used to make id/date/status/rule-ref validation
 // errors precise per the file/line/field contract.
 func fieldLine(fm []byte, field string) int {
 	lines := strings.Split(string(fm), "\n")

@@ -10,7 +10,6 @@ func TestParseDir(t *testing.T) {
 	writeFile(t, dir, "ADR-0002-second.md", `---
 id: ADR-0002
 title: Second
-category: architecture
 date: 2026-07-02
 status: accepted
 ---
@@ -22,7 +21,6 @@ Second decision.
 	writeFile(t, dir, "ADR-0001-first.md", `---
 id: ADR-0001
 title: First
-category: architecture
 date: 2026-07-01
 status: accepted
 ---
@@ -53,7 +51,6 @@ func TestParseDirFailsFastOnMalformedFile(t *testing.T) {
 	writeFile(t, dir, "ADR-0001-good.md", `---
 id: ADR-0001
 title: Good
-category: architecture
 date: 2026-07-01
 status: accepted
 ---
@@ -84,7 +81,6 @@ func TestParseDirDuplicateID(t *testing.T) {
 		return `---
 id: ADR-0001
 title: ` + title + `
-category: architecture
 date: 2026-07-01
 status: accepted
 ---

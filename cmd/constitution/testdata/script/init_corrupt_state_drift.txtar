@@ -6,13 +6,13 @@
 
 env CONSTITUTION_TODAY=2026-07-02
 
-exec constitution init --principle 'P1' --target claude
+exec constitution init --target claude
 
 # drift the managed block AND poison the drift bookkeeping
 cp drifted-claude.md CLAUDE.md
 cp corrupt.state constitution/.state
 
-! exec constitution init --principle 'P1' --target claude
+! exec constitution init --target claude
 stderr 'empty drift state'
 stderr 'refusing to overwrite'
 grep 'HACKED' CLAUDE.md

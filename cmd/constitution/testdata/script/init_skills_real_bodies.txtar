@@ -4,7 +4,7 @@
 
 env CONSTITUTION_TODAY=2026-07-01
 
-exec constitution init --target claude --consent off --principle 'Prefer boring technology'
+exec constitution init --target claude --consent off
 stdout 'constitution ready'
 
 # Fanned into all three trees by default.

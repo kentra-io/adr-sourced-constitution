@@ -21,7 +21,7 @@ func writeManifest(t *testing.T, adrDir string, adrs []adr.ADR) {
 
 func sampleADR() adr.ADR {
 	return adr.ADR{
-		ID: "ADR-0001", Title: "T", Category: "architecture", Date: "2026-07-01",
+		ID: "ADR-0001", Title: "T", Date: "2026-07-01",
 		Status:       adr.StatusAccepted,
 		Sections:     map[string]string{"Decision Outcome": "y"},
 		SectionOrder: []string{"Decision Outcome"},

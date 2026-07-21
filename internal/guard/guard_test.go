@@ -31,7 +31,7 @@ func gitIn(t *testing.T, dir string, args ...string) {
 func writeADR(t *testing.T, adrDir, id, title, decisionText string) adr.ADR {
 	t.Helper()
 	content := adr.Compose(adr.NewADR{
-		ID: id, Title: title, Category: "architecture", Date: "2026-07-01",
+		ID: id, Title: title, Date: "2026-07-01",
 		Body: "## Context and Problem Statement\n\nx\n\n## Considered Options\n\n- a\n\n## Decision Outcome\n\n" + decisionText + "\n",
 	})
 	path := filepath.Join(adrDir, adr.Filename(id, title))

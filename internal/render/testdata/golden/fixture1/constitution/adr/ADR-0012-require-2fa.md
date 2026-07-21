@@ -1,7 +1,6 @@
 ---
 id: ADR-0012
 title: Require 2FA for repository administrators
-category: security
 date: 2026-06-23
 status: accepted
 source: FS-0012
@@ -22,6 +21,10 @@ credential-compromise risk.
 All repository administrators must have two-factor authentication
 enabled; org settings enforce it.
 
-## Rule
+## Rules
+
+### security
+
+#### require-2fa
 
 Require two-factor authentication for all repository administrators.

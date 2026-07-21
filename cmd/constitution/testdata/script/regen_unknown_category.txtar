@@ -1,9 +1,10 @@
-# `constitution regen` fails with a precise error when an ADR's category
+# `constitution regen` fails with a precise error when a rule's category
 # isn't in the configured vocabulary (M1 DoD: malformed ADRs fail with
-# precise file/field errors; spec §2.5's hard-error stance).
+# precise file/field errors; spec §2.5's hard-error stance). In v0.2 the
+# unknown category arrives via a rule's "### <category>" tag.
 
 ! exec constitution regen
-stderr 'field "category": not in the configured category vocabulary \[architecture\] \(got "bogus"\)'
+stderr 'field "category": rule bogus/some-rule: not in the configured category vocabulary \[architecture\] \(got "bogus"\)'
 ! stdout .
 ! exists constitution/constitution.md
 
@@ -16,7 +17,6 @@ categories:
 ---
 id: ADR-0001
 title: A rule with an unknown category
-category: bogus
 date: 2026-07-01
 status: accepted
 ---
@@ -31,4 +31,11 @@ Context.
 
 ## Decision Outcome
 
+Outcome text.
+
+## Rules
+
+### bogus
+
+#### some-rule
 Outcome text.

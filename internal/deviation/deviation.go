@@ -287,7 +287,7 @@ func semanticErrors(rep Report, adrs map[string]adr.ADR) []string {
 				i, d.ADRID, a.Status))
 		case !a.IsRuleBearing():
 			errs = append(errs, fmt.Sprintf(
-				"deviations[%d].adrId: %s is a record-only ADR (no ## Rule section); record-only ADRs do not appear in constitution.md, so a deviation cannot cite one — cite a rule-bearing ADR instead",
+				"deviations[%d].adrId: %s is a record-only ADR (no ## Rules section); record-only ADRs do not appear in constitution.md, so a deviation cannot cite one — cite a rule-bearing ADR instead",
 				i, d.ADRID))
 		}
 

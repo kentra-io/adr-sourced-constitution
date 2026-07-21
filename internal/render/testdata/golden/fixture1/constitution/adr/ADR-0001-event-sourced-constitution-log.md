@@ -1,7 +1,6 @@
 ---
 id: ADR-0001
 title: Model the constitution as an event-sourced ADR log
-category: architecture
 date: 2026-06-01
 status: superseded
 source: FS-0001

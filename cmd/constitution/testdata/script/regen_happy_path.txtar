@@ -1,7 +1,8 @@
 # `constitution regen` renders constitution/constitution.md from the ADR
-# log (M1 DoD happy path): rule-bearing active ADRs render grouped by
+# log (M1 DoD happy path): the rules of active ADRs render grouped per
 # category; a record-only active ADR and a deprecated ADR are both excluded
-# from the projection (plan §2.12).
+# from the projection (plan §2.12). The pre-v0.2 `category:` frontmatter on
+# checked-in fixtures is an ignored unknown field.
 
 exec constitution regen
 stdout 'wrote .*constitution.constitution\.md'
@@ -38,8 +39,11 @@ Need a source of truth that supports supersede/deprecate semantics.
 
 Model the constitution as a projection of an append-only ADR log.
 
-## Rule
+## Rules
 
+### architecture
+
+#### event-sourced-log
 Model the constitution as a projection of an append-only ADR log; never
 hand-edit constitution.md.
 
@@ -68,15 +72,20 @@ This rule no longer applies.
 <!--
   GENERATED FILE -- projection of the ADR log in constitution/adr/.
   Do not hand-edit; changes will be overwritten by the next "constitution
-  regen". Only rule-bearing (## Rule) active ADRs project here; to change a
-  rule, add, supersede, or deprecate an ADR instead.
+  regen". Only the rules (## Rules entries) of active ADRs project here; to
+  change a rule, add, supersede, or deprecate an ADR instead.
 -->
 
 # Constitution
 
+The source of truth for this project's standing technical decisions — how
+recurring problems are solved (architecture, mapping, testing, process) — so
+that requirements can stay functional and need not re-explain implementation
+choices.
+
 ## architecture
 
-### Model the constitution as an event-sourced ADR log
+### event-sourced-log
 
 Model the constitution as a projection of an append-only ADR log; never
 hand-edit constitution.md.

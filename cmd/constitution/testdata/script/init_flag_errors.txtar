@@ -6,7 +6,7 @@
 env CONSTITUTION_TODAY=2026-07-02
 
 # --- --consent: unknown policy ---
-exitcode 2 constitution init --consent advisory --principle P
+exitcode 2 constitution init --consent advisory
 stderr '--consent must be "strict" or "off" \(got "advisory"\)'
 
 # --- --target: unknown value ---

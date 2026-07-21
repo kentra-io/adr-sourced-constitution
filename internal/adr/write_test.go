@@ -189,102 +189,69 @@ func TestValidateBody(t *testing.T) {
 	}
 }
 
-// TestValidateBodyEmptyRule proves a present-but-empty "## Rule" section is
-// rejected on the write path too (plan §2.12).
-func TestValidateBodyEmptyRule(t *testing.T) {
-	body := "## Context and Problem Statement\n\nx\n\n## Considered Options\n\n- a\n\n## Decision Outcome\n\ny\n\n## Rule\n\n   \n"
+// TestValidateBodyEmptyRules proves a present-but-empty "## Rules" section is
+// rejected on the write path too (shared validateAndParseRules seam).
+func TestValidateBodyEmptyRules(t *testing.T) {
+	body := "## Context and Problem Statement\n\nx\n\n## Considered Options\n\n- a\n\n## Decision Outcome\n\ny\n\n## Rules\n\n   \n"
 	err := ValidateBody([]byte(body), "b.md")
 	if err == nil {
-		t.Fatal("ValidateBody(empty Rule) = nil, want error")
+		t.Fatal("ValidateBody(empty Rules) = nil, want error")
 	}
-	want := `b.md: field "Rule": the "## Rule" section is present but empty; give it a normative statement or remove it (a record-only ADR has no Rule section)`
+	want := `b.md: field "Rules": the "## Rules" section is present but empty; give it "### <category>" / "#### <slug>" rule entries or remove it (a record-only ADR has no Rules section)`
 	if err.Error() != want {
 		t.Errorf("ValidateBody error = %q, want %q", err.Error(), want)
 	}
 }
 
-// TestValidateBodyDuplicateRule proves a body carrying two "## Rule" sections
-// is rejected rather than letting the last one silently win the projection
-// (plan §2.12, fix: rule input is validated, never silently swallowed).
-func TestValidateBodyDuplicateRule(t *testing.T) {
-	body := "## Context and Problem Statement\n\nx\n\n## Considered Options\n\n- a\n\n## Decision Outcome\n\ny\n\n## Rule\n\nFirst.\n\n## Rule\n\nSecond.\n"
+// TestValidateBodyDuplicateRules proves a body carrying two "## Rules"
+// sections is rejected rather than letting the last one silently win the
+// projection (rule input is validated, never silently swallowed).
+func TestValidateBodyDuplicateRules(t *testing.T) {
+	body := "## Context and Problem Statement\n\nx\n\n## Considered Options\n\n- a\n\n## Decision Outcome\n\ny\n\n## Rules\n\n### testing\n\n#### first\n\nFirst.\n\n## Rules\n\n### testing\n\n#### second\n\nSecond.\n"
 	err := ValidateBody([]byte(body), "b.md")
 	if err == nil {
-		t.Fatal("ValidateBody(duplicate Rule) = nil, want error")
+		t.Fatal("ValidateBody(duplicate Rules) = nil, want error")
 	}
-	want := `b.md: field "Rule": the "## Rule" section appears more than once; a body may carry at most one "## Rule" section`
+	want := `b.md: field "Rules": the "## Rules" section appears more than once; a body may carry at most one`
 	if err.Error() != want {
 		t.Errorf("ValidateBody error = %q, want %q", err.Error(), want)
 	}
 }
 
-// TestValidateBodyRuleHeadingLine proves a "## Rule" section whose content
-// carries a Markdown heading line is rejected: a rule is plain prose (plan
-// §2.12). This covers the single-'#' case that survives extraction as content.
+// TestValidateBodyRuleHeadingLine proves a "## Rules" section whose rule text
+// carries a Markdown heading line is rejected: rule text is plain prose.
+// This covers the single-'#' case that survives extraction as content.
 func TestValidateBodyRuleHeadingLine(t *testing.T) {
-	body := "## Context and Problem Statement\n\nx\n\n## Considered Options\n\n- a\n\n## Decision Outcome\n\ny\n\n## Rule\n\nreal rule\n# Big Heading\n"
+	body := "## Context and Problem Statement\n\nx\n\n## Considered Options\n\n- a\n\n## Decision Outcome\n\ny\n\n## Rules\n\n### testing\n\n#### real-rule\n\nreal rule\n# Big Heading\n"
 	err := ValidateBody([]byte(body), "b.md")
 	if err == nil {
-		t.Fatal("ValidateBody(heading in Rule) = nil, want error")
+		t.Fatal("ValidateBody(heading in rule text) = nil, want error")
 	}
-	want := `b.md: field "Rule": rule text is plain prose and must not contain Markdown heading lines; found a line beginning with "#": # Big Heading`
+	want := `b.md: field "Rules": rule text is plain prose and must not contain Markdown heading lines; found: # Big Heading`
 	if err.Error() != want {
 		t.Errorf("ValidateBody error = %q, want %q", err.Error(), want)
 	}
 }
 
-// TestValidateRuleText proves the raw-flag validator (the --rule path) rejects
-// any line beginning with a Markdown heading marker, before composition — so a
-// heading-bearing rule is refused rather than silently split/truncated.
-func TestValidateRuleText(t *testing.T) {
-	if err := ValidateRuleText("Plain prose rule.", "--rule"); err != nil {
-		t.Errorf("ValidateRuleText(plain) = %v, want nil", err)
+// TestComposeRuleBearingBody proves a body carrying its own "## Rules"
+// section composes into an ADR that parses back rule-bearing with the exact
+// rule entries.
+func TestComposeRuleBearingBody(t *testing.T) {
+	body := "## Context and Problem Statement\n\nWhy.\n\n## Considered Options\n\n- a\n\n## Decision Outcome\n\nDo it.\n\n## Rules\n\n### architecture\n\n#### do-the-thing\n\nDo the thing.\n"
+	if err := ValidateBody([]byte(body), "b.md"); err != nil {
+		t.Fatalf("ValidateBody(rules body) = %v", err)
 	}
-	// A mid-line '#' is fine — only line-leading heading markers are rejected.
-	if err := ValidateRuleText("Tag commits with #ticket.", "--rule"); err != nil {
-		t.Errorf("ValidateRuleText(mid-line #) = %v, want nil", err)
-	}
-	err := ValidateRuleText("real rule\n## Sneaky\nmore", "--rule")
-	if err == nil {
-		t.Fatal("ValidateRuleText(heading line) = nil, want error")
-	}
-	want := `--rule: rule text is plain prose and must not contain Markdown heading lines; found a line beginning with "#": ## Sneaky`
-	if err.Error() != want {
-		t.Errorf("ValidateRuleText error = %q, want %q", err.Error(), want)
-	}
-}
-
-// TestHasAndAppendRuleSection covers the --rule composition helpers (plan
-// §2.12): detecting an existing Rule section, and appending one as the last
-// body section such that it parses back rule-bearing.
-func TestHasAndAppendRuleSection(t *testing.T) {
-	base := "## Context and Problem Statement\n\nWhy.\n\n## Considered Options\n\n- a\n\n## Decision Outcome\n\nDo it.\n"
-	if HasRuleSection([]byte(base)) {
-		t.Error("HasRuleSection(base) = true, want false")
-	}
-
-	withRule := AppendRuleSection([]byte(base), "Do the thing.")
-	if !HasRuleSection(withRule) {
-		t.Error("HasRuleSection(appended) = false, want true")
-	}
-	if err := ValidateBody(withRule, "b.md"); err != nil {
-		t.Fatalf("ValidateBody(appended) = %v", err)
-	}
-	// It composes into an ADR that parses back rule-bearing with the exact rule.
 	out := Compose(NewADR{
-		ID: "ADR-0001", Title: "T", Category: "architecture", Date: "2026-07-01",
-		Body: string(withRule),
+		ID: "ADR-0001", Title: "T", Date: "2026-07-01",
+		Body: body,
 	})
 	a, err := ParseBytes(out, "ADR-0001-t.md")
 	if err != nil {
 		t.Fatalf("composed ADR does not parse: %v\n%s", err, out)
 	}
-	if !a.IsRuleBearing() || a.Rule() != "Do the thing." {
-		t.Errorf("rule-bearing=%v rule=%q, want true/%q", a.IsRuleBearing(), a.Rule(), "Do the thing.")
-	}
-	// The Rule must be the LAST section.
-	if last := a.SectionOrder[len(a.SectionOrder)-1]; last != RuleSection {
-		t.Errorf("last section = %q, want %q", last, RuleSection)
+	want := Rule{Category: "architecture", Slug: "do-the-thing", Text: "Do the thing."}
+	if !a.IsRuleBearing() || len(a.Rules) != 1 || a.Rules[0] != want {
+		t.Errorf("Rules = %+v, want [%+v]", a.Rules, want)
 	}
 }
 
@@ -299,7 +266,7 @@ func TestValidateBodyCRLF(t *testing.T) {
 func TestCompose(t *testing.T) {
 	body := "## Context and Problem Statement\n\nWhy.\n\n## Considered Options\n\n- a\n\n## Decision Outcome\n\nDo it.\n"
 	out := Compose(NewADR{
-		ID: "ADR-0007", Title: "Use event sourcing", Category: "architecture",
+		ID: "ADR-0007", Title: "Use event sourcing",
 		Date: "2026-07-01", Source: "FS-0042", Supersedes: "ADR-0003", Body: body,
 	})
 
@@ -308,7 +275,7 @@ func TestCompose(t *testing.T) {
 	if err != nil {
 		t.Fatalf("composed ADR does not parse: %v\n%s", err, out)
 	}
-	if a.ID != "ADR-0007" || a.Title != "Use event sourcing" || a.Category != "architecture" ||
+	if a.ID != "ADR-0007" || a.Title != "Use event sourcing" ||
 		a.Date != "2026-07-01" || a.Source != "FS-0042" || a.Supersedes != "ADR-0003" ||
 		a.Status != StatusAccepted {
 		t.Errorf("composed model mismatch: %+v", a)
@@ -318,16 +285,47 @@ func TestCompose(t *testing.T) {
 	}
 }
 
+// TestComposeRuleRetirementLists proves the supersedes-rules/removes-rules
+// frontmatter lists compose as flow sequences and round-trip through the
+// parser as validated refs.
+func TestComposeRuleRetirementLists(t *testing.T) {
+	body := "## Context and Problem Statement\n\nx\n\n## Considered Options\n\n- a\n\n## Decision Outcome\n\ny\n"
+	out := string(Compose(NewADR{
+		ID: "ADR-0004", Title: "T", Date: "2026-07-01", Body: body,
+		SupersedesRules: []string{"ADR-0002/testing/old-tiers", "ADR-0003/architecture/x"},
+		RemovesRules:    []string{"ADR-0002/testing/no-mutation"},
+	}))
+	if !contains(out, "supersedes-rules: [ADR-0002/testing/old-tiers, ADR-0003/architecture/x]\n") {
+		t.Errorf("missing supersedes-rules line:\n%s", out)
+	}
+	if !contains(out, "removes-rules: [ADR-0002/testing/no-mutation]\n") {
+		t.Errorf("missing removes-rules line:\n%s", out)
+	}
+	a, err := ParseBytes([]byte(out), "ADR-0004-t.md")
+	if err != nil {
+		t.Fatalf("composed ADR does not parse: %v\n%s", err, out)
+	}
+	if len(a.SupersedesRules) != 2 || a.SupersedesRules[1].String() != "ADR-0003/architecture/x" {
+		t.Errorf("SupersedesRules = %+v", a.SupersedesRules)
+	}
+	if len(a.RemovesRules) != 1 || a.RemovesRules[0].String() != "ADR-0002/testing/no-mutation" {
+		t.Errorf("RemovesRules = %+v", a.RemovesRules)
+	}
+}
+
 func TestComposeOmitsOptionalFields(t *testing.T) {
 	body := "## Context and Problem Statement\n\nx\n\n## Considered Options\n\n- a\n\n## Decision Outcome\n\ny\n"
 	out := string(Compose(NewADR{
-		ID: "ADR-0001", Title: "T", Category: "architecture", Date: "2026-07-01", Body: body,
+		ID: "ADR-0001", Title: "T", Date: "2026-07-01", Body: body,
 	}))
 	if contains(out, "source:") {
 		t.Errorf("expected no source line when Source is empty:\n%s", out)
 	}
 	if contains(out, "supersedes:") {
 		t.Errorf("expected no supersedes line when Supersedes is empty:\n%s", out)
+	}
+	if contains(out, "supersedes-rules:") || contains(out, "removes-rules:") {
+		t.Errorf("expected no rule-retirement lines when the lists are empty:\n%s", out)
 	}
 }
 
@@ -336,7 +334,7 @@ func TestComposeQuotesAmbiguousTitle(t *testing.T) {
 	// A title containing ": " would break an unquoted YAML scalar; Compose
 	// must quote it and it must round-trip.
 	title := "Prefer A: not B"
-	out := Compose(NewADR{ID: "ADR-0001", Title: title, Category: "architecture", Date: "2026-07-01", Body: body})
+	out := Compose(NewADR{ID: "ADR-0001", Title: title, Date: "2026-07-01", Body: body})
 	a, err := ParseBytes(out, "ADR-0001-x.md")
 	if err != nil {
 		t.Fatalf("composed ADR with ambiguous title does not parse: %v\n%s", err, out)

@@ -5,7 +5,7 @@
 env CONSTITUTION_TODAY=2026-07-02
 
 # --- refuse: strict, non-tty, no --approve. Nothing is written. ---
-! exec constitution adr new --title 'A rule' --category architecture --body-file body.md
+! exec constitution adr new --title 'A rule' --body-file body.md
 stderr 'requires confirmation under the "strict" policy'
 stderr 'not a terminal'
 ! stdout .
@@ -13,7 +13,7 @@ stderr 'not a terminal'
 ! exists constitution/constitution.md
 
 # --- proceed: same command with --approve ---
-exec constitution adr new --title 'A rule' --category architecture --body-file body.md --approve
+exec constitution adr new --title 'A rule' --body-file body.md --approve
 stdout 'created .*ADR-0001-a-rule\.md'
 exists constitution/adr/ADR-0001-a-rule.md
 exists constitution/constitution.md

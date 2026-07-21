@@ -106,25 +106,28 @@ func parseBytesCore(data []byte, path string) (*ADR, []byte, error) {
 	if err := validateSections(sections, requiredForRegen, path); err != nil {
 		return nil, nil, err
 	}
-	if err := validateRuleSection(sections, order, path); err != nil {
+	rules, err := validateAndParseRules(sections, order, path)
+	if err != nil {
 		return nil, nil, err
 	}
 
 	num, _ := parseID(m.ID) // format already validated in parseMeta
 
 	return &ADR{
-		ID:           m.ID,
-		Num:          num,
-		Title:        m.Title,
-		Category:     m.Category,
-		Date:         m.Date,
-		Status:       m.Status,
-		Source:       m.Source,
-		Supersedes:   m.Supersedes,
-		SupersededBy: m.SupersededBy,
-		Sections:     sections,
-		SectionOrder: order,
-		Path:         path,
+		ID:              m.ID,
+		Num:             num,
+		Title:           m.Title,
+		Date:            m.Date,
+		Status:          m.Status,
+		Source:          m.Source,
+		Supersedes:      m.Supersedes,
+		SupersededBy:    m.SupersededBy,
+		Rules:           rules,
+		SupersedesRules: m.SupersedesRules,
+		RemovesRules:    m.RemovesRules,
+		Sections:        sections,
+		SectionOrder:    order,
+		Path:            path,
 	}, fm, nil
 }
 

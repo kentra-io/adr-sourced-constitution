@@ -3,7 +3,7 @@
 
 env CONSTITUTION_TODAY=2026-07-02
 
-exec constitution adr new --title 'No gate here' --category architecture --body-file body.md
+exec constitution adr new --title 'No gate here' --body-file body.md
 stdout 'created .*ADR-0001-no-gate-here\.md'
 ! stderr .
 exists constitution/adr/ADR-0001-no-gate-here.md

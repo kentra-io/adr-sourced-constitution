@@ -1,7 +1,6 @@
 ---
 id: ADR-0010
 title: Limit source lines to 100 characters
-category: code-style
 date: 2026-06-21
 status: accepted
 source: FS-0010

@@ -1,11 +1,11 @@
 # `constitution init` on an empty scratch repo (M4 DoD happy path): one init
-# yields config, a founding ADR, a rendered projection, pointer blocks in both
-# default targets, and skill copies in all three trees; regen and guard both
-# exit 0 afterward.
+# yields config, a founding ADR (seeded from --founding-file), a rendered
+# projection, pointer blocks in both default targets, and skill copies in all
+# three trees; regen and guard both exit 0 afterward.
 
 env CONSTITUTION_TODAY=2026-07-02
 
-exec constitution init --principle 'All code must have tests'
+exec constitution init --founding-file founding.md
 stdout 'init: constitution ready'
 ! stderr .
 
@@ -50,3 +50,8 @@ exec constitution regen
 ! stderr .
 exec constitution guard
 stdout 'clean'
+
+-- founding.md --
+## All code must have tests
+
+Every change ships with tests, no exceptions.

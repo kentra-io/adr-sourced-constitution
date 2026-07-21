@@ -1,0 +1,71 @@
+# Retirement-ref errors are caught by the fold preflight BEFORE the consent
+# gate or any write (v0.2, proposal §2): a dangling ref, a self-ref, and a
+# double-retire each exit 1 with a precise stderr message, and the log is
+# untouched (no new ADR file, projection unchanged).
+
+env CONSTITUTION_TODAY=2026-07-02
+
+exec constitution adr new --title 'Testing discipline' --body-file body-1.md
+cp constitution/constitution.md before.md
+
+# --- dangling: the ref names a rule no ADR carries ---
+exitcode 1 constitution adr new --title 'Dangling' --body-file body-2.md --supersedes-rule ADR-0001/testing/ghost
+stderr 'retirement ref "ADR-0001/testing/ghost" does not resolve to any rule in the log'
+! exists constitution/adr/ADR-0002-dangling.md
+cmp constitution/constitution.md before.md
+
+# --- self-ref: an ADR may not retire its own rule ---
+exitcode 1 constitution adr new --title 'Selfie' --body-file body-2.md --rule 'testing/self: My own rule.' --removes-rule ADR-0002/testing/self
+stderr 'retirement ref "ADR-0002/testing/self": an ADR may only retire rules of an earlier ADR'
+! exists constitution/adr/ADR-0002-selfie.md
+cmp constitution/constitution.md before.md
+
+# --- double-retire: two accepted ADRs retiring the same ref ---
+exec constitution adr new --title 'First retire' --body-file body-2.md --rule 'testing/new-way: The new way.' --supersedes-rule ADR-0001/testing/old-tiers
+cp constitution/constitution.md after-retire.md
+exitcode 1 constitution adr new --title 'Second retire' --body-file body-2.md --removes-rule ADR-0001/testing/old-tiers
+stderr 'retirement ref "ADR-0001/testing/old-tiers": already retired by ADR-0002'
+! exists constitution/adr/ADR-0003-second-retire.md
+cmp constitution/constitution.md after-retire.md
+
+-- constitution.yml --
+schemaVersion: 1
+consent:
+  policy: off
+sourceTracking:
+  type: none
+categories:
+  - testing
+
+-- body-1.md --
+## Context and Problem Statement
+
+x
+
+## Considered Options
+
+- a
+
+## Decision Outcome
+
+Adopt the discipline.
+
+## Rules
+
+### testing
+
+#### old-tiers
+Old tiers.
+
+-- body-2.md --
+## Context and Problem Statement
+
+x
+
+## Considered Options
+
+- a
+
+## Decision Outcome
+
+Change something.
