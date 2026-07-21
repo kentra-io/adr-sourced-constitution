@@ -1,6 +1,7 @@
 package adr
 
 import (
+	"errors"
 	"strings"
 	"testing"
 )
@@ -75,8 +76,8 @@ func TestParseRulesSectionErrors(t *testing.T) {
 			if err == nil {
 				t.Fatal("expected error, got nil")
 			}
-			pe, ok := err.(*ParseError)
-			if !ok {
+			var pe *ParseError
+			if !errors.As(err, &pe) {
 				t.Fatalf("error type %T, want *ParseError", err)
 			}
 			if pe.Field != RulesSection {

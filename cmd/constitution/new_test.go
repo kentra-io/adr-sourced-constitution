@@ -101,7 +101,7 @@ func TestComposeRulesSection(t *testing.T) {
 		// a keeps first-appearance order (before b), and x before z within a.
 		ia, ib := strings.Index(s, "### a"), strings.Index(s, "### b")
 		ix, iz := strings.Index(s, "#### x"), strings.Index(s, "#### z")
-		if !(ia < ib && ia < ix && ix < iz && iz < ib) {
+		if ia >= ib || ia >= ix || ix >= iz || iz >= ib {
 			t.Errorf("ordering wrong (a=%d b=%d x=%d z=%d):\n%s", ia, ib, ix, iz, s)
 		}
 		if err := adr.ValidateBody(out, "test"); err != nil {
