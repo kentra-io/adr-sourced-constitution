@@ -34,9 +34,11 @@ isolating it keeps that guarantee structural.
 ## Procedure
 
 1. **Load the rules.** `cat constitution/constitution.md`. Each standing rule is
-   a heading with an `ADR-NNNN` in its metadata line. That id is what you cite.
-   (If it reads "No standing rules yet", the constitution is empty of rules and
-   any conforming plan passes trivially.)
+   a `#### <slug>` entry under a `### <category>` heading, individually
+   addressable as `ADR-NNNN/<category>/<slug>`, but you cite the whole
+   `adrId` (`ADR-NNNN`) in `deviation.json` — the deviation schema is
+   ADR-scoped, not rule-scoped. (If it reads "No standing rules yet", the
+   constitution is empty of rules and any conforming plan passes trivially.)
 2. **Reason rule-by-rule.** For *every* rule in the projection, decide:
    does the plan conform, or conflict? Go through all of them — a rule the plan
    simply ignores can still be violated by it. For each conflict, note the
