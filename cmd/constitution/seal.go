@@ -85,8 +85,11 @@ func runSeal(cmd *cli.Command) error {
 	}
 	crashCheckpoint("after-phase-flip")
 
-	if _, err := fmt.Fprintf(m.stdout, "sealed: %d ADR(s) baselined in %s; the log is now append-only\n",
-		len(adrs), filepath.Join("constitution", "adr", manifest.FileName)); err != nil {
+	// The manifest's location is fixed by the spec (§4.3), so the message
+	// uses the forward-slash form on every platform rather than a
+	// filepath.Join that would print backslashes on Windows.
+	if _, err := fmt.Fprintf(m.stdout, "sealed: %d ADR(s) baselined in constitution/adr/%s; the log is now append-only\n",
+		len(adrs), manifest.FileName); err != nil {
 		return err
 	}
 	return m.regen()
