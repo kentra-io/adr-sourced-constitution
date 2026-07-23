@@ -1,0 +1,85 @@
+# `adr edit` per-facet replacement (v0.2 proposal §3, draft phase): each
+# provided flag replaces exactly that facet; omitted facets keep their
+# current value. id/date/status are never editable; a title change renames
+# the file to the new slug.
+
+env CONSTITUTION_TODAY=2026-07-02
+exec constitution adr new --title 'Original title' --body-file body.md --rule 'architecture/first-rule: Original rule text.'
+stdout 'created .*ADR-0001-original-title\.md'
+
+# --- title facet: file renamed, id + date + body + rule untouched ---
+env CONSTITUTION_TODAY=2026-07-09
+exec constitution adr edit ADR-0001 --title 'Renamed title'
+stdout 'edited .*ADR-0001-renamed-title\.md'
+! exists constitution/adr/ADR-0001-original-title.md
+grep 'title: Renamed title' constitution/adr/ADR-0001-renamed-title.md
+# date stays the record's original decision date, not today
+grep 'date: 2026-07-02' constitution/adr/ADR-0001-renamed-title.md
+grep 'Original rule text\.' constitution/adr/ADR-0001-renamed-title.md
+grep 'Original rule text\.' constitution/constitution.md
+
+# --- rule facet alone: Rules section replaced, prose sections kept ---
+exec constitution adr edit ADR-0001 --rule 'architecture/first-rule: Revised rule text.'
+grep 'Revised rule text\.' constitution/adr/ADR-0001-renamed-title.md
+! grep 'Original rule text\.' constitution/adr/ADR-0001-renamed-title.md
+grep 'The original decision prose\.' constitution/adr/ADR-0001-renamed-title.md
+grep 'Revised rule text\.' constitution/constitution.md
+
+# --- body facet: the whole body is replaced; a Rules-free file makes the
+#     record rule-less (record-only), dropping it from the projection ---
+exec constitution adr edit ADR-0001 --body-file body-no-rules.md
+grep 'A completely new decision prose\.' constitution/adr/ADR-0001-renamed-title.md
+! grep '## Rules' constitution/adr/ADR-0001-renamed-title.md
+! grep 'Revised rule text\.' constitution/constitution.md
+
+# --- body + rule together: same contract as adr new ---
+exec constitution adr edit ADR-0001 --body-file body-no-rules.md --rule 'architecture/back-again: Rule is back.'
+grep 'Rule is back\.' constitution/constitution.md
+
+# --- no facet flags -> error, nothing changes ---
+! exec constitution adr edit ADR-0001
+stderr 'nothing to change'
+
+# --- unknown id -> error ---
+! exec constitution adr edit ADR-0099 --title 'Nope'
+stderr 'no ADR with id "ADR-0099"'
+
+# --- empty title -> error ---
+! exec constitution adr edit ADR-0001 --title '   '
+stderr '--title must not be empty'
+
+-- constitution.yml --
+schemaVersion: 1
+phase: draft
+consent:
+  policy: off
+sourceTracking:
+  type: none
+categories:
+  - architecture
+
+-- body.md --
+## Context and Problem Statement
+
+x
+
+## Considered Options
+
+- a
+
+## Decision Outcome
+
+The original decision prose.
+
+-- body-no-rules.md --
+## Context and Problem Statement
+
+x
+
+## Considered Options
+
+- a
+
+## Decision Outcome
+
+A completely new decision prose.

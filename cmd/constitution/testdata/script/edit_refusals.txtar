@@ -1,0 +1,107 @@
+# `adr edit` refusal surface: sealed phase refuses outright (append-only —
+# supersede/deprecate are the sealed verbs); a non-accepted target refuses;
+# editing away a rule a later draft ADR retires fails the fold preflight
+# BEFORE the consent gate; a consent refusal writes nothing.
+
+env CONSTITUTION_TODAY=2026-07-02
+
+# --- sealed phase: edit refuses, pointing at the sealed-era verbs ---
+cp sealed.yml constitution.yml
+! exec constitution adr edit ADR-0001 --title 'New'
+stderr 'phase is sealed — ADR files are append-only'
+cp draft.yml constitution.yml
+
+# --- draft log: ADR-0001 carries a rule, ADR-0002 retires a rule of it after
+#     replacing it, ADR-0003 supersedes... build the minimal retire chain ---
+exec constitution adr new --title 'Base rules' --body-file body-two-rules.md
+exec constitution adr new --title 'Tighten one' --body-file body.md --rule 'architecture/tighter: Tighter rule.' --supersedes-rule 'ADR-0001/architecture/loose'
+
+# --- editing ADR-0001 to a body whose Rules drop the retired rule
+#     -> the preflight catches ADR-0002's now-dangling ref, nothing written ---
+! exec constitution adr edit ADR-0001 --body-file body.md --rule 'architecture/keeper: Keeper stays.'
+stderr 'ADR-0001/architecture/loose'
+grep 'Loose rule\.' constitution/adr/ADR-0001-base-rules.md
+
+# --- consent refusal writes nothing (strict policy, non-TTY, no --approve) ---
+cp strict.yml constitution.yml
+cp constitution/adr/ADR-0001-base-rules.md before.md
+! exec constitution adr edit ADR-0001 --title 'Should not land'
+stderr 'requires confirmation under the "strict" policy'
+cmp constitution/adr/ADR-0001-base-rules.md before.md
+! exists constitution/adr/ADR-0001-should-not-land.md
+
+# --- non-accepted target: deprecate ADR-0002 (draft still allows the sealed
+#     verbs), then try editing it ---
+cp draft.yml constitution.yml
+exec constitution deprecate ADR-0002
+! exec constitution adr edit ADR-0002 --title 'Zombie'
+stderr 'not accepted \(status: deprecated\)'
+
+-- constitution.yml --
+placeholder: overwritten by the first cp
+
+-- draft.yml --
+schemaVersion: 1
+phase: draft
+consent:
+  policy: off
+sourceTracking:
+  type: none
+categories:
+  - architecture
+
+-- sealed.yml --
+schemaVersion: 1
+phase: sealed
+consent:
+  policy: off
+sourceTracking:
+  type: none
+categories:
+  - architecture
+
+-- strict.yml --
+schemaVersion: 1
+phase: draft
+consent:
+  policy: strict
+sourceTracking:
+  type: none
+categories:
+  - architecture
+
+-- body.md --
+## Context and Problem Statement
+
+x
+
+## Considered Options
+
+- a
+
+## Decision Outcome
+
+y
+
+-- body-two-rules.md --
+## Context and Problem Statement
+
+x
+
+## Considered Options
+
+- a
+
+## Decision Outcome
+
+y
+
+## Rules
+
+### architecture
+
+#### loose
+Loose rule.
+
+#### keeper
+Keeper stays.
