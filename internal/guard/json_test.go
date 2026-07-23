@@ -61,11 +61,15 @@ func sampleResult() Result {
 			Files:   []string{"constitution/adr/ADR-0006-f.md", "constitution/adr/ADR-0006-g.md"},
 			Message: "ADR-0006: id used by 2 files: constitution/adr/ADR-0006-f.md, constitution/adr/ADR-0006-g.md",
 		},
+		{
+			Kind: KindUnknownCategory, ID: "ADR-0007", File: "constitution/adr/ADR-0007-h.md",
+			Message: `rule tooling/pin-versions uses category "tooling", which is not in the configured vocabulary [architecture testing]`,
+		},
 	}
 	sortViolations(vs)
 	return Result{
 		Violations: vs,
-		Summary:    Summary{Checked: 6, Violations: len(vs), Clean: false},
+		Summary:    Summary{Checked: 7, Violations: len(vs), Clean: false},
 	}
 }
 

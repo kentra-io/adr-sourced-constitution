@@ -8,6 +8,7 @@ consent:
 sourceTracking:
     type: none
     pattern: ""
+phase: sealed
 categories:
     - architecture
     - code-style

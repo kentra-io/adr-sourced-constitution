@@ -1,0 +1,63 @@
+# Draft-phase regen and the manifest baseline (v0.2 proposal §3): before
+# seal no manifest exists, and regen actively removes a stale one (e.g. a
+# crash between seal's manifest write and its phase flip) so any draft repo
+# converges back to "no baseline". A sealed config regen keeps writing it.
+
+# --- draft regen writes the projection but no manifest ---
+exec constitution regen
+stdout 'wrote'
+exists constitution/constitution.md
+! exists constitution/adr/.manifest.sha256
+
+# --- a stale manifest (interrupted seal) is removed by the next regen ---
+cp stale.manifest constitution/adr/.manifest.sha256
+exec constitution regen
+! exists constitution/adr/.manifest.sha256
+
+# --- flipping the config to sealed brings the manifest back ---
+cp sealed.yml constitution.yml
+exec constitution regen
+exists constitution/adr/.manifest.sha256
+
+-- constitution.yml --
+schemaVersion: 1
+phase: draft
+consent:
+  policy: off
+sourceTracking:
+  type: none
+categories:
+  - architecture
+
+-- sealed.yml --
+schemaVersion: 1
+phase: sealed
+consent:
+  policy: off
+sourceTracking:
+  type: none
+categories:
+  - architecture
+
+-- stale.manifest --
+0000000000000000000000000000000000000000000000000000000000000000  ADR-0001-first.md
+
+-- constitution/adr/ADR-0001-first.md --
+---
+id: ADR-0001
+title: First
+date: 2026-07-01
+status: accepted
+---
+
+## Context and Problem Statement
+
+x
+
+## Considered Options
+
+- a
+
+## Decision Outcome
+
+y

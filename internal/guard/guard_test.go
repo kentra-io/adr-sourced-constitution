@@ -251,3 +251,114 @@ func TestRunBareModeFallsBackWhenNotARepo(t *testing.T) {
 		t.Errorf("Run().Mode = %q, want manifest-only", res.Mode)
 	}
 }
+
+// writeRuleADR composes and writes one accepted ADR carrying a single rule
+// under the given category, for draft-mode vocabulary tests.
+func writeRuleADR(t *testing.T, adrDir, id, title, category, slug string) {
+	t.Helper()
+	content := adr.Compose(adr.NewADR{
+		ID: id, Title: title, Date: "2026-07-01",
+		Body: "## Context and Problem Statement\n\nx\n\n## Considered Options\n\n- a\n\n## Decision Outcome\n\ny\n\n" +
+			"## Rules\n\n### " + category + "\n\n#### " + slug + "\nRule text.\n",
+	})
+	path := filepath.Join(adrDir, adr.Filename(id, title))
+	if err := os.WriteFile(path, content, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := adr.Parse(path); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Draft phase reports clean on mutations that would scream in sealed mode:
+// a reworded body and a stale manifest are legal working-set states before
+// seal (v0.2 proposal §3).
+func TestRunDraftIgnoresFrozenEditAndManifest(t *testing.T) {
+	root, adrDir := newCleanRepo(t)
+
+	// Sealed-illegal on both axes: body rewritten in place, manifest stale.
+	writeADR(t, adrDir, "ADR-0001", "First rule", "REWRITTEN out-of-band")
+
+	sealed, err := Run(Options{Root: root})
+	if err != nil {
+		t.Fatalf("sealed Run() error = %v", err)
+	}
+	if sealed.Summary.Clean {
+		t.Fatal("sealed Run() = clean; want violations (the draft test needs a mutation sealed mode catches)")
+	}
+
+	draft, err := Run(Options{Root: root, Phase: "draft", Categories: []string{"architecture"}})
+	if err != nil {
+		t.Fatalf("draft Run() error = %v", err)
+	}
+	if !draft.Summary.Clean {
+		t.Errorf("draft Run() = %+v, want clean (git legality + manifest checks are sealed-phase semantics)", draft.Violations)
+	}
+	if draft.Mode != "draft" {
+		t.Errorf("Mode = %q, want %q", draft.Mode, "draft")
+	}
+}
+
+func TestRunDraftUnknownCategory(t *testing.T) {
+	root := t.TempDir()
+	adrDir := filepath.Join(root, "constitution", "adr")
+	if err := os.MkdirAll(adrDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeRuleADR(t, adrDir, "ADR-0001", "In vocab", "architecture", "in-vocab")
+	writeRuleADR(t, adrDir, "ADR-0002", "Out of vocab", "tooling", "pin-versions")
+
+	res, err := Run(Options{Root: root, Phase: "draft", Categories: []string{"architecture", "testing"}})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if res.Summary.Violations != 1 {
+		t.Fatalf("got %d violation(s), want exactly 1: %+v", res.Summary.Violations, res.Violations)
+	}
+	v := res.Violations[0]
+	if v.Kind != KindUnknownCategory || v.ID != "ADR-0002" {
+		t.Errorf("violation = %+v, want unknown_category on ADR-0002", v)
+	}
+	wantMsg := `rule tooling/pin-versions uses category "tooling", which is not in the configured vocabulary [architecture testing]`
+	if v.Message != wantMsg {
+		t.Errorf("Message = %q, want %q", v.Message, wantMsg)
+	}
+}
+
+func TestRunDraftIDCollisionStillReported(t *testing.T) {
+	root := t.TempDir()
+	adrDir := filepath.Join(root, "constitution", "adr")
+	if err := os.MkdirAll(adrDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeADR(t, adrDir, "ADR-0001", "First", "y")
+	writeADR(t, adrDir, "ADR-0001", "First again", "y")
+
+	res, err := Run(Options{Root: root, Phase: "draft", Categories: []string{"architecture"}})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if res.Summary.Violations != 1 || res.Violations[0].Kind != KindIDCollision {
+		t.Errorf("got %+v, want exactly one id_collision", res.Violations)
+	}
+}
+
+// An explicit git base in draft is a hard error, not a silent no-op: the
+// caller asked for a check that has no semantics before seal.
+func TestRunDraftExplicitGitBaseErrors(t *testing.T) {
+	root, _ := newCleanRepo(t)
+
+	for _, opts := range []Options{
+		{Root: root, Phase: "draft", Base: "HEAD"},
+		{Root: root, Phase: "draft", MergeBase: "main"},
+	} {
+		_, err := Run(opts)
+		if err == nil {
+			t.Errorf("Run(%+v) error = nil, want draft-phase git-mode refusal", opts)
+			continue
+		}
+		if !strings.Contains(err.Error(), "do not apply before") {
+			t.Errorf("error = %q, want the draft-phase refusal message", err)
+		}
+	}
+}

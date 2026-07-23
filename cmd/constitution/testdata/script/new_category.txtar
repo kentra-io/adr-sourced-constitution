@@ -30,6 +30,7 @@ stderr '--new-category "security" is not used by any rule'
 
 -- constitution.yml --
 schemaVersion: 1
+phase: sealed
 consent:
   policy: off
 sourceTracking:

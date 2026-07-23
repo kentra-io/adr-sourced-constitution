@@ -75,6 +75,73 @@ func (m *mutContext) regen() error {
 	return regenAt(m.root, m.stdout, m.stderr)
 }
 
+// ruleSurfaceFlags is the flag set every rule-bearing mutation shares
+// (new/supersede/edit): rules in, retirements out, vocabulary growth.
+func ruleSurfaceFlags() []cli.Flag {
+	return []cli.Flag{
+		&cli.StringSliceFlag{Name: "rule", Usage: "a standing rule as \"<category>/<slug>: <text>\" (repeatable); composed into a ## Rules section. Mutually exclusive with a body-file that carries its own ## Rules"},
+		&cli.StringSliceFlag{Name: "supersedes-rule", Usage: "retire a prior rule this ADR replaces: \"ADR-NNNN/<category>/<slug>\" (repeatable)"},
+		&cli.StringSliceFlag{Name: "removes-rule", Usage: "retire a prior rule nothing replaces: \"ADR-NNNN/<category>/<slug>\" (repeatable)"},
+		&cli.StringSliceFlag{Name: "new-category", Usage: "introduce a category into the vocabulary if a rule uses an unknown one (repeatable)"},
+	}
+}
+
+// adrInput is the validated compose-input `adr new` and `supersede` share:
+// the body with any --rule flags composed in, the error label naming where
+// that body came from, and the up-front-validated retirement ref lists.
+type adrInput struct {
+	body            []byte
+	label           string
+	source          string
+	supersedesRules []string
+	removesRules    []string
+}
+
+// composeADRInput is the shared validate-and-compose prologue of the
+// body-taking mutating verbs: read the body (file or stdin), reject the
+// ambiguous "--rule AND a body-file with its own ## Rules", compose the
+// flag rules in, validate MADR shape and source-ref contract, and validate
+// the retirement ref flags' format. No log access, no writes — everything
+// here fails before an id is allocated or a prompt is shown.
+func (m *mutContext) composeADRInput(cmd *cli.Command) (*adrInput, error) {
+	body, err := readBody(cmd.String("body-file"), m.stdin)
+	if err != nil {
+		return nil, err
+	}
+	ruleFlags := cmd.StringSlice("rule")
+	if len(ruleFlags) > 0 && hasRulesSection(body) {
+		return nil, fmt.Errorf(
+			"both --rule and a --body-file that already contains a \"## Rules\" section were supplied; provide the rules exactly once (drop --rule, or remove the section from the body)")
+	}
+	body, err = composeRulesSection(body, ruleFlags)
+	if err != nil {
+		return nil, err
+	}
+	label := bodyLabel(ruleFlags)
+	if err := adr.ValidateBody(body, label); err != nil {
+		return nil, err
+	}
+	source := cmd.String("source")
+	if err := validateSource(m.cfg.SourceTracking, source); err != nil {
+		return nil, err
+	}
+	supersedesRules, err := ruleRefFlags("supersedes-rule", cmd.StringSlice("supersedes-rule"))
+	if err != nil {
+		return nil, err
+	}
+	removesRules, err := ruleRefFlags("removes-rule", cmd.StringSlice("removes-rule"))
+	if err != nil {
+		return nil, err
+	}
+	return &adrInput{
+		body:            body,
+		label:           label,
+		source:          source,
+		supersedesRules: supersedesRules,
+		removesRules:    removesRules,
+	}, nil
+}
+
 // readBody reads a MADR body from a file path, or from stdin when path is
 // "-" (plan §2.3).
 func readBody(path string, stdin io.Reader) ([]byte, error) {

@@ -36,6 +36,7 @@ grep 'source: bootstrap' constitution/adr/ADR-0003-c.md
 
 -- constitution.yml --
 schemaVersion: 1
+phase: sealed
 consent:
   policy: off
 sourceTracking:
@@ -45,6 +46,7 @@ categories:
 
 -- cfg-github.yml --
 schemaVersion: 1
+phase: sealed
 consent:
   policy: off
 sourceTracking:

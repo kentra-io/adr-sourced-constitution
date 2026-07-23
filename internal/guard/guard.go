@@ -22,6 +22,16 @@
 //     tamper-evidence claim is made against a malicious actor; see
 //     docs/manifest-canonicalization.md.
 //
+// # Draft phase
+//
+// When Options.Phase is "draft" (v0.2 proposal §3), only structural checks
+// run: id-uniqueness, parse (via scanDir), and the vocabulary check
+// (unknown_category). Git legality and the manifest cross-check are
+// sealed-phase semantics — in draft the log is a legally mutable working
+// set and no manifest baseline exists until `constitution seal`. An
+// explicit --base/--merge-base in draft is a hard error (exit 2), not a
+// silent no-op.
+//
 // # Git-mode base resolution
 //
 // Bare `guard` (no --base/--merge-base/--no-git): if the constitution
@@ -60,6 +70,9 @@ import (
 	"fmt"
 	"path/filepath"
 	"sort"
+
+	"github.com/kentra-io/adr-sourced-constitution/internal/adr"
+	"github.com/kentra-io/adr-sourced-constitution/internal/config"
 )
 
 // Kind enumerates the exact violation types plan §2.7 pins. Every
@@ -74,6 +87,11 @@ const (
 	KindFileRenamed        Kind = "file_renamed"
 	KindManifestMismatch   Kind = "manifest_mismatch"
 	KindIDCollision        Kind = "id_collision"
+	// KindUnknownCategory is draft-mode's vocabulary check (v0.2 proposal
+	// §3): a rule filed under a category outside the configured vocabulary.
+	// Sealed mode never emits it — there the vocabulary is enforced by the
+	// write path and regen, before content can land.
+	KindUnknownCategory Kind = "unknown_category"
 )
 
 // allKinds is the frozen enum plan §2.7 pins, as data: every Kind guard may
@@ -89,6 +107,7 @@ var allKinds = []Kind{
 	KindFileRenamed,
 	KindManifestMismatch,
 	KindIDCollision,
+	KindUnknownCategory,
 }
 
 // Violation is one detected illegal mutation, citing the ADR id and the
@@ -129,6 +148,16 @@ type Options struct {
 	// Root is the constitution project root: the directory containing
 	// constitution.yml and constitution/. Required.
 	Root string
+	// Phase is the config's founding phase (v0.2 proposal D1/A3):
+	// "draft" runs only id-uniqueness + parse + the vocabulary check —
+	// the log is a legally mutable working set, so git legality and the
+	// manifest cross-check do not apply until `constitution seal`. Any
+	// other value (including empty, for pre-phase internal callers) runs
+	// the full sealed semantics.
+	Phase string
+	// Categories is the configured vocabulary, for draft mode's
+	// unknown_category check. Ignored outside draft.
+	Categories []string
 	// Base is an explicit git ref to diff against (--base). Empty means
 	// HEAD, unless MergeBase is set.
 	Base string
@@ -160,6 +189,22 @@ func Run(opts Options) (Result, error) {
 	var violations []Violation
 	violations = append(violations, idCollisions(adrs)...)
 
+	if opts.Phase == config.PhaseDraft {
+		// Draft phase (v0.2 proposal §3): the log is a legally mutable
+		// working set — no git legality, no manifest cross-check (there is
+		// no manifest baseline until seal). What remains meaningful is
+		// structural: ids unique, files parse (scanDir already hard-errored
+		// otherwise), rule categories in the vocabulary. An explicit git
+		// base is a caller error, not a silent no-op: the check they asked
+		// for has no semantics before seal.
+		if opts.Base != "" || opts.MergeBase != "" {
+			return Result{}, fmt.Errorf(
+				"guard: phase is draft — git legality checks (--base/--merge-base) do not apply before `constitution seal`")
+		}
+		violations = append(violations, unknownCategories(adrs, opts.Categories)...)
+		return finishResult(adrs, violations, "draft", ""), nil
+	}
+
 	mode, err := resolveGitMode(opts)
 	if err != nil {
 		return Result{}, err
@@ -178,28 +223,59 @@ func Run(opts Options) (Result, error) {
 	}
 	violations = append(violations, mv...)
 
+	label, base := "manifest-only", ""
+	if mode.active {
+		label, base = "git", mode.base
+	}
+	return finishResult(adrs, violations, label, base), nil
+}
+
+// finishResult sorts and wraps the pooled violations into the Result every
+// mode returns. Violations is kept an array, never null, so a machine
+// consumer (plan §2.7: "pipeable") needn't nil-check a clean result.
+func finishResult(adrs []adr.ADR, violations []Violation, mode, base string) Result {
 	sortViolations(violations)
 	if violations == nil {
-		// Keep the JSON payload's "violations" key an array, never null —
-		// a machine consumer (plan §2.7: "pipeable") shouldn't need a nil
-		// check to iterate a clean result.
 		violations = []Violation{}
 	}
-
-	res := Result{
+	return Result{
 		Violations: violations,
 		Summary: Summary{
 			Checked:    len(adrs),
 			Violations: len(violations),
 			Clean:      len(violations) == 0,
 		},
-		Mode: "manifest-only",
+		Mode: mode,
+		Base: base,
 	}
-	if mode.active {
-		res.Mode = "git"
-		res.Base = mode.base
+}
+
+// unknownCategories is draft mode's vocabulary check: one violation per
+// rule filed under a category missing from the configured vocabulary,
+// regardless of the ADR's status (an out-of-vocabulary category is a data
+// problem whether or not the rule currently projects).
+func unknownCategories(adrs []adr.ADR, categories []string) []Violation {
+	vocab := make(map[string]bool, len(categories))
+	for _, c := range categories {
+		vocab[c] = true
 	}
-	return res, nil
+	var vs []Violation
+	for i := range adrs {
+		for _, r := range adrs[i].Rules {
+			if vocab[r.Category] {
+				continue
+			}
+			vs = append(vs, Violation{
+				Kind: KindUnknownCategory,
+				ID:   adrs[i].ID,
+				File: rootRelFile(filepath.Base(adrs[i].Path)),
+				Message: fmt.Sprintf(
+					"rule %s/%s uses category %q, which is not in the configured vocabulary %v",
+					r.Category, r.Slug, r.Category, categories),
+			})
+		}
+	}
+	return vs
 }
 
 func sortViolations(vs []Violation) {

@@ -31,6 +31,7 @@ stdout '\[manifest_mismatch\] ADR-0001'
 
 -- constitution.yml --
 schemaVersion: 1
+phase: sealed
 consent:
   policy: off
 sourceTracking:

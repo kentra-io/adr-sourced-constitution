@@ -27,6 +27,7 @@ func run(ctx context.Context, args []string) error {
 		Commands: []*cli.Command{
 			initCommand(),
 			adrCommand(),
+			sealCommand(),
 			supersedeCommand(),
 			deprecateCommand(),
 			regenCommand(),

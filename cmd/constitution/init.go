@@ -135,7 +135,13 @@ func runInit(cmd *cli.Command) error {
 		return err
 	}
 
-	_, err = fmt.Fprintln(stdout, "init: constitution ready in constitution/")
+	if _, err = fmt.Fprintln(stdout, "init: constitution ready in constitution/"); err != nil {
+		return err
+	}
+	if cfg.Phase == config.PhaseDraft {
+		_, err = fmt.Fprintln(stdout,
+			"init: phase is draft — ADRs stay editable (adr edit / adr rm) until `constitution seal` makes the log append-only")
+	}
 	return err
 }
 
@@ -187,8 +193,12 @@ func buildOrLoadConfig(cmd *cli.Command, root string, stderr io.Writer) (cfg *co
 		AgentInstructions: config.AgentInstructions{Targets: targets},
 		Consent:           config.Consent{Policy: consent},
 		SourceTracking:    config.SourceTracking{Type: config.SourceTrackingNone},
-		Categories:        categories,
-		Skills:            config.Skills{Trees: trees},
+		// A fresh constitution starts in draft (v0.2 proposal A3): founding
+		// is a staged process, and sealing is always an explicit,
+		// human-approved act — init never sells finality.
+		Phase:      config.PhaseDraft,
+		Categories: categories,
+		Skills:     config.Skills{Trees: trees},
 	}, true, nil
 }
 

@@ -1,0 +1,79 @@
+# `adr rm` reference rules (v0.2 proposal §3): refuse while another ADR
+# retires the target's rules (the ref list is editable — fix that first) or
+# while a successor supersedes the target (rm the successor first). The one
+# heal case: removing a SUPERSEDING ADR is the draft-phase undo — its target
+# is restored to accepted and its rules project again.
+
+env CONSTITUTION_TODAY=2026-07-02
+exec constitution adr new --title 'Base rules' --body-file body-rules.md
+exec constitution supersede ADR-0001 --title 'Replacement' --body-file body.md --rule 'architecture/replacement: Replacement rule.'
+grep 'status: superseded' constitution/adr/ADR-0001-base-rules.md
+grep 'superseded-by: ADR-0002' constitution/adr/ADR-0001-base-rules.md
+! grep 'Base rule\.' constitution/constitution.md
+
+# --- rm the SUPERSEDED one refuses: its successor builds on the slot ---
+! exec constitution adr rm ADR-0001
+stderr 'ADR-0001 is superseded by ADR-0002, which builds on its slot; rm ADR-0002 first'
+
+# --- rm the SUPERSEDING one heals: ADR-0001 restored, rules back ---
+exec constitution adr rm ADR-0002
+stdout 'restored ADR-0001 to accepted'
+stdout 'removed .*ADR-0002-replacement\.md'
+grep 'status: accepted' constitution/adr/ADR-0001-base-rules.md
+! grep 'superseded-by' constitution/adr/ADR-0001-base-rules.md
+grep 'Base rule\.' constitution/constitution.md
+! grep 'Replacement rule\.' constitution/constitution.md
+
+# --- rule-ref reference refuses: a retirer must drop its ref first ---
+exec constitution adr new --title 'Retirer' --body-file body.md --rule 'architecture/tight: Tight rule.' --supersedes-rule 'ADR-0001/architecture/base-rule'
+! exec constitution adr rm ADR-0001
+stderr 'ADR-0002 still retires rules of ADR-0001 \(ADR-0001/architecture/base-rule\); edit ADR-0002.s ref list first'
+exists constitution/adr/ADR-0001-base-rules.md
+
+# --- after clearing the ref, rm goes through ---
+exec constitution adr edit ADR-0002 --supersedes-rule ''
+exec constitution adr rm ADR-0001
+! exists constitution/adr/ADR-0001-base-rules.md
+
+-- constitution.yml --
+schemaVersion: 1
+phase: draft
+consent:
+  policy: off
+sourceTracking:
+  type: none
+categories:
+  - architecture
+
+-- body.md --
+## Context and Problem Statement
+
+x
+
+## Considered Options
+
+- a
+
+## Decision Outcome
+
+y
+
+-- body-rules.md --
+## Context and Problem Statement
+
+x
+
+## Considered Options
+
+- a
+
+## Decision Outcome
+
+y
+
+## Rules
+
+### architecture
+
+#### base-rule
+Base rule.

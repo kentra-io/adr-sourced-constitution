@@ -26,6 +26,7 @@ consent:
 sourceTracking:
   type: generic
   pattern: '^FS-[0-9]+$'
+phase: sealed
 categories:
   - architecture
   - code-style
@@ -34,6 +35,9 @@ categories:
 	cfg, err := Load(path)
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.Phase != PhaseSealed {
+		t.Errorf("Phase = %q, want %q", cfg.Phase, PhaseSealed)
 	}
 	if len(cfg.Categories) != 2 || cfg.Categories[0] != "architecture" || cfg.Categories[1] != "code-style" {
 		t.Errorf("Categories = %v, want [architecture code-style] in order", cfg.Categories)
@@ -47,11 +51,14 @@ categories:
 }
 
 func TestLoadDefaults(t *testing.T) {
-	path := write(t, "schemaVersion: 1\ncategories: [architecture]\n")
+	path := write(t, "schemaVersion: 1\nphase: draft\ncategories: [architecture]\n")
 
 	cfg, err := Load(path)
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.Phase != PhaseDraft {
+		t.Errorf("Phase = %q, want %q", cfg.Phase, PhaseDraft)
 	}
 	if cfg.Consent.Policy != ConsentStrict {
 		t.Errorf("default Consent.Policy = %q, want %q", cfg.Consent.Policy, ConsentStrict)
@@ -92,32 +99,42 @@ func TestLoadInvalid(t *testing.T) {
 		},
 		{
 			name:    "no categories",
-			content: "schemaVersion: 1\ncategories: []\n",
+			content: "schemaVersion: 1\nphase: sealed\ncategories: []\n",
 			wantErr: `field "categories": at least one category is required`,
 		},
 		{
 			name:    "duplicate category",
-			content: "schemaVersion: 1\ncategories: [architecture, architecture]\n",
+			content: "schemaVersion: 1\nphase: sealed\ncategories: [architecture, architecture]\n",
 			wantErr: `field "categories": duplicate category "architecture"`,
 		},
 		{
+			name:    "missing phase",
+			content: "schemaVersion: 1\ncategories: [architecture]\n",
+			wantErr: `field "phase": required — add 'phase: sealed' for an existing (append-only) log, or 'phase: draft' for an unsealed one`,
+		},
+		{
+			name:    "bad phase value",
+			content: "schemaVersion: 1\nphase: open\ncategories: [architecture]\n",
+			wantErr: `field "phase": must be "draft" or "sealed" (got "open")`,
+		},
+		{
 			name:    "bad consent policy",
-			content: "schemaVersion: 1\ncategories: [architecture]\nconsent:\n  policy: advisory\n",
+			content: "schemaVersion: 1\nphase: sealed\ncategories: [architecture]\nconsent:\n  policy: advisory\n",
 			wantErr: `field "consent.policy": must be "strict" or "off" (got "advisory")`,
 		},
 		{
 			name:    "bad sourceTracking type",
-			content: "schemaVersion: 1\ncategories: [architecture]\nsourceTracking:\n  type: trello\n",
+			content: "schemaVersion: 1\nphase: sealed\ncategories: [architecture]\nsourceTracking:\n  type: trello\n",
 			wantErr: `field "sourceTracking.type": must be one of "none", "generic", "github-issue", "jira" (got "trello")`,
 		},
 		{
 			name:    "unknown agentInstructions target",
-			content: "schemaVersion: 1\ncategories: [architecture]\nagentInstructions:\n  targets: [claude, claude-md]\n",
+			content: "schemaVersion: 1\nphase: sealed\ncategories: [architecture]\nagentInstructions:\n  targets: [claude, claude-md]\n",
 			wantErr: `field "agentInstructions.targets": unknown target "claude-md" (allowed: "claude", "agents")`,
 		},
 		{
 			name:    "unknown skills tree",
-			content: "schemaVersion: 1\ncategories: [architecture]\nskills:\n  trees: [claude, vscode]\n",
+			content: "schemaVersion: 1\nphase: sealed\ncategories: [architecture]\nskills:\n  trees: [claude, vscode]\n",
 			wantErr: `field "skills.trees": unknown skills tree "vscode" (allowed: "claude", "agents", "cursor")`,
 		},
 	}

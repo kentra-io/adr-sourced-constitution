@@ -98,7 +98,18 @@ func regenCore(root string, cfg *config.Config, stdout, stderr io.Writer) error 
 
 	crashCheckpoint("after-projection")
 
-	if err := manifest.Write(adrDir, adrs); err != nil {
+	// The manifest baseline is a sealed-phase artifact (v0.2 proposal §3):
+	// `constitution seal` writes the first one, and every sealed regen keeps
+	// it current. In draft no baseline exists — and a stale one (a crash
+	// between seal's manifest write and its phase flip, or a hand-reverted
+	// phase) is actively removed so the repo never carries a manifest that
+	// guard would not vouch for. This is what makes seal's crash windows
+	// convergent: any draft-phase regen returns the repo to "no manifest".
+	if cfg.Phase == config.PhaseSealed {
+		if err := manifest.Write(adrDir, adrs); err != nil {
+			return err
+		}
+	} else if err := os.Remove(filepath.Join(adrDir, manifest.FileName)); err != nil && !os.IsNotExist(err) {
 		return err
 	}
 
@@ -116,20 +127,19 @@ func regenCore(root string, cfg *config.Config, stdout, stderr io.Writer) error 
 		}
 	}
 
-	if err := warnLongRules(stderr, adrs); err != nil {
-		return err
-	}
-
 	_, err = fmt.Fprintf(stdout, "wrote %s\n", outPath)
 	return err
 }
 
 // warnLongRules warns (stderr, never blocks) for each rule of an active ADR
 // whose text runs longer than ruleLineWarningThreshold lines (plan §2.12) —
-// a standing rule should be a terse 1–3 line statement. Rules of accepted
-// ADRs are checked — including ones a later ADR retires, so a retired rule
-// may still be warned about; a frozen rule on a superseded record is not
-// the author's live concern.
+// a standing rule should be a terse 1–3 line statement. Fired once per rule
+// lifetime, not on every regen (v0.2 proposal §5): the writing verb calls
+// it with just the ADR it wrote, and `seal` calls it with the whole log as
+// the pre-seal review checklist. Rules of accepted ADRs are checked —
+// including ones a later ADR retires, so a retired rule may still be warned
+// about; a frozen rule on a superseded record is not the author's live
+// concern.
 func warnLongRules(stderr io.Writer, adrs []adr.ADR) error {
 	for i := range adrs {
 		a := &adrs[i]

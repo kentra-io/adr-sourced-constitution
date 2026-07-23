@@ -29,7 +29,8 @@
             "file_deleted",
             "file_renamed",
             "manifest_mismatch",
-            "id_collision"
+            "id_collision",
+            "unknown_category"
           ]
         },
         "id": {

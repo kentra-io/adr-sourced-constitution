@@ -1,0 +1,75 @@
+# `adr edit` retirement-ref facets: --supersedes-rule/--removes-rule replace
+# the WHOLE list (not append); a single empty value clears it; empty mixed
+# with refs is an error. The fold recomputes accordingly.
+
+env CONSTITUTION_TODAY=2026-07-02
+exec constitution adr new --title 'Base rules' --body-file body-two-rules.md
+exec constitution adr new --title 'Tighten' --body-file body.md --rule 'architecture/tighter: Tighter rule.' --supersedes-rule 'ADR-0001/architecture/loose'
+! grep 'Loose rule\.' constitution/constitution.md
+grep 'Keeper stays\.' constitution/constitution.md
+
+# --- replace the list: retire keeper instead of loose ---
+exec constitution adr edit ADR-0002 --supersedes-rule 'ADR-0001/architecture/keeper'
+grep 'supersedes-rules: \[ADR-0001/architecture/keeper\]' constitution/adr/ADR-0002-tighten.md
+grep 'Loose rule\.' constitution/constitution.md
+! grep 'Keeper stays\.' constitution/constitution.md
+
+# --- clear the list: both base rules project again ---
+exec constitution adr edit ADR-0002 --supersedes-rule ''
+! grep 'supersedes-rules' constitution/adr/ADR-0002-tighten.md
+grep 'Loose rule\.' constitution/constitution.md
+grep 'Keeper stays\.' constitution/constitution.md
+
+# --- empty mixed with a ref -> error, nothing written ---
+! exec constitution adr edit ADR-0002 --supersedes-rule '' --supersedes-rule 'ADR-0001/architecture/loose'
+stderr 'an empty value clears the list and cannot be combined with refs'
+
+# --- a dangling replacement ref fails the preflight ---
+! exec constitution adr edit ADR-0002 --removes-rule 'ADR-0001/architecture/no-such-rule'
+stderr 'no-such-rule'
+
+-- constitution.yml --
+schemaVersion: 1
+phase: draft
+consent:
+  policy: off
+sourceTracking:
+  type: none
+categories:
+  - architecture
+
+-- body.md --
+## Context and Problem Statement
+
+x
+
+## Considered Options
+
+- a
+
+## Decision Outcome
+
+y
+
+-- body-two-rules.md --
+## Context and Problem Statement
+
+x
+
+## Considered Options
+
+- a
+
+## Decision Outcome
+
+y
+
+## Rules
+
+### architecture
+
+#### loose
+Loose rule.
+
+#### keeper
+Keeper stays.

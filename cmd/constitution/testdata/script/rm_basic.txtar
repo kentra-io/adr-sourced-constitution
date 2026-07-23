@@ -1,0 +1,80 @@
+# `adr rm` (v0.2 proposal §3, draft phase): deletes a record outright; later
+# ids keep their numbers (the gap is honest draft history — NextID stays
+# max+1, so the freed id is never silently reused); sealed phase refuses;
+# a consent refusal deletes nothing.
+
+env CONSTITUTION_TODAY=2026-07-02
+exec constitution adr new --title 'Keeper' --body-file body.md --rule 'architecture/keeper: Kept rule.'
+exec constitution adr new --title 'Dead end' --body-file body.md --rule 'architecture/dead-end: Dead rule.'
+exec constitution adr new --title 'Later' --body-file body.md
+
+# --- plain rm: file gone, projection drops its rule, others untouched ---
+exec constitution adr rm ADR-0002
+stdout 'removed .*ADR-0002-dead-end\.md'
+! exists constitution/adr/ADR-0002-dead-end.md
+! grep 'Dead rule\.' constitution/constitution.md
+grep 'Kept rule\.' constitution/constitution.md
+exists constitution/adr/ADR-0003-later.md
+
+# --- the gap stays: the next new ADR takes ADR-0004, not ADR-0002 ---
+exec constitution adr new --title 'After the gap' --body-file body.md
+stdout 'created .*ADR-0004-after-the-gap\.md'
+
+# --- unknown id ---
+! exec constitution adr rm ADR-0099
+stderr 'no ADR with id "ADR-0099"'
+
+# --- consent refusal deletes nothing ---
+cp strict.yml constitution.yml
+! exec constitution adr rm ADR-0003
+stderr 'requires confirmation under the "strict" policy'
+exists constitution/adr/ADR-0003-later.md
+
+# --- sealed phase refuses ---
+cp sealed.yml constitution.yml
+! exec constitution adr rm ADR-0003
+stderr 'phase is sealed — the log is append-only'
+exists constitution/adr/ADR-0003-later.md
+
+-- constitution.yml --
+schemaVersion: 1
+phase: draft
+consent:
+  policy: off
+sourceTracking:
+  type: none
+categories:
+  - architecture
+
+-- strict.yml --
+schemaVersion: 1
+phase: draft
+consent:
+  policy: strict
+sourceTracking:
+  type: none
+categories:
+  - architecture
+
+-- sealed.yml --
+schemaVersion: 1
+phase: sealed
+consent:
+  policy: off
+sourceTracking:
+  type: none
+categories:
+  - architecture
+
+-- body.md --
+## Context and Problem Statement
+
+x
+
+## Considered Options
+
+- a
+
+## Decision Outcome
+
+y

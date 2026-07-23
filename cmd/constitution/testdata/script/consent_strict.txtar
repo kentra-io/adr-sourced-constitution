@@ -30,6 +30,7 @@ grep 'status: accepted' constitution/adr/ADR-0001-a-rule.md
 
 -- constitution.yml --
 schemaVersion: 1
+phase: sealed
 consent:
   policy: strict
 sourceTracking:

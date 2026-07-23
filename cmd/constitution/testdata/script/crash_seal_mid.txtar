@@ -1,0 +1,50 @@
+# Crash injection at seal's write seams (v0.2 proposal §3): killing the
+# process between the manifest baseline and the phase flip leaves a DRAFT
+# repo with an orphan manifest — any draft regen removes it, and re-running
+# seal completes. Killing after the flip but before the closing regen
+# leaves a sealed repo whose manifest was already written one step earlier,
+# so it is already consistent.
+
+env CONSTITUTION_TODAY=2026-07-02
+exec constitution adr new --title 'First' --body-file body.md --rule 'architecture/first: First rule.'
+
+# --- kill between manifest write and phase flip ---
+env CONSTITUTION_CRASH_AFTER=after-manifest-baseline
+! exec constitution seal --approve
+exists constitution/adr/.manifest.sha256
+grep 'phase: draft' constitution.yml
+
+# --- a draft regen removes the orphan baseline (convergence) ---
+env CONSTITUTION_CRASH_AFTER=
+exec constitution regen
+! exists constitution/adr/.manifest.sha256
+
+# --- re-run completes ---
+exec constitution seal --approve
+grep 'phase: sealed' constitution.yml
+exists constitution/adr/.manifest.sha256
+exec constitution guard
+stdout 'guard: clean'
+
+-- constitution.yml --
+schemaVersion: 1
+phase: draft
+consent:
+  policy: off
+sourceTracking:
+  type: none
+categories:
+  - architecture
+
+-- body.md --
+## Context and Problem Statement
+
+x
+
+## Considered Options
+
+- a
+
+## Decision Outcome
+
+y

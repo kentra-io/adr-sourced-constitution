@@ -3,15 +3,17 @@ package main
 import "github.com/urfave/cli/v3"
 
 // adrCommand is the `constitution adr` subcommand group (plan §4): the
-// verbs that operate on an individual ADR record. `new` and `renumber` live
-// here; `supersede` and `deprecate` are top-level because they read as
-// verbs on the log, not on the `adr` noun.
+// verbs that operate on an individual ADR record. `new`, `edit`, and
+// `renumber` live here; `supersede` and `deprecate` are top-level because
+// they read as verbs on the log, not on the `adr` noun.
 func adrCommand() *cli.Command {
 	return &cli.Command{
 		Name:  "adr",
 		Usage: "operate on individual ADR records",
 		Commands: []*cli.Command{
 			newCommand(),
+			editCommand(),
+			rmCommand(),
 			renumberCommand(),
 		},
 	}

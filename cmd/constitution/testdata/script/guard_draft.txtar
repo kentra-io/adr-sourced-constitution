@@ -1,0 +1,100 @@
+# Phase-aware guard, draft mode (v0.2 proposal §3): before seal the log is a
+# legally mutable working set — guard checks only id-uniqueness, parse, and
+# the category vocabulary. No manifest is required (none exists before seal),
+# and a state that sealed mode would flag (no git history, no baseline,
+# freely edited files) reports clean. An out-of-vocabulary rule category is
+# the one content violation draft mode reports (unknown_category, exit 1).
+# Explicitly asking for git legality (--base/--merge-base) in draft is a
+# usage error (exit 2): that check has no semantics before seal.
+
+# --- clean draft repo: no manifest, no git — still clean, labeled draft ---
+exec constitution guard
+stdout 'guard: clean \(1 ADR\(s\) checked, draft mode\)'
+
+# --- an out-of-vocabulary rule category -> unknown_category, exit 1 ---
+cp bad-adr.md constitution/adr/ADR-0002-out-of-vocab.md
+exitcode 1 constitution guard
+stdout '\[unknown_category\] ADR-0002 constitution/adr/ADR-0002-out-of-vocab.md'
+stdout 'rule tooling/pin-versions uses category "tooling", which is not in the configured vocabulary \[architecture\]'
+rm constitution/adr/ADR-0002-out-of-vocab.md
+
+# --- JSON shape carries the kind ---
+cp bad-adr.md constitution/adr/ADR-0002-out-of-vocab.md
+exitcode 1 constitution guard --format json
+stdout '"kind": "unknown_category"'
+rm constitution/adr/ADR-0002-out-of-vocab.md
+
+# --- explicit git base in draft -> exit 2, nothing on stdout ---
+exitcode 2 constitution guard --base HEAD
+! stdout .
+stderr 'phase is draft — git legality checks \(--base/--merge-base\) do not apply before `constitution seal`'
+exitcode 2 constitution guard --merge-base main
+stderr 'do not apply before'
+
+# --- --no-git in draft is a harmless no-op ---
+exec constitution guard --no-git
+stdout 'draft mode'
+
+-- constitution.yml --
+schemaVersion: 1
+phase: draft
+consent:
+  policy: off
+sourceTracking:
+  type: none
+categories:
+  - architecture
+
+-- constitution/adr/ADR-0001-first.md --
+---
+id: ADR-0001
+title: First
+date: 2026-07-01
+status: accepted
+---
+
+## Context and Problem Statement
+
+x
+
+## Considered Options
+
+- a
+
+## Decision Outcome
+
+y
+
+## Rules
+
+### architecture
+
+#### first-rule
+Rule text.
+
+-- bad-adr.md --
+---
+id: ADR-0002
+title: Out of vocab
+date: 2026-07-02
+status: accepted
+---
+
+## Context and Problem Statement
+
+x
+
+## Considered Options
+
+- a
+
+## Decision Outcome
+
+y
+
+## Rules
+
+### tooling
+
+#### pin-versions
+Pin them.

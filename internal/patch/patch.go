@@ -313,3 +313,50 @@ func join(lines []line) string {
 	}
 	return b.String()
 }
+
+// Unsupersede reverses Supersede: status back to `accepted`, and the
+// derived `superseded-by:` line removed. It is the heal half of draft-phase
+// `adr rm` (v0.2 proposal §3): deleting a superseding ADR restores the
+// decision it had replaced. Tolerant of an absent superseded-by line and of
+// an already-accepted status, so a crash between rm's heal write and its
+// file delete converges on re-run instead of refusing.
+func Unsupersede(data []byte) ([]byte, error) {
+	out, err := editField(data, "status", string(adr.StatusAccepted), "")
+	if err != nil {
+		return nil, err
+	}
+	out = removeField(out, "superseded-by")
+	if err := verify(data, out, func(o, p *adr.ADR) bool {
+		return p.Status == adr.StatusAccepted &&
+			p.SupersededBy == "" &&
+			p.ID == o.ID &&
+			sameFrozen(o, p)
+	}); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// removeField deletes the first top-level `<field>:` line inside the
+// frontmatter block, leaving every other byte untouched. A missing field is
+// a no-op, not an error — Unsupersede's convergence depends on that.
+func removeField(data []byte, field string) []byte {
+	prefix := ""
+	s := string(data)
+	if strings.HasPrefix(s, bom) {
+		prefix, s = bom, s[len(bom):]
+	}
+	lines := splitKeepEnds(s)
+	closeIdx, ok := frontmatterBounds(lines)
+	if !ok {
+		return data
+	}
+	for i := 1; i < closeIdx; i++ {
+		indent, key, _, ok := splitField(lines[i].text)
+		if !ok || indent != "" || key != field {
+			continue
+		}
+		return []byte(prefix + join(append(lines[:i], lines[i+1:]...)))
+	}
+	return data
+}

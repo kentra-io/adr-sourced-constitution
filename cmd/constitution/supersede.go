@@ -27,16 +27,12 @@ func supersedeCommand() *cli.Command {
 		Name:      "supersede",
 		Usage:     "supersede an accepted ADR with a new one",
 		ArgsUsage: "<id>",
-		Flags: []cli.Flag{
+		Flags: append([]cli.Flag{
 			&cli.StringFlag{Name: "title", Required: true, Usage: "title of the superseding ADR"},
 			&cli.StringFlag{Name: "source", Usage: "source ref (required when sourceTracking.type != none)"},
 			&cli.StringFlag{Name: "body-file", Required: true, Usage: "path to the new ADR's MADR body (the ## sections), or - for stdin; may carry its own ## Rules section"},
-			&cli.StringSliceFlag{Name: "rule", Usage: "a standing rule as \"<category>/<slug>: <text>\" (repeatable); composed into a ## Rules section. Mutually exclusive with a body-file that carries its own ## Rules"},
-			&cli.StringSliceFlag{Name: "supersedes-rule", Usage: "retire a prior rule this ADR replaces: \"ADR-NNNN/<category>/<slug>\" (repeatable)"},
-			&cli.StringSliceFlag{Name: "removes-rule", Usage: "retire a prior rule nothing replaces: \"ADR-NNNN/<category>/<slug>\" (repeatable)"},
-			&cli.StringSliceFlag{Name: "new-category", Usage: "introduce a category into the vocabulary if a rule uses an unknown one (repeatable)"},
 			approveFlag(),
-		},
+		}, ruleSurfaceFlags()...),
 		Action: func(_ context.Context, cmd *cli.Command) error {
 			return runSupersede(cmd)
 		},
@@ -70,34 +66,9 @@ func runSupersede(cmd *cli.Command) error {
 	}
 
 	title := cmd.String("title")
-	source := cmd.String("source")
 
 	// --- validate up front ---
-	body, err := readBody(cmd.String("body-file"), m.stdin)
-	if err != nil {
-		return err
-	}
-	ruleFlags := cmd.StringSlice("rule")
-	if len(ruleFlags) > 0 && hasRulesSection(body) {
-		return fmt.Errorf(
-			"both --rule and a --body-file that already contains a \"## Rules\" section were supplied; provide the rules exactly once (drop --rule, or remove the section from the body)")
-	}
-	body, err = composeRulesSection(body, ruleFlags)
-	if err != nil {
-		return err
-	}
-	label := bodyLabel(ruleFlags)
-	if err := adr.ValidateBody(body, label); err != nil {
-		return err
-	}
-	if err := validateSource(m.cfg.SourceTracking, source); err != nil {
-		return err
-	}
-	supersedesRules, err := ruleRefFlags("supersedes-rule", cmd.StringSlice("supersedes-rule"))
-	if err != nil {
-		return err
-	}
-	removesRules, err := ruleRefFlags("removes-rule", cmd.StringSlice("removes-rule"))
+	in, err := m.composeADRInput(cmd)
 	if err != nil {
 		return err
 	}
@@ -110,15 +81,15 @@ func runSupersede(cmd *cli.Command) error {
 		ID:              newID,
 		Title:           title,
 		Date:            today(),
-		Source:          source,
+		Source:          in.source,
 		Supersedes:      oldID,
-		SupersedesRules: supersedesRules,
-		RemovesRules:    removesRules,
-		Body:            string(body),
+		SupersedesRules: in.supersedesRules,
+		RemovesRules:    in.removesRules,
+		Body:            string(in.body),
 	})
 
 	// Full parse of the composed record before anything else happens.
-	newParsed, err := adr.ParseBytesUnnamed(newFile, label)
+	newParsed, err := adr.ParseBytesUnnamed(newFile, in.label)
 	if err != nil {
 		return err
 	}
@@ -187,5 +158,8 @@ func runSupersede(cmd *cli.Command) error {
 	if _, err := fmt.Fprintf(m.stdout, "created %s\nsuperseded %s\n", newDest, oldID); err != nil {
 		return err
 	}
-	return m.regen()
+	if err := m.regen(); err != nil {
+		return err
+	}
+	return warnLongRules(m.stderr, []adr.ADR{*newParsed})
 }

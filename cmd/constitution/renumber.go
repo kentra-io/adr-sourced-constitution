@@ -67,7 +67,9 @@ func runRenumber(cmd *cli.Command) error {
 	}
 
 	// Refuse if any *other* ADR references <old> — renumber is only safe for
-	// an unreferenced (not-yet-merged) ADR (plan §2.6).
+	// an unreferenced (not-yet-merged) ADR (plan §2.6). Rule-retirement refs
+	// carry the id inside "ADR-NNNN/<category>/<slug>" values, so they pin
+	// it exactly like a supersedes link does (v0.2 proposal §2).
 	adrs, err := adr.ParseDir(m.adrDir)
 	if err != nil {
 		return err
@@ -78,6 +80,11 @@ func runRenumber(cmd *cli.Command) error {
 		}
 		if a.Supersedes == oldID || a.SupersededBy == oldID {
 			return fmt.Errorf("renumber: %s is referenced by %s (supersedes/superseded-by); cannot renumber a referenced ADR", oldID, a.ID)
+		}
+		for _, r := range append(append([]adr.RuleRef(nil), a.SupersedesRules...), a.RemovesRules...) {
+			if r.ADRID == oldID {
+				return fmt.Errorf("renumber: %s is referenced by %s (%s); cannot renumber a referenced ADR", oldID, a.ID, r.String())
+			}
 		}
 	}
 

@@ -1,0 +1,109 @@
+# The founding lifecycle end-to-end (v0.2 proposal §3 acceptance — the
+# kafka-dq wipe, replayed as CLI verbs instead of rm -rf): init founds in
+# draft; a welded tech bet is dropped with one `adr edit`; a dead-end
+# supersede chain is undone with `adr rm` (heal) and the dead end removed;
+# `seal` baselines; after seal the draft verbs refuse and change flows
+# through supersede; guard stays green throughout and the from-empty replay
+# (delete every projection, regen) converges. Consent policy stays strict —
+# every mutation runs non-TTY with --approve, the sanctioned agent path.
+
+env CONSTITUTION_TODAY=2026-07-10
+exec constitution init --founding-file founding.md
+stdout 'phase is draft'
+grep 'phase: draft' constitution.yml
+! exists constitution/adr/.manifest.sha256
+grep 'Hexagonal core\.' constitution/constitution.md
+grep 'welded to RabbitMQ' constitution/adr/ADR-0002-transport-choice.md
+
+# --- wipe #1 replay: the tech bet welded into a founding ADR is dropped by
+#     editing that ADR, not by wiping the repo ---
+exec constitution adr edit ADR-0002 --body-file transport-revised.md --approve
+stdout 'edited'
+! grep 'welded to RabbitMQ' constitution/adr/ADR-0002-transport-choice.md
+grep 'transport stays an open research bet' constitution/adr/ADR-0002-transport-choice.md
+
+# --- a dead-end direction: ADR-0003 taken, then superseded by ADR-0004,
+#     then the whole line abandoned — rm undoes the supersede (heal), then
+#     removes the dead end ---
+exec constitution adr new --title 'Bet on sync polling' --body-file body.md --approve
+exec constitution supersede ADR-0003 --title 'Bet on async polling' --body-file body.md --approve
+grep 'status: superseded' constitution/adr/ADR-0003-bet-on-sync-polling.md
+exec constitution adr rm ADR-0004 --approve
+stdout 'restored ADR-0003 to accepted'
+exec constitution adr rm ADR-0003 --approve
+! exists constitution/adr/ADR-0003-bet-on-sync-polling.md
+
+# --- draft guard is green through all of it ---
+exec constitution guard
+stdout 'guard: clean \(2 ADR\(s\) checked, draft mode\)'
+
+# --- seal ---
+exec constitution seal --approve
+stdout 'sealed: 2 ADR\(s\) baselined'
+grep 'phase: sealed' constitution.yml
+exists constitution/adr/.manifest.sha256
+
+# --- sealed: draft verbs refuse; change flows through supersede ---
+! exec constitution adr edit ADR-0001 --title 'Nope' --approve
+stderr 'phase is sealed'
+! exec constitution adr rm ADR-0002 --approve
+stderr 'phase is sealed'
+exec constitution supersede ADR-0002 --title 'Transport decided' --body-file body.md --approve
+stdout 'created .*ADR-0003-transport-decided\.md'
+grep 'superseded-by: ADR-0003' constitution/adr/ADR-0002-transport-choice.md
+
+# --- sealed guard green; from-empty replay converges byte-for-byte ---
+exec constitution guard
+stdout 'guard: clean \(3 ADR\(s\) checked'
+cp constitution/constitution.md snap.md
+cp constitution/adr/.manifest.sha256 snap.manifest
+rm constitution/constitution.md
+rm constitution/adr/.manifest.sha256
+exec constitution regen
+cmp constitution/constitution.md snap.md
+cmp constitution/adr/.manifest.sha256 snap.manifest
+exec constitution guard
+stdout 'guard: clean'
+
+-- founding.md --
+## Hexagonal architecture
+
+Hexagonal core.
+
+## Rules
+
+### architecture
+
+#### hex-core
+Hexagonal core.
+
+## Transport choice
+
+The service is welded to RabbitMQ for all transport.
+
+-- transport-revised.md --
+## Context and Problem Statement
+
+Established at project bootstrap by `constitution init`.
+
+## Considered Options
+
+- Adopt this founding principle
+- Leave the convention implicit
+
+## Decision Outcome
+
+The transport stays an open research bet until stage-2 research lands.
+
+-- body.md --
+## Context and Problem Statement
+
+x
+
+## Considered Options
+
+- a
+
+## Decision Outcome
+
+y

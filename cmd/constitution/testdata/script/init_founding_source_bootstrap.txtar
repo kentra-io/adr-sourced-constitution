@@ -26,6 +26,7 @@ Every change ships with tests, no exceptions.
 
 -- constitution.yml --
 schemaVersion: 1
+phase: sealed
 agentInstructions:
   targets:
     - claude

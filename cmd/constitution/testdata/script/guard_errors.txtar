@@ -41,6 +41,7 @@ stderr 'no constitution.yml'
 
 -- norepo/constitution.yml --
 schemaVersion: 1
+phase: sealed
 consent:
   policy: off
 sourceTracking:
@@ -53,6 +54,7 @@ placeholder so the directory exists
 
 -- missing/constitution.yml --
 schemaVersion: 1
+phase: sealed
 consent:
   policy: off
 sourceTracking:

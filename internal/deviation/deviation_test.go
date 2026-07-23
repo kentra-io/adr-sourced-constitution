@@ -16,7 +16,7 @@ func scratchProject(t *testing.T) (root, hash string) {
 	root = t.TempDir()
 
 	mustWrite(t, filepath.Join(root, "constitution.yml"),
-		"schemaVersion: 1\nconsent:\n  policy: off\nsourceTracking:\n  type: none\ncategories:\n  - architecture\n")
+		"schemaVersion: 1\nphase: sealed\nconsent:\n  policy: off\nsourceTracking:\n  type: none\ncategories:\n  - architecture\n")
 
 	adrDir := filepath.Join(root, "constitution", "adr")
 	if err := os.MkdirAll(adrDir, 0o755); err != nil {
@@ -116,7 +116,7 @@ func TestValidateSupersededADRIDIsInactive(t *testing.T) {
 	// name the ADR's actual status.
 	root := t.TempDir()
 	mustWrite(t, filepath.Join(root, "constitution.yml"),
-		"schemaVersion: 1\nconsent:\n  policy: off\nsourceTracking:\n  type: none\ncategories:\n  - architecture\n")
+		"schemaVersion: 1\nphase: sealed\nconsent:\n  policy: off\nsourceTracking:\n  type: none\ncategories:\n  - architecture\n")
 
 	adrDir := filepath.Join(root, "constitution", "adr")
 	if err := os.MkdirAll(adrDir, 0o755); err != nil {
@@ -169,7 +169,7 @@ func TestValidateSupersededADRIDIsInactive(t *testing.T) {
 func TestValidateRecordOnlyADRIDIsRejected(t *testing.T) {
 	root := t.TempDir()
 	mustWrite(t, filepath.Join(root, "constitution.yml"),
-		"schemaVersion: 1\nconsent:\n  policy: off\nsourceTracking:\n  type: none\ncategories:\n  - architecture\n")
+		"schemaVersion: 1\nphase: sealed\nconsent:\n  policy: off\nsourceTracking:\n  type: none\ncategories:\n  - architecture\n")
 
 	adrDir := filepath.Join(root, "constitution", "adr")
 	if err := os.MkdirAll(adrDir, 0o755); err != nil {

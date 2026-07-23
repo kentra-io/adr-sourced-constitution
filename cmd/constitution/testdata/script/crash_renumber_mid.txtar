@@ -42,6 +42,7 @@ grep 'ADR-0050' constitution/constitution.md
 
 -- constitution.yml --
 schemaVersion: 1
+phase: sealed
 consent:
   policy: off
 sourceTracking:

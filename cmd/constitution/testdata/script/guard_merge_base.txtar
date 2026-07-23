@@ -41,6 +41,7 @@ stdout 'illegal status transition accepted -> deprecated'
 
 -- constitution.yml --
 schemaVersion: 1
+phase: sealed
 consent:
   policy: off
 sourceTracking:
