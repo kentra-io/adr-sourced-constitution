@@ -20,7 +20,7 @@ import (
 
 // starterCategories is the reference category vocabulary `init` proposes
 // (plan §2.5) — a suggestion only, overridable with repeated --category.
-var starterCategories = []string{"architecture", "code-style", "process", "testing", "security", "data"}
+var starterCategories = []string{"purpose", "architecture", "code-style", "testing", "process", "tooling", "security", "data"}
 
 // initCommand implements `constitution init` (plan §4). It scaffolds
 // constitution/adr/, writes constitution.yml at the repo root, seeds
