@@ -26,16 +26,12 @@ func newCommand() *cli.Command {
 		Name:      "new",
 		Usage:     "create a new accepted ADR from a MADR body",
 		ArgsUsage: " ", // no positional args
-		Flags: []cli.Flag{
+		Flags: append([]cli.Flag{
 			&cli.StringFlag{Name: "title", Required: true, Usage: "ADR title"},
 			&cli.StringFlag{Name: "source", Usage: "source ref (required when sourceTracking.type != none)"},
 			&cli.StringFlag{Name: "body-file", Required: true, Usage: "path to the MADR body (the ## sections), or - for stdin; may carry its own ## Rules section"},
-			&cli.StringSliceFlag{Name: "rule", Usage: "a standing rule as \"<category>/<slug>: <text>\" (repeatable); composed into a ## Rules section. Mutually exclusive with a body-file that carries its own ## Rules"},
-			&cli.StringSliceFlag{Name: "supersedes-rule", Usage: "retire a prior rule this ADR replaces: \"ADR-NNNN/<category>/<slug>\" (repeatable)"},
-			&cli.StringSliceFlag{Name: "removes-rule", Usage: "retire a prior rule nothing replaces: \"ADR-NNNN/<category>/<slug>\" (repeatable)"},
-			&cli.StringSliceFlag{Name: "new-category", Usage: "introduce a category into the vocabulary if a rule uses an unknown one (repeatable)"},
 			approveFlag(),
-		},
+		}, ruleSurfaceFlags()...),
 		Action: func(_ context.Context, cmd *cli.Command) error {
 			return runNew(cmd)
 		},
@@ -49,34 +45,9 @@ func runNew(cmd *cli.Command) error {
 	}
 
 	title := cmd.String("title")
-	source := cmd.String("source")
 
 	// --- validate everything up front (no writes, no prompt yet) ---
-	body, err := readBody(cmd.String("body-file"), m.stdin)
-	if err != nil {
-		return err
-	}
-	ruleFlags := cmd.StringSlice("rule")
-	if len(ruleFlags) > 0 && hasRulesSection(body) {
-		return fmt.Errorf(
-			"both --rule and a --body-file that already contains a \"## Rules\" section were supplied; provide the rules exactly once (drop --rule, or remove the section from the body)")
-	}
-	body, err = composeRulesSection(body, ruleFlags)
-	if err != nil {
-		return err
-	}
-	label := bodyLabel(ruleFlags)
-	if err := adr.ValidateBody(body, label); err != nil {
-		return err
-	}
-	if err := validateSource(m.cfg.SourceTracking, source); err != nil {
-		return err
-	}
-	supersedesRules, err := ruleRefFlags("supersedes-rule", cmd.StringSlice("supersedes-rule"))
-	if err != nil {
-		return err
-	}
-	removesRules, err := ruleRefFlags("removes-rule", cmd.StringSlice("removes-rule"))
+	in, err := m.composeADRInput(cmd)
 	if err != nil {
 		return err
 	}
@@ -89,16 +60,16 @@ func runNew(cmd *cli.Command) error {
 		ID:              id,
 		Title:           title,
 		Date:            today(),
-		Source:          source,
-		SupersedesRules: supersedesRules,
-		RemovesRules:    removesRules,
-		Body:            string(body),
+		Source:          in.source,
+		SupersedesRules: in.supersedesRules,
+		RemovesRules:    in.removesRules,
+		Body:            string(in.body),
 	})
 
 	// Full parse of the composed record: the exact bytes about to be written
 	// must satisfy the read path (rules grammar, frontmatter refs) before
 	// anything else happens.
-	parsed, err := adr.ParseBytesUnnamed(file, label)
+	parsed, err := adr.ParseBytesUnnamed(file, in.label)
 	if err != nil {
 		return err
 	}
