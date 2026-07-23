@@ -26,6 +26,14 @@ stderr 'no ADR with id "ADR-0099"'
 ! exec constitution adr renumber ADR-0002 nope
 stderr 'not a valid ADR id'
 
+# --- refuse: <old>'s rules are retired by another ADR's ref list (v0.2):
+#     the "ADR-NNNN/..." refs pin the id exactly like a supersedes link ---
+exec constitution adr new --title 'Rule bearer' --body-file body-rule.md
+exec constitution adr new --title 'Retirer' --body-file body.md --rule 'architecture/tighter: Tighter.' --supersedes-rule 'ADR-0004/architecture/loose'
+! exec constitution adr renumber ADR-0004 ADR-0060
+stderr 'ADR-0004 is referenced by ADR-0005 \(ADR-0004/architecture/loose\)'
+exists constitution/adr/ADR-0004-rule-bearer.md
+
 # --- success: renumber an unreferenced ADR ---
 exec constitution adr renumber ADR-0002 ADR-0050
 stdout 'renumbered ADR-0002 -> ADR-0050'
@@ -53,3 +61,23 @@ x
 ## Decision Outcome
 
 y
+
+-- body-rule.md --
+## Context and Problem Statement
+
+x
+
+## Considered Options
+
+- a
+
+## Decision Outcome
+
+y
+
+## Rules
+
+### architecture
+
+#### loose
+Loose rule.
