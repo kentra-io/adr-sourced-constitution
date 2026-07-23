@@ -14,7 +14,8 @@ exists constitution.yml
 exists constitution/adr/ADR-0001-all-code-must-have-tests.md
 exists constitution/constitution.md
 exists constitution/.state
-exists constitution/adr/.manifest.sha256
+! exists constitution/adr/.manifest.sha256
+stdout 'phase is draft'
 
 # --- both agent-instruction targets by default ---
 exists CLAUDE.md

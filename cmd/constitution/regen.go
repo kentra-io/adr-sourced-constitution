@@ -98,7 +98,18 @@ func regenCore(root string, cfg *config.Config, stdout, stderr io.Writer) error 
 
 	crashCheckpoint("after-projection")
 
-	if err := manifest.Write(adrDir, adrs); err != nil {
+	// The manifest baseline is a sealed-phase artifact (v0.2 proposal §3):
+	// `constitution seal` writes the first one, and every sealed regen keeps
+	// it current. In draft no baseline exists — and a stale one (a crash
+	// between seal's manifest write and its phase flip, or a hand-reverted
+	// phase) is actively removed so the repo never carries a manifest that
+	// guard would not vouch for. This is what makes seal's crash windows
+	// convergent: any draft-phase regen returns the repo to "no manifest".
+	if cfg.Phase == config.PhaseSealed {
+		if err := manifest.Write(adrDir, adrs); err != nil {
+			return err
+		}
+	} else if err := os.Remove(filepath.Join(adrDir, manifest.FileName)); err != nil && !os.IsNotExist(err) {
 		return err
 	}
 

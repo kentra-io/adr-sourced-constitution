@@ -12,7 +12,6 @@ cp CLAUDE.md snap.claude
 cp AGENTS.md snap.agents
 cp constitution/.state snap.state
 cp constitution/constitution.md snap.md
-cp constitution/adr/.manifest.sha256 snap.manifest
 cp constitution/adr/ADR-0001-idempotent-principle.md snap.adr
 cp .claude/skills/adr-draft/SKILL.md snap.skill.claude
 cp .agents/skills/plan-gate/SKILL.md snap.skill.agents
@@ -30,7 +29,6 @@ cmp CLAUDE.md snap.claude
 cmp AGENTS.md snap.agents
 cmp constitution/.state snap.state
 cmp constitution/constitution.md snap.md
-cmp constitution/adr/.manifest.sha256 snap.manifest
 cmp constitution/adr/ADR-0001-idempotent-principle.md snap.adr
 cmp .claude/skills/adr-draft/SKILL.md snap.skill.claude
 cmp .agents/skills/plan-gate/SKILL.md snap.skill.agents
