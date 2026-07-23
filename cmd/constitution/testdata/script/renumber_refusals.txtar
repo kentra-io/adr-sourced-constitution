@@ -33,6 +33,7 @@ exists constitution/adr/ADR-0050-second.md
 
 -- constitution.yml --
 schemaVersion: 1
+phase: sealed
 consent:
   policy: off
 sourceTracking:

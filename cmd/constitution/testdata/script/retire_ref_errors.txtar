@@ -30,6 +30,7 @@ cmp constitution/constitution.md after-retire.md
 
 -- constitution.yml --
 schemaVersion: 1
+phase: sealed
 consent:
   policy: off
 sourceTracking:

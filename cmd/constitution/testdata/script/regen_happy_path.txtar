@@ -13,6 +13,7 @@ cmp constitution/constitution.md want-constitution.md
 
 -- constitution.yml --
 schemaVersion: 1
+phase: sealed
 categories:
   - architecture
   - process

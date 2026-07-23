@@ -10,6 +10,7 @@ cmp constitution/constitution.md want-constitution.md
 
 -- constitution.yml --
 schemaVersion: 1
+phase: sealed
 consent:
   policy: off
 sourceTracking:

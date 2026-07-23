@@ -24,6 +24,7 @@ stdout 'renamed from constitution/adr/ADR-0001-first-rule.md to constitution/adr
 
 -- constitution.yml --
 schemaVersion: 1
+phase: sealed
 consent:
   policy: off
 sourceTracking:

@@ -45,6 +45,7 @@ stdout '"clean": false'
 
 -- constitution.yml --
 schemaVersion: 1
+phase: sealed
 consent:
   policy: off
 sourceTracking:

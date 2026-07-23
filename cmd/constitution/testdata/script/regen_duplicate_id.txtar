@@ -10,6 +10,7 @@ stderr 'ADR-0001-second-claimant\.md: field "id": duplicate id "ADR-0001" \(alre
 
 -- constitution.yml --
 schemaVersion: 1
+phase: sealed
 categories:
   - architecture
 

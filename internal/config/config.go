@@ -15,12 +15,21 @@ import (
 // migration machinery in v1."
 const SchemaVersion = 1
 
-// Config is the constitution.yml schema (plan §2.10, §2.5, §2.8).
+// Config is the constitution.yml schema (plan §2.10, §2.5, §2.8; v0.2
+// proposal §3 for phase).
 type Config struct {
 	SchemaVersion     int               `yaml:"schemaVersion"`
 	AgentInstructions AgentInstructions `yaml:"agentInstructions"`
 	Consent           Consent           `yaml:"consent"`
 	SourceTracking    SourceTracking    `yaml:"sourceTracking"`
+	// Phase is the founding phase (v0.2 proposal D1/A3): "draft" means the
+	// log is a fully mutable working set (edit/rm allowed, no manifest
+	// baseline, guard checks parse + vocabulary only); "sealed" means
+	// append-only forever with the full guard semantics. REQUIRED — the one
+	// config field with no default, because defaulting either way silently
+	// picks an immutability model (A3: sealing is always an explicit,
+	// human-approved act; D4: no absent-field compatibility logic).
+	Phase string `yaml:"phase"`
 	// Categories is the project's category vocabulary (spec §4.2), in the
 	// order the projection groups sections by (plan §3: "categories in
 	// config order"). Governed: a new category is introduced by an ADR
@@ -58,6 +67,12 @@ const (
 	SkillTreeClaude = "claude"
 	SkillTreeAgents = "agents"
 	SkillTreeCursor = "cursor"
+)
+
+// Config.Phase values (v0.2 proposal D1/A3).
+const (
+	PhaseDraft  = "draft"
+	PhaseSealed = "sealed"
 )
 
 // Consent policy vocabulary (plan §2.4): "strict" | "off". Not enforced
@@ -146,6 +161,20 @@ func (c *Config) validate(path string) error {
 			return fmt.Errorf("%s: field %q: duplicate category %q", path, "categories", cat)
 		}
 		seen[cat] = true
+	}
+
+	switch c.Phase {
+	case PhaseDraft, PhaseSealed:
+	case "":
+		return fmt.Errorf(
+			"%s: field %q: required — add 'phase: sealed' for an existing (append-only) log, or 'phase: draft' for an unsealed one",
+			path, "phase",
+		)
+	default:
+		return fmt.Errorf(
+			"%s: field %q: must be %q or %q (got %q)",
+			path, "phase", PhaseDraft, PhaseSealed, c.Phase,
+		)
 	}
 
 	if c.Consent.Policy == "" {

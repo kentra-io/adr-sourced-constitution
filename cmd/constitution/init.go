@@ -187,6 +187,7 @@ func buildOrLoadConfig(cmd *cli.Command, root string, stderr io.Writer) (cfg *co
 		AgentInstructions: config.AgentInstructions{Targets: targets},
 		Consent:           config.Consent{Policy: consent},
 		SourceTracking:    config.SourceTracking{Type: config.SourceTrackingNone},
+		Phase:             config.PhaseSealed,
 		Categories:        categories,
 		Skills:            config.Skills{Trees: trees},
 	}, true, nil

@@ -44,7 +44,7 @@ func setupRepo(t *testing.T, consentPolicy string, categories ...string) {
 	t.Helper()
 	t.Chdir(t.TempDir())
 	var b strings.Builder
-	b.WriteString("schemaVersion: 1\nconsent:\n  policy: " + consentPolicy + "\nsourceTracking:\n  type: none\ncategories:\n")
+	b.WriteString("schemaVersion: 1\nphase: sealed\nconsent:\n  policy: " + consentPolicy + "\nsourceTracking:\n  type: none\ncategories:\n")
 	for _, c := range categories {
 		b.WriteString("  - " + c + "\n")
 	}

@@ -10,6 +10,7 @@ exists constitution/adr/ADR-0001-no-gate-here.md
 
 -- constitution.yml --
 schemaVersion: 1
+phase: sealed
 consent:
   policy: off
 sourceTracking:

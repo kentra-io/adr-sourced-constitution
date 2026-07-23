@@ -10,6 +10,7 @@ stderr 'field "category": rule bogus/some-rule: not in the configured category v
 
 -- constitution.yml --
 schemaVersion: 1
+phase: sealed
 categories:
   - architecture
 

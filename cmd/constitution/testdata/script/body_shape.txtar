@@ -15,6 +15,7 @@ stdout 'created .*ADR-0001-complete\.md'
 
 -- constitution.yml --
 schemaVersion: 1
+phase: sealed
 consent:
   policy: off
 sourceTracking:

@@ -16,6 +16,7 @@ cmp constitution/adr/ADR-0001-original-rule.md want-old-adr.md
 
 -- constitution.yml --
 schemaVersion: 1
+phase: sealed
 consent:
   policy: off
 sourceTracking:
