@@ -119,7 +119,7 @@ func runEdit(cmd *cli.Command) error {
 	if err != nil {
 		return err
 	}
-	body, label, err := editBody(cmd, m, oldPath, old)
+	body, label, err := editBody(cmd, m, oldPath)
 	if err != nil {
 		return err
 	}
@@ -235,7 +235,7 @@ func editRefList(cmd *cli.Command, flagName string, old []adr.RuleRef) ([]string
 //   - neither keeps the body untouched.
 //
 // The returned label names the error source for validation/parse failures.
-func editBody(cmd *cli.Command, m *mutContext, oldPath string, old *adr.ADR) ([]byte, string, error) {
+func editBody(cmd *cli.Command, m *mutContext, oldPath string) ([]byte, string, error) {
 	ruleFlags := cmd.StringSlice("rule")
 
 	var body []byte

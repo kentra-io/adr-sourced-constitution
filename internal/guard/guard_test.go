@@ -254,7 +254,7 @@ func TestRunBareModeFallsBackWhenNotARepo(t *testing.T) {
 
 // writeRuleADR composes and writes one accepted ADR carrying a single rule
 // under the given category, for draft-mode vocabulary tests.
-func writeRuleADR(t *testing.T, adrDir, id, title, category, slug string) adr.ADR {
+func writeRuleADR(t *testing.T, adrDir, id, title, category, slug string) {
 	t.Helper()
 	content := adr.Compose(adr.NewADR{
 		ID: id, Title: title, Date: "2026-07-01",
@@ -265,11 +265,9 @@ func writeRuleADR(t *testing.T, adrDir, id, title, category, slug string) adr.AD
 	if err := os.WriteFile(path, content, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	a, err := adr.Parse(path)
-	if err != nil {
+	if _, err := adr.Parse(path); err != nil {
 		t.Fatal(err)
 	}
-	return *a
 }
 
 // Draft phase reports clean on mutations that would scream in sealed mode:
