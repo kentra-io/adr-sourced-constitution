@@ -1,6 +1,7 @@
 package patch
 
 import (
+	"bytes"
 	"errors"
 	"sort"
 	"strings"
@@ -334,5 +335,49 @@ func assertEqual(t *testing.T, what string, got, want []string) {
 		if got[i] != want[i] {
 			t.Fatalf("%s = %q, want %q", what, got, want)
 		}
+	}
+}
+
+// Unsupersede is Supersede's exact inverse: patching and un-patching an
+// accepted ADR is byte-identity, and un-patching an already-accepted file
+// (the rm-crash re-run) is a convergent no-op.
+func TestUnsupersedeRoundTrip(t *testing.T) {
+	orig := []byte(`---
+id: ADR-0001
+title: First
+date: 2026-07-01
+status: accepted
+---
+
+## Context and Problem Statement
+
+x
+
+## Considered Options
+
+- a
+
+## Decision Outcome
+
+y
+`)
+	superseded, err := Supersede(orig, "ADR-0002")
+	if err != nil {
+		t.Fatalf("Supersede: %v", err)
+	}
+	restored, err := Unsupersede(superseded)
+	if err != nil {
+		t.Fatalf("Unsupersede: %v", err)
+	}
+	if !bytes.Equal(restored, orig) {
+		t.Errorf("Unsupersede(Supersede(x)) != x\n--- got ---\n%s\n--- want ---\n%s", restored, orig)
+	}
+
+	again, err := Unsupersede(orig)
+	if err != nil {
+		t.Fatalf("Unsupersede on accepted: %v", err)
+	}
+	if !bytes.Equal(again, orig) {
+		t.Errorf("Unsupersede on an accepted file is not a no-op:\n%s", again)
 	}
 }

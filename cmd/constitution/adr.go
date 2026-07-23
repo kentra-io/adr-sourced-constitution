@@ -13,6 +13,7 @@ func adrCommand() *cli.Command {
 		Commands: []*cli.Command{
 			newCommand(),
 			editCommand(),
+			rmCommand(),
 			renumberCommand(),
 		},
 	}
