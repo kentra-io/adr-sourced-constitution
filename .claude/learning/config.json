@@ -1,0 +1,14 @@
+{
+  "version": "2.2",
+  "observer": {
+    "enabled": true,
+    "run_interval_minutes": 5,
+    "min_observations_to_analyze": 20
+  },
+  "retroactive": {
+    "sessions_dir": ".claude/sessions",
+    "batch_size": 10,
+    "min_user_messages": 3,
+    "max_extract_chars": 30000
+  }
+}

@@ -10,6 +10,7 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/kentra-io/adr-sourced-constitution/internal/config"
 	"github.com/kentra-io/adr-sourced-constitution/internal/guard"
 )
 
@@ -83,18 +84,27 @@ func runGuard(cmd *cli.Command) error {
 	// scans zero ADRs and reports a false "clean". Require constitution.yml
 	// here. A project WITH constitution.yml but no ADRs yet is still
 	// legitimately clean — that case is handled downstream, not rejected here.
-	if _, err := os.Stat(filepath.Join(cwd, "constitution.yml")); err != nil {
+	configPath := filepath.Join(cwd, "constitution.yml")
+	if _, err := os.Stat(configPath); err != nil {
 		return &exitError{
 			err:  fmt.Errorf("guard: no constitution.yml in %s; run guard from a constitution project root", cwd),
 			code: guardExitCouldNotRun,
 		}
 	}
+	// The config decides which guard semantics apply (phase, vocabulary), so
+	// an unreadable/invalid config is a "could not run", not a violation.
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		return &exitError{err: fmt.Errorf("guard: %w", err), code: guardExitCouldNotRun}
+	}
 
 	opts := guard.Options{
-		Root:      cwd,
-		Base:      base,
-		MergeBase: mergeBase,
-		NoGit:     cmd.Bool("no-git"),
+		Root:       cwd,
+		Base:       base,
+		MergeBase:  mergeBase,
+		NoGit:      cmd.Bool("no-git"),
+		Phase:      cfg.Phase,
+		Categories: cfg.Categories,
 	}
 
 	res, err := guard.Run(opts)
@@ -144,7 +154,7 @@ func writeGuardText(w io.Writer, res guard.Result) error {
 			_, err := fmt.Fprintf(w, "guard: clean (%d ADR(s) checked, git mode vs %s)\n", res.Summary.Checked, res.Base)
 			return err
 		}
-		_, err := fmt.Fprintf(w, "guard: clean (%d ADR(s) checked, manifest-only mode)\n", res.Summary.Checked)
+		_, err := fmt.Fprintf(w, "guard: clean (%d ADR(s) checked, %s mode)\n", res.Summary.Checked, res.Mode)
 		return err
 	}
 

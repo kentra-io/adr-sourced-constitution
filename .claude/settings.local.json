@@ -1,0 +1,49 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(go build *)",
+      "Bash(/tmp/adrc-test --help)",
+      "Bash(/tmp/adrc-test adr *)",
+      "Bash(brew list *)",
+      "Bash(brew tap *)",
+      "Bash(/tmp/adrc-test deprecate *)",
+      "Bash(sed 's|constitution/adr/||')",
+      "Bash(/tmp/adrc-test guard *)",
+      "Bash(echo \"\\(guard exit: $?\\)\")",
+      "Read(//Users/jony/code/kentra/harness/.claudebox/**)",
+      "Read(//Users/jony/.claudebox/**)",
+      "Bash(docker version *)",
+      "Bash(git checkout *)",
+      "Bash(gofmt *)",
+      "Bash(echo \"exit=$?\")",
+      "Bash(echo \"diff exit: $?\")",
+      "Bash(go test *)",
+      "Bash(python3 -c ' *)",
+      "Bash(/private/tmp/claude-501/-Users-jony-code-kentra-harness-adr-sourced-constitution/f4b74065-2b13-4867-ad14-8d3144194692/scratchpad/cb-fixed run *)",
+      "Bash(echo \"run exited: $?\")",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(cp -p /Users/jony/go/bin/claudebox /private/tmp/claude-501/-Users-jony-code-kentra-harness-adr-sourced-constitution/f4b74065-2b13-4867-ad14-8d3144194692/scratchpad/claudebox-prev-backup)",
+      "Bash(/Users/jony/go/bin/claudebox --help)",
+      "Bash(git merge *)",
+      "Read(//Users/jony/code/kentra/harness/claudebox/**)",
+      "Bash(make install *)",
+      "Bash(echo \"exit: $?\")",
+      "Read(//Users/jony/.claude/skills/continuous-learning/hooks/**)",
+      "Read(//Users/jony/go/bin/**)",
+      "Bash(/Users/jony/go/bin/claudebox run *)",
+      "Read(//Users/jony/.claude/skills/continuous-learning/**)",
+      "Read(//Users/jony/.claude/skills/continuous-learning-v2/**)",
+      "Read(//Users/jony/.claude/skills/continuous-learning-v2/hooks/**)",
+      "Bash(tar czf *)",
+      "Bash(git rm *)",
+      "Bash(rm -rf .claude/skills/continuous-learning)",
+      "Bash(rm -rf ~/.claude/skills/continuous-learning)",
+      "Bash(go vet *)",
+      "Bash(echo \"\\(exit $?\\)\")"
+    ]
+  },
+  "enabledMcpjsonServers": [
+    "excalidraw"
+  ]
+}

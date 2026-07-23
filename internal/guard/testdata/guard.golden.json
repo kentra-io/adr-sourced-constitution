@@ -41,11 +41,17 @@
         "constitution/adr/ADR-0006-g.md"
       ],
       "message": "ADR-0006: id used by 2 files: constitution/adr/ADR-0006-f.md, constitution/adr/ADR-0006-g.md"
+    },
+    {
+      "kind": "unknown_category",
+      "id": "ADR-0007",
+      "file": "constitution/adr/ADR-0007-h.md",
+      "message": "rule tooling/pin-versions uses category \"tooling\", which is not in the configured vocabulary [architecture testing]"
     }
   ],
   "summary": {
-    "checked": 6,
-    "violations": 6,
+    "checked": 7,
+    "violations": 7,
     "clean": false
   }
 }
