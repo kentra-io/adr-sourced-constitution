@@ -1,29 +1,23 @@
 schemaVersion: 1
 managed:
     - path: .agents/skills/adr-draft/SKILL.md
-      hash: 116c70be7d0bfa7f9012f6e81e9bb7a947f0a239ec3c9bd022c308e20eb8c809
+      hash: 9526c73d8d49f2f1eeac7526efb4c5d06b0ce43002b03690512c6b2f88083222
     - path: .agents/skills/constitution-gov/SKILL.md
-      hash: 23e6b4685aa62e01d0806dedc87a53792ef3198ff3ed75b1d348696f7a4aa213
-    - path: .agents/skills/constitution-init/SKILL.md
-      hash: 0c3e0d10f8dad8b26c4d779f8ae12fe47056294a8ee201d130f56ddace7e3bc2
+      hash: 9425a60acd4d07fed6567a092b55b5e94c735a5d5dcde026f0da788718b1669c
     - path: .agents/skills/plan-gate/SKILL.md
-      hash: 855ed88e30f4f4e16d309bd7a6149dd1fe76fb428b6e211b8e714c6beb3f2f8b
+      hash: 3ac069311451ce399676e06089f92cb55211e885626a9a3824fae72c39e9c0c1
     - path: .claude/skills/adr-draft/SKILL.md
-      hash: 116c70be7d0bfa7f9012f6e81e9bb7a947f0a239ec3c9bd022c308e20eb8c809
+      hash: 9526c73d8d49f2f1eeac7526efb4c5d06b0ce43002b03690512c6b2f88083222
     - path: .claude/skills/constitution-gov/SKILL.md
-      hash: 23e6b4685aa62e01d0806dedc87a53792ef3198ff3ed75b1d348696f7a4aa213
-    - path: .claude/skills/constitution-init/SKILL.md
-      hash: 0c3e0d10f8dad8b26c4d779f8ae12fe47056294a8ee201d130f56ddace7e3bc2
+      hash: 9425a60acd4d07fed6567a092b55b5e94c735a5d5dcde026f0da788718b1669c
     - path: .claude/skills/plan-gate/SKILL.md
-      hash: 855ed88e30f4f4e16d309bd7a6149dd1fe76fb428b6e211b8e714c6beb3f2f8b
+      hash: 3ac069311451ce399676e06089f92cb55211e885626a9a3824fae72c39e9c0c1
     - path: .cursor/skills/adr-draft/SKILL.md
-      hash: 116c70be7d0bfa7f9012f6e81e9bb7a947f0a239ec3c9bd022c308e20eb8c809
+      hash: 9526c73d8d49f2f1eeac7526efb4c5d06b0ce43002b03690512c6b2f88083222
     - path: .cursor/skills/constitution-gov/SKILL.md
-      hash: 23e6b4685aa62e01d0806dedc87a53792ef3198ff3ed75b1d348696f7a4aa213
-    - path: .cursor/skills/constitution-init/SKILL.md
-      hash: 0c3e0d10f8dad8b26c4d779f8ae12fe47056294a8ee201d130f56ddace7e3bc2
+      hash: 9425a60acd4d07fed6567a092b55b5e94c735a5d5dcde026f0da788718b1669c
     - path: .cursor/skills/plan-gate/SKILL.md
-      hash: 855ed88e30f4f4e16d309bd7a6149dd1fe76fb428b6e211b8e714c6beb3f2f8b
+      hash: 3ac069311451ce399676e06089f92cb55211e885626a9a3824fae72c39e9c0c1
     - path: AGENTS.md
       hash: 7f39bbdc0f1f4a893ce0ec93d115b48c04cabad60cdd5615076e53a66ca96e30
     - path: CLAUDE.md

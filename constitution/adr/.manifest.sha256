@@ -10,3 +10,6 @@ a24c97fe3d1ad5e21c7a26e295e3dead80f384b73e789cf7c4ea85aa73996beb  ADR-0006-alloc
 144185d47f46b1594778ec475f66255b0aa1f5abc772dd24c250ccd810344060  ADR-0010-keep-project-config-in-a-versioned-root-constitution-yml.md
 ae6387e1cf95e961251a56ecf35d894f131b39d66c57de79ef363c30b8f5bf9b  ADR-0011-pin-the-byte-fidelity-stack-for-deterministic-projection.md
 bddb96a2996c48870b324498915622be4117b1d9716c0bc78ab828bc98268909  ADR-0012-reset-the-active-constitution-to-cli-mediation-only.md
+9ab0f65a36a1e224e71dcd0072e7877aaff3f80cafbbd667620ac7fa76bba4b3  ADR-0013-founding-phase-draft-until-sealed.md
+aad57bff978e6d9038bc6fe5623a662641a3faf28ffc711e0b458e2d29e34485  ADR-0014-purposeful-projection-the-constitution-states-its-own-goal.md
+520538753749403eae6cf5fb3ac216be7589b55fc91f4cffd99dfc9c68b741c5  ADR-0015-the-rule-is-the-unit-of-change.md

@@ -1,6 +1,8 @@
-# `adr-sourced-constitution` — Implementation Plan (v1)
+# `adr-sourced-constitution` — Implementation Plan (v1, with dated v0.2 revision blocks)
 
 *Generated: 2026-07-02. Status: **PLAN — pending user review.** Companion to [adr-sourced-constitution.md](./adr-sourced-constitution.md) (the design spec) and, in the harness repo, [mvp-plan.md](../mvp-plan.md) (Phase 1) and [planning.md](../planning.md) (§7/§8). Produced from the spec plus a 6-topic parallel research run + completeness critique (2026-07-02, all framework/library claims verified against live primary sources — see §14).*
+
+> **This document still describes v1** (M0–M7 below, as originally planned and built) — that historical milestone log is left intact. **v0.2** (the founding draft/seal phase, the Rules grammar + per-rule retirement, the revised starter vocabulary, and the skills/docs rewrite — landed 2026-07-21 through 2026-07-23 via three separate plan docs under `docs/plans/`) is layered on top as **dated revision blocks**: a summary block at §2.13, and a one-line pointer appended *inside* every individual §2.x pinned decision that v0.2 supersedes or extends. Nothing pre-existing was deleted or rewritten to pretend v1 always looked this way.
 
 > **What this document is.** The sequenced, buildable plan for **v1** of the primitive. The spec decides *what it is*; this decides *what gets built, in what order, with which concrete stack*, pins every TBD the spec left open (§2), and records the spec corrections the research surfaced (§1). Milestones carry validation contracts (Definition of Done); nothing is complete without proving it.
 
@@ -71,19 +73,27 @@ constitution adr new --title "…" --category architecture [--source FS-0042] --
 - **`off`**: no CLI-level gate (for adopters who want pure tooling).
 - `advisory`/`category-scoped`/`batched` are **deferred** — no design exists and the harness's HARD RULE doesn't need them.
 
+> **v0.2:** the vocabulary itself is unchanged (still `strict | off`). The set of mutating verbs it gates grew — `adr edit`, `adr rm`, and `seal` (§2.13) are consent-gated identically to `adr new`/`supersede`/`deprecate`, each taking the same `--approve` non-TTY path.
+
 ### 2.5 Category vocabulary governance (spec §13.6)
 Vocabulary lives in `constitution.yml`. `adr new` **hard-errors** on an unknown category; introducing one requires `--new-category`, which (a) appends the category to config and (b) still produces an ordinary ADR (no meta-record type), matching the spec's default assumption. `init` proposes the reference starter list (`architecture`, `code-style`, `process`, `testing`, `security`, `data`) as a suggestion only.
+
+> **v0.2 (2026-07-21/23):** the *governance mechanism* here (ordinary ADR + `--new-category`, no meta-record) is unchanged and still how it works. What changed is *what* carries a category — a **rule**, not the whole ADR (an ADR can now touch several categories at once) — and the starter list, which grew to `purpose, architecture, code-style, testing, process, tooling, security, data`. See §2.13.
 
 ### 2.6 ID allocation & collision strategy (spec §13.3 adjacent; guard brief)
 - Keep `ADR-NNNN` sequential zero-padded ids; `adr new` scans `adr/` for the highest id (optimistic, same as adr-tools).
 - Collisions are a **CI-time problem**: `guard` (merge-base mode) includes an id/filename-uniqueness check; adopters are told to enable "require branches up to date before merging" or a merge queue. (adr-tools' #102 lock-file idea was never shipped for good reason; log4brains' date-slug switch sacrifices readability we won't give up.)
 - **`constitution adr renumber <old-id> <new-id>`** is the escape hatch — safe by construction: a colliding ADR is by definition not yet merged/accepted into the shared log, so nothing references it; renumber is a pure rename + frontmatter id edit.
 
+> **v0.2 (M2, 2026-07-23):** `renumber`'s "is it referenced?" refusal now also extends to per-rule retirement — it refuses when any other ADR's `supersedes-rules`/`removes-rules` cites `<old-id>/…`. See §2.13.
+
 ### 2.7 Guard modes + manifest (spec §13.7 + §5.4)
 - **Git mode (default):** shell out to the system `git` binary (`git diff --name-status`, `git show <ref>:<path>`) — *not* go-git, *not* hand-parsed unified diffs. The legality check is a **structured comparison**: parse frontmatter + body on both sides; allow-list only `status:` and `superseded-by:` to differ. Diff base: `HEAD` for local/skill checks; `git merge-base <target> HEAD` for CI (computed locally, not trusted from `pull_request.base.sha`); reference workflow uses `fetch-depth: 0`.
 - **Manifest mode (no-git fallback, pulled forward):** `constitution/adr/.manifest.sha256` records each ADR's frozen-content hash (canonicalized: body + frozen frontmatter fields, LF-normalized — exact canonicalization rule is an M3 design note). Auto-rewritten by every mutating command; `guard` always cross-checks disk vs manifest. **Advisory in v1** — no branch-protection wiring, no tamper-evidence claim against a malicious committer (they can edit both files in one commit; that's Phase 2's branch protection).
 - **Exit contract:** `0` clean · `1` violations found · `2` guard could not run. `--format json` emits a machine payload (violation `kind` enum: `frozen_field_changed | body_changed | file_deleted | file_renamed | manifest_mismatch | id_collision`, each citing the ADR id) — JSON-only on stdout, pipeable. `--format github` annotations: deferred nice-to-have.
 - v1 ships `guard` + one **documented, optional, advisory** GitHub Actions example job. No required checks, no Conductor — Phase 1 "surfaces; human honors", per spec §5.4.
+
+> **v0.2 (M2, 2026-07-23):** `guard` is now **phase-aware** — it loads `constitution.yml` and, in `draft` phase, runs only parse + id-uniqueness + a new vocabulary check (`unknown_category` violation kind); the git-legality and manifest-cross-check modes described above are **sealed-phase-only** (an explicit `--base`/`--merge-base` in draft is a usage error, exit 2). The manifest itself is now written once, at `constitution seal`, rather than from the first accepted ADR — see §2.13.
 
 ### 2.8 source-ref contract (spec §13.3)
 Minimal typed config, no live tracker integration in v1:
@@ -116,6 +126,8 @@ Written by the plan-validation skill via the CLI-validated path, default `./devi
 ### 2.10 Project config
 `constitution.yml` at **repo root** (sibling of `constitution/` — config is neither log nor projection). Plain `yaml.Unmarshal` into a versioned struct (`schemaVersion: 1`; unknown version ⇒ refuse with a clear message — no migration machinery in v1). Fields: agent-instruction targets, consent policy, sourceTracking, category vocabulary. No Viper (multi-source merging is unneeded weight).
 
+> **v0.2 (M2, 2026-07-23):** config gains a **required** `phase: draft | sealed` field — the one field with no default, since defaulting either way would silently pick an immutability model for the author (a missing field is a hard error with a migration hint). See §2.13.
+
 ### 2.11 Dogfood decision
 The `adr-sourced-constitution` repo **governs itself**: M5 runs `constitution init` on this repo, and the founding ADRs are the very decisions in this plan (§2.1–§2.10, stack choices in §3). First real-world exercise + living example in one.
 
@@ -131,6 +143,25 @@ v1 as first built projected **every** accepted ADR into `constitution.md`. User 
 - **init:** each `--principle` yields a rule-bearing ADR (the principle text is the Rule). In `--founding-file`, a per-ADR `## Rule` section is honored; absent ⇒ record-only.
 - **Skills:** `adr-draft` asks whether the decision is a standing rule or a point-in-time record, and drafts the Rule section accordingly; `plan-gate`/`constitution-gov` prose updated to the curated-projection model.
 - **Migration:** none mechanically — pre-existing ADRs without Rule sections simply stop projecting. This repo's own constitution empties to the placeholder; the founding **re-seed is user-interactive with per-ADR approval** and is scheduled before the `v0.1.0` cut (also closes the consent gap flagged 2026-07-03).
+
+> **SUPERSEDED by v0.2 (M1, 2026-07-21).** The single-`## Rule`-section-per-ADR model this subsection describes is v1's design; v0.2 (proposal D3/D5/A1/A2) replaced it wholesale with the `## Rules` → `### <category>` → `#### <slug>` grammar — categories moved from ADR frontmatter onto individual rules (one ADR may now carry rules in several categories), rules gained individual identity (`ADR-NNNN/<category>/<slug>`) and per-rule retirement (`supersedes-rules:`/`removes-rules:`, with fold-time masking and resurrection warnings — proposal A6/A7), and the fixed D2 preamble was added to every render. This subsection is left as-built history of what actually shipped first; see §2.13 for the current model and `docs/plans/2026-07-21-v0.2-m1-rules-grammar.md` for the full implementation.
+
+### 2.13 v0.2 revision block — founding phase, Rules grammar, no-compat (dated 2026-07-21 → 2026-07-23)
+
+v0.2 is design-of-record in `docs/proposal-v0.2-next-iteration.md` (decisions D1–D5, A1–A7) and shipped as three sequential, independently-planned milestones — **M1** (`docs/plans/2026-07-21-v0.2-m1-rules-grammar.md`, PR #13, `3928b9b`), **M2** (`docs/plans/2026-07-23-v0.2-m2-draft-seal.md`, PR #14, `75f3d52`), and **M3** (`docs/plans/2026-07-23-v0.2-m3-m4-skills-docs.md`, PR #15, `05425ba`) — each with its own task-by-task implementation plan; read the linked doc for the full mechanism. This block is the index. Pinned decisions, one line each:
+
+| Decision | One-liner | Detail |
+|---|---|---|
+| **Founding draft/seal phase** (D1/A3) | `constitution.yml` requires `phase: draft \| sealed` (no default); draft = fully mutable working set through the CLI (`adr edit`/`adr rm` join `adr new`/`supersede`/`deprecate`); `constitution seal` (consent-gated) baselines the manifest and flips the log to append-only forever, at which point pre-v0.2 §5 immutability applies exactly as originally specified. | M2 doc §"Context", Task 1–2, 7 |
+| **Rules grammar replaces `## Rule`** (D3/D5/A1) | Body's optional section is `## Rules` → `### <category>` → `#### <slug>`, not a single flat `## Rule`; one ADR may carry rules in several categories at once. Untagged text anywhere in the section is a validation error. | M1 doc Task 2–3; supersedes §2.12 above |
+| **`category:` removed from frontmatter** (A2) | Category is a property of a rule, not of the ADR — a record-only ADR now has no category field at all. | M1 doc Task 3; §2.5 above |
+| **Per-rule retirement + resurrection** (A6/A7) | `supersedes-rules:`/`removes-rules:` frontmatter lists retire individual prior rule refs (`ADR-NNNN/<category>/<slug>`); the fold masks refs retired by *currently-accepted* ADRs only — a retirer that itself gets superseded without re-retiring resurrects the rule, and `regen` warns. | M1 doc Task 4 |
+| **Revised starter category vocabulary** | `purpose, architecture, code-style, testing, process, tooling, security, data` (adds `purpose`, `tooling`) — `cmd/constitution/init.go`'s `starterCategories`. | M3 doc T1; §2.5 above |
+| **New verbs: `adr edit`, `adr rm`, `seal`** | `edit` = per-facet replace (draft, accepted-only targets); `rm` = delete outright (draft-only, refuses on rule-ref/supersede references, heals a supersede-undo); `seal` = the draft→sealed transition. All three consent-gated like every other mutating verb. | M2 doc Tasks 5–7; §4 below |
+| **Guard is phase-aware** | Draft: parse + id-uniqueness + vocabulary (`unknown_category`) only; explicit `--base`/`--merge-base` in draft is exit 2. Sealed: the original field-scoped + manifest checks, unrelaxed. | M2 doc Task 3; §2.7 above |
+| **Once-per-lifetime rule-length warnings** | The per-rule length warning fires at the write that lands the rule (`new`/`edit`/`supersede`/`seal`'s checklist), not on every bare `regen` — `regen` alone only warns about the whole-file 200-line guidance and fold/resurrection. | M2 doc Task 7 |
+| **`renumber` rule-ref refusal** | Extends the existing "is it referenced?" refusal to `supersedes-rules`/`removes-rules` citations of the old id. | M2 doc Task 8; §2.6 above |
+| **D4: no backward compatibility** | Pre-v0.2 `## Rule`/`category:` inputs are unsupported; goldens changed freely across all three milestones. Own-repo migration was a one-line hand-edit (`phase: sealed`) since all 12 ADRs were already record-only. | All three plan docs, "Locked decisions" |
 
 ---
 
@@ -177,19 +208,23 @@ adr-sourced-constitution/
 
 ---
 
-## 4. CLI surface (v1 — 7 verbs)
+## 4. CLI surface (v1 planned 7 verbs; **current as-built surface is 11 — see the v0.2 rows below**)
 
 | Command | Behavior |
 |---|---|
-| `constitution init` | Scaffold `constitution/{adr,}`, write `constitution.yml` (flags or interactive prompts; the *conversational* interview is the Layer-2 skill wrapping this), seed founding ADRs (`--founding-file` / repeated `--principle`, source `bootstrap`), write managed pointer blocks into chosen targets, fan out skills (§6), `regen`. Idempotent re-run; interior-drift requires confirm/`--force` (§2.2). |
-| `constitution adr new` | §2.3. Validates category (§2.5) + source (§2.8) + body shape; allocates id; atomic write; consent gate (§2.4); auto-`regen`; manifest update. |
-| `constitution supersede <id>` | New ADR (with `supersedes:`) + line-patch old ADR to `status: superseded` + `superseded-by:`; ordered per §3; auto-`regen`. |
+| `constitution init` | Scaffold `constitution/{adr,}`, write `constitution.yml` (flags or interactive prompts; the *conversational* interview is the Layer-2 skill wrapping this), seed founding ADRs (`--founding-file`, writes `phase: draft` — **v0.2**, §2.13), write managed pointer blocks into chosen targets, fan out skills (§6), `regen`. Idempotent re-run; interior-drift requires confirm/`--force` (§2.2). |
+| `constitution adr new` | §2.3. Validates category-per-rule (§2.5) + source (§2.8) + body shape; the `## Rules` grammar + retirement-ref fold preflight before consent (**v0.2**, §2.13); allocates id; atomic write; consent gate (§2.4); auto-`regen`; manifest update (sealed only — **v0.2**). |
+| **`constitution adr edit <id>`** *(v0.2, M2)* | Draft-phase-only, accepted-targets-only, per-facet replace: `--title` (renames the file), `--source`, `--body-file` (whole body incl. Rules presence/absence), `--rule` (Rules section only), `--supersedes-rule`/`--removes-rule` (whole-list replace, `""` clears). Consent-gated; refuses once sealed. §2.13. |
+| **`constitution adr rm <id>`** *(v0.2, M2)* | Draft-phase-only: deletes a record outright. Refuses while another ADR's rule-retirement lists cite it, or while a later ADR supersedes it (that successor must be `rm`'d first — which restores the original to `accepted`, the supersede-undo heal case). Ids are not renumbered — a gap stays. §2.13. |
+| `constitution supersede <id>` | New ADR (with `supersedes:`, optionally `supersedes-rules:`/`removes-rules:` — **v0.2**) + line-patch old ADR to `status: superseded` + `superseded-by:`; ordered per §3; auto-`regen`. |
 | `constitution deprecate <id>` | Line-patch to `status: deprecated`; auto-`regen`. |
-| `constitution adr renumber <old> <new>` | §2.6 escape hatch: rename + id-field edit; refuses if any ADR references `<old>`. |
-| `constitution regen` | Deterministic projection (spec §6): read all → active set → group → render → atomic write. Warns >~200 lines (§2.1). Also refreshes managed blocks + manifest. |
-| `constitution guard` | §2.7: `--base <ref>` / merge-base / manifest-only; exit 0/1/2; `--format json`. |
+| `constitution adr renumber <old> <new>` | §2.6 escape hatch: rename + id-field edit; refuses if any ADR references `<old>` **or any ADR's `supersedes-rules`/`removes-rules` cites `<old>/…`** (**v0.2**, §2.13). |
+| **`constitution seal`** *(v0.2, M2)* | Consent-gated draft→sealed transition: runs the full rule-length/200-line/resurrection warning checklist, writes the manifest baseline, flips `phase: sealed`, regenerates. Irreversible; `adr edit`/`adr rm` refuse from then on. §2.13. |
+| `constitution regen` | Deterministic per-rule-fold projection (spec §6): read all → active set → fold retirement → group by rule category → render (with the fixed D2 preamble — **v0.2**) → atomic write. Warns >~200 lines (§2.1); per-rule length warnings moved to the write path (**v0.2**, §2.13). Also refreshes managed blocks + manifest (manifest write is sealed-phase-only — **v0.2**). |
+| `constitution guard` | §2.7, **now phase-aware** (**v0.2**, §2.13): draft = parse + id-uniqueness + vocabulary (`unknown_category`) only, `--base`/`--merge-base` in draft = exit 2; sealed = `--base <ref>` / merge-base / manifest-only unchanged from the original design; exit 0/1/2; `--format json`. |
+| **`constitution deviation validate <path>`** *(shipped alongside the M1 rules work, plan §2.9)* | Validates a `deviation.json` against schema + the live log: every `adrId` must cite an active, rule-bearing ADR (whole-ADR grain — unaffected by the per-rule grammar); exit 0/1/2. |
 
-`constitution.md` render template (per **rule-bearing** active ADR under its category heading, §2.12): title as rule heading, the `Rule` section body, then a metadata line (`ADR-0007 · 2026-07-01 · source FS-0042`). Record-only ADRs stay in the log and do not project. A short generated header states the file is a projection and must never be hand-edited, pointing at `adr/`. Exact layout is finalized against golden fixtures. `adr new`/`supersede` accept `--rule <text>` (§2.12).
+`constitution.md` render template (per **rule** of a rule-bearing active ADR under its rule's category heading — **v0.2**: was per-ADR under §2.12's single-category model): the rule's `#### <slug>` as the rendered heading, the rule text verbatim, then a metadata line (`ADR-0007 · 2026-07-01 · source FS-0042`). Record-only ADRs stay in the log and do not project; a rule masked by a currently-accepted retirement (`supersedes-rules`/`removes-rules`) does not project either (§2.13). A short generated header + the fixed D2 purpose preamble open every render, states the file is a projection and must never be hand-edited, pointing at `adr/`. Exact layout is finalized against golden fixtures. `adr new`/`edit`/`supersede` accept `--rule "<category>/<slug>: <text>"` (repeatable) and `--supersedes-rule`/`--removes-rule "ADR-NNNN/<category>/<slug>"` (repeatable) — supersedes the flat `--rule <text>` of §2.12.
 
 ---
 
@@ -320,6 +355,8 @@ Framework adapters (Spec-Kit first when picked back up) · drift sweep · brownf
 | Spec-tracking + consent seams | M2/M4 (config-level) |
 | Distribution (GoReleaser/tap/claudebox) | M6 |
 | Harness Phase-1 acceptance | M7 |
+
+> **v0.2 note:** this table maps the **v1** milestones (M0–M7, this document). v0.2's own milestones — M1 (Rules grammar), M2 (draft/seal), M3 (skills), M4 (this doc + the spec) — are a *separate*, later numbering under `docs/plans/`; don't conflate `implementation-plan.md`'s M1–M3 above (schema/write-path/guard, 2026-07-02 era) with `docs/plans/2026-07-21-v0.2-m1-rules-grammar.md` etc. (2026-07-21/23 era). §2.13 is the index for the latter.
 
 ## 14. Provenance
 
