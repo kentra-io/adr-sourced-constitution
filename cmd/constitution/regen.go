@@ -127,20 +127,19 @@ func regenCore(root string, cfg *config.Config, stdout, stderr io.Writer) error 
 		}
 	}
 
-	if err := warnLongRules(stderr, adrs); err != nil {
-		return err
-	}
-
 	_, err = fmt.Fprintf(stdout, "wrote %s\n", outPath)
 	return err
 }
 
 // warnLongRules warns (stderr, never blocks) for each rule of an active ADR
 // whose text runs longer than ruleLineWarningThreshold lines (plan §2.12) —
-// a standing rule should be a terse 1–3 line statement. Rules of accepted
-// ADRs are checked — including ones a later ADR retires, so a retired rule
-// may still be warned about; a frozen rule on a superseded record is not
-// the author's live concern.
+// a standing rule should be a terse 1–3 line statement. Fired once per rule
+// lifetime, not on every regen (v0.2 proposal §5): the writing verb calls
+// it with just the ADR it wrote, and `seal` calls it with the whole log as
+// the pre-seal review checklist. Rules of accepted ADRs are checked —
+// including ones a later ADR retires, so a retired rule may still be warned
+// about; a frozen rule on a superseded record is not the author's live
+// concern.
 func warnLongRules(stderr io.Writer, adrs []adr.ADR) error {
 	for i := range adrs {
 		a := &adrs[i]

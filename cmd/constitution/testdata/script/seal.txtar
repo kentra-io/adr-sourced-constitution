@@ -1,0 +1,100 @@
+# `constitution seal` (v0.2 proposal D1/A3): the explicit end of the
+# founding draft. Pre-seal checklist re-fires every long-rule warning; on
+# consent the manifest baseline is written and the phase flips to sealed —
+# after which edit/rm refuse, the sealed verbs still work, and guard runs
+# full sealed semantics.
+
+env CONSTITUTION_TODAY=2026-07-02
+exec constitution adr new --title 'First decision' --body-file body.md --rule 'architecture/first: First rule.'
+exec constitution adr new --title 'Long rule' --body-file body-long-rule.md
+stderr '6-line rule text'
+! exists constitution/adr/.manifest.sha256
+
+# --- consent refusal: still draft, still no manifest ---
+cp strict.yml constitution.yml
+! exec constitution seal
+stderr 'requires confirmation under the "strict" policy'
+grep 'phase: draft' constitution.yml
+! exists constitution/adr/.manifest.sha256
+
+# --- seal with --approve: checklist re-fires the long-rule warning, then
+#     the baseline lands and the phase flips ---
+exec constitution seal --approve
+stdout 'sealed: 2 ADR\(s\) baselined in constitution/adr/\.manifest\.sha256; the log is now append-only'
+stderr 'ADR-0002/architecture/long-rule has a 6-line rule text'
+stderr 'this is the last cheap edit'
+grep 'phase: sealed' constitution.yml
+exists constitution/adr/.manifest.sha256
+grep 'ADR-0001-first-decision\.md' constitution/adr/.manifest.sha256
+
+# --- sealed: edit and rm refuse, seal again refuses ---
+! exec constitution adr edit ADR-0001 --title 'Nope'
+stderr 'phase is sealed'
+! exec constitution adr rm ADR-0001
+stderr 'phase is sealed'
+! exec constitution seal --approve
+stderr 'seal: already sealed'
+
+# --- the sealed-era verbs still work, and guard is clean ---
+exec constitution deprecate ADR-0002 --approve
+grep 'status: deprecated' constitution/adr/ADR-0002-long-rule.md
+exec constitution guard
+stdout 'guard: clean \(2 ADR\(s\) checked'
+
+-- constitution.yml --
+schemaVersion: 1
+phase: draft
+consent:
+  policy: off
+sourceTracking:
+  type: none
+categories:
+  - architecture
+
+-- strict.yml --
+schemaVersion: 1
+phase: draft
+consent:
+  policy: strict
+sourceTracking:
+  type: none
+categories:
+  - architecture
+
+-- body.md --
+## Context and Problem Statement
+
+x
+
+## Considered Options
+
+- a
+
+## Decision Outcome
+
+y
+
+-- body-long-rule.md --
+## Context and Problem Statement
+
+x
+
+## Considered Options
+
+- a
+
+## Decision Outcome
+
+y
+
+## Rules
+
+### architecture
+
+#### long-rule
+line one
+line two
+line three
+line four
+line five
+line six

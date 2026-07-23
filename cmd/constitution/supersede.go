@@ -158,5 +158,8 @@ func runSupersede(cmd *cli.Command) error {
 	if _, err := fmt.Fprintf(m.stdout, "created %s\nsuperseded %s\n", newDest, oldID); err != nil {
 		return err
 	}
-	return m.regen()
+	if err := m.regen(); err != nil {
+		return err
+	}
+	return warnLongRules(m.stderr, []adr.ADR{*newParsed})
 }

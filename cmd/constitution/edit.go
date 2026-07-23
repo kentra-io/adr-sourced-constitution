@@ -191,7 +191,10 @@ func runEdit(cmd *cli.Command) error {
 	if _, err := fmt.Fprintf(m.stdout, "edited %s\n", newPath); err != nil {
 		return err
 	}
-	return m.regen()
+	if err := m.regen(); err != nil {
+		return err
+	}
+	return warnLongRules(m.stderr, []adr.ADR{*parsed})
 }
 
 // editRefList resolves a retirement-ref facet: unset keeps the record's

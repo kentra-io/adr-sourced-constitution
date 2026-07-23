@@ -50,12 +50,13 @@ stderr 'the "## Rules" section appears more than once; a body may carry at most 
 stderr 'must not contain Markdown heading lines'
 ! exists constitution/adr/ADR-0004-heading-rule.md
 
-# --- regen warns (does not block) on a rule text longer than 5 lines ---
+# --- the long-rule warning fires once, at the write that lands the rule
+#     (v0.2 proposal §5) — a later bare regen stays quiet about it ---
 exec constitution adr new --title 'Long rule' --body-file body-long-rule.md
 stderr 'ADR-0004/architecture/long-rule has a 6-line rule text'
 exec constitution regen
 stdout 'wrote'
-stderr 'ADR-0004/architecture/long-rule has a 6-line rule text'
+! stderr 'long-rule has a 6-line rule text'
 grep '### long-rule' constitution/constitution.md
 
 -- constitution.yml --

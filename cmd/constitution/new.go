@@ -109,5 +109,8 @@ func runNew(cmd *cli.Command) error {
 		return err
 	}
 
-	return m.regen()
+	if err := m.regen(); err != nil {
+		return err
+	}
+	return warnLongRules(m.stderr, []adr.ADR{*parsed})
 }
