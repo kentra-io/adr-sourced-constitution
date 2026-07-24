@@ -1,6 +1,6 @@
 # `adr-sourced-constitution` — Design Specification
 
-*Generated: 2026-07-01. Reframed 2026-07-02 as a **standalone, general-purpose SDD primitive** (was: a Spec-Kit-bound harness module). Status: **DESIGN — pending user review.** Companion to [planning.md](./planning.md) (§6b, §7, §8), [mvp-plan.md](./mvp-plan.md) (Phase 1), [observability.md](./observability.md).*
+*Generated: 2026-07-01. Reframed 2026-07-02 as a **standalone, general-purpose SDD primitive** (was: a Spec-Kit-bound harness module). Status: **IMPLEMENTED — v0.1 shipped, v0.2 M1–M4 shipped 2026-07-23.** Kept as the original design document. Companion to [planning.md](./planning.md) (§6b, §7, §8), [mvp-plan.md](./mvp-plan.md) (Phase 1), [observability.md](./observability.md).*
 
 > **What this document is.** The buildable design of **`adr-sourced-constitution`** — a standalone primitive that models a project's governing "constitution" (its principles + accumulated architectural decisions — the *HOW* of the project) as an **event-sourced projection of an immutable ADR log**, deterministically rendered to a plain `constitution.md` that **any** SDD tool can consume. It ships as a **Go CLI + agent-agnostic skills + thin per-framework adapters**, integrating by default via a dedicated folder + an agent-instructions pointer. Produced through a structured grill/brainstorm + a cross-framework deep-research run (2026-07-01/02). Every decision carries its rationale; deferred items are flagged, not dropped.
 

@@ -52,8 +52,9 @@ for linux/darwin/windows × amd64/arm64. Pick the channel for your environment:
 ## Status
 
 The [design](./adr-sourced-constitution.md) and [v1 build plan](./implementation-plan.md)
-are implemented and released (v0.1.0). The deferred **code-validation** sweep
-(README use #3) is the remaining roadmap item.
+are implemented and shipped through v0.2 (M1–M4 merged 2026-07-23, plugin 0.2.0;
+v0.1.1 is the latest git tag — v0.2.0 not yet tagged). The deferred **code-validation**
+sweep (README use #3) is the remaining roadmap item.
 
 ## License
 
