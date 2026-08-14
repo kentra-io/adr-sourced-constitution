@@ -76,6 +76,28 @@ earn its place in the config or the founding file:
    issue"). **Note the limitation honestly:** `init` always writes
    `sourceTracking.type: none` regardless of the answer — tell them you'll
    set `type:`/`pattern:` *after* init, since that's config, not the log.
+
+   `type:` accepts **exactly four values** — copy one verbatim, never invent a
+   value from the human's wording (`github` is not legal; `github-issue` is):
+
+   | They answer | `type:` | default `pattern:` | example `--source` |
+   | --- | --- | --- | --- |
+   | GitHub issues | `github-issue` | `#\d+` | `#42` |
+   | Jira | `jira` | `[A-Z]+-\d+` | `PROJ-42` |
+   | Something else (Linear, a wiki, …) | `generic` | none — **any non-empty string passes** | `LIN-42`, `conversation` |
+   | Nothing / don't force it | `none` | n/a | must be omitted |
+
+   Setting `pattern:` overrides the default for any type; leave it `""` to keep
+   the default. Under `generic` an empty pattern enforces *nothing* beyond
+   non-emptiness — if they want real enforcement, give them `github-issue`/`jira`
+   or an explicit `pattern:`.
+
+   **State this consequence before they choose, because it is not reversible by
+   a process rule:** the source contract is enforced by the CLI, not by
+   convention. Any type other than `none` makes `--source` **mandatory** on
+   every future `adr new`/`supersede`, and under `none` passing `--source` is
+   **rejected**. There is no "optional citation" setting — declining a standing
+   rule about citing issues does not make `--source` optional.
 2. **Agent targets.** What agents/tools do you build for — Claude Code,
    other agent frameworks, both? → `--target claude`, `--target agents`, or
    both (the default).
@@ -205,16 +227,23 @@ mutating command to an `allowed-tools` list, and never wrap/`eval` the prompt.
 
 ## Verify and hand off
 
-1. Run `constitution guard` — it should report clean.
-2. `cat constitution/constitution.md` and show the human the render:
+1. If they asked for issue tracking, edit `constitution.yml`'s
+   `sourceTracking` block now — set `type:` to one of the four legal values
+   from interview question 1 (`none`/`generic`/`github-issue`/`jira`) and an
+   optional `pattern:`. Future ADRs will then require `--source`.
+2. Run `constitution guard` — it should report clean. **Run it after the
+   config edit, not before**: `constitution.yml` is hand-written here, so this
+   is the only check that the value you typed is actually legal. An invalid
+   `type:` does not fail at edit time — it fails on the *next* command the
+   human runs, long after this flow has handed off. If guard reports
+   `field "sourceTracking.type": must be one of …`, you invented a value; fix
+   it against the table and re-run.
+3. `cat constitution/constitution.md` and show the human the render:
    rule-bearing entries grouped by category, one section per category.
    Record-only principles are correctly absent — they live in
    `constitution/adr/` only. If every principle was record-only or a bet, the
    file shows the `No standing rules yet.` placeholder, which is the right
    outcome, not a bug.
-3. If they asked for issue tracking, edit `constitution.yml`'s
-   `sourceTracking` block now (set `type:` and an optional `pattern:`) —
-   future ADRs will then require `--source`.
 4. Point them at `adr-draft` for new decisions and `constitution-gov` for
    planning governance. Close by restating: **the constitution is still
    draft** — `adr edit`/`adr rm` keep changes cheap — until stage 2's research
@@ -225,6 +254,11 @@ mutating command to an `allowed-tools` list, and never wrap/`eval` the prompt.
 
 - Never run `constitution init` more than once in this flow.
 - Never hand-edit `constitution/adr/` or `constitution/constitution.md`.
+- Never invent a `constitution.yml` value from the human's phrasing. Every
+  field there is a closed vocabulary validated by the CLI, so a plausible-
+  sounding guess (`type: github`) is not a near-miss — it breaks every
+  subsequent command with a validation error. Copy the exact value from the
+  table in interview question 1, then prove it with `constitution guard`.
 - Never write the founding file, or run any command, before the human has
   confirmed its exact content.
 - Never pre-approve or bypass a mutating command's consent prompt.
