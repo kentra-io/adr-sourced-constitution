@@ -1,0 +1,327 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/kentra-io/milestoned-plan-dag/main/schema/plan.schema.json
+#
+# Addresses issues #18, #19, #20 as one change.
+#
+# Decisions locked before authoring (they resolve the forks the issues leave open):
+#
+#   #20(a) ADR shaping      — ONE founding ADR carrying every rule. It is an
+#                             ordinary ADR with no new type, no frontmatter
+#                             field, no reserved-identity mechanism: `init`
+#                             only seeds on an empty log (init.go:298) and
+#                             adr.NextID returns 1 there, so the founding ADR
+#                             IS ADR-0001 deterministically. Nothing in the
+#                             system needs to identify it at runtime.
+#
+#   #20(b) record-only/bets — the founding file becomes an ADR *body*, the
+#                             exact artefact `adr new --body-file` already
+#                             accepts. ExtractSections is permissive about
+#                             which headings appear (body.go:16), so bets live
+#                             as an ordinary non-mandatory prose section of the
+#                             founding ADR: durable in the log, never rendered.
+#                             This supersedes the issue's `## category` /
+#                             `### slug` proposal — the `##` overload it
+#                             describes was caused by the MULTI-principle
+#                             founding file, and one ADR removes it outright.
+#
+#   #20(2) the preamble     — stays tool-oriented and unchanged. It explains
+#                             what a constitution is; that is its job and it
+#                             should read the same in every repo. Project
+#                             purpose is content, so it goes through the log
+#                             as rules under the `purpose` category (already
+#                             first in starterCategories, init.go:23). The
+#                             hardcoded `(architecture, mapping, testing,
+#                             process)` parenthetical is knowingly left alone.
+#
+#   #18 scope               — `config schema`, `config set`, and
+#                             `init --source-tracking/--source-pattern` are IN.
+#                             schemaVersion discipline + the v0.1 `phase`
+#                             migration are OUT of this plan.
+#                             No self-governance ADR: code and docs only.
+#
+#   #19 draft lifecycle     — "draft until complete, then immutable" already
+#                             exists as ADR-0013's repo-wide `phase: draft` ->
+#                             `constitution seal` (seal.go:15-21). No per-ADR
+#                             draft state and no `-Draft` filename suffix: IDs
+#                             are `ADR-NNNN` by format, rules are addressed as
+#                             `ADR-NNNN/<category>/<slug>`, and guard has
+#                             dedicated rename detection. The gap is that the
+#                             skill buries this at SKILL.md:144 — M6 fixes the
+#                             teaching, not the mechanism.
+#
+schemaVersion: 0.1.0
+
+milestones:
+  - number: 1
+    slug: config-schema-command
+    goal: Expose the constitution.yml vocabulary as machine-readable JSON via `constitution config schema`
+    deliverables:
+      create:
+        - "internal/config/schema.go — `Schema() []Field` and `Field{Key, Type, Required, Default, Values, Doc}`: the single source of the config vocabulary, built from the same constants `Config.validate` enforces, so a skill can read the enum instead of remembering it"
+        - internal/config/schema_test.go — proves Schema() and Config.validate cannot disagree in either direction
+        - cmd/constitution/config.go — `configCommand()` (the `config` command group) and `runConfigSchema`, printing Schema() as indented JSON to stdout
+        - cmd/constitution/config_test.go — unit coverage for the schema subcommand's output shape
+        - cmd/constitution/testdata/script/config_schema.txtar — end-to-end testscript for `constitution config schema`
+      modify:
+        - cmd/constitution/main.go — register the `config` command group alongside the existing verbs
+    contract:
+      check: go build ./... && go vet ./... && golangci-lint run && go test ./...
+      criteria:
+        - name: internal/config/schema_test.go::TestSchemaEnumsAcceptedByValidator
+          given: every value that Schema() declares for an enumerated field (sourceTracking.type, consent.policy, phase, agentInstructions.targets, skills.trees)
+          when: a Config carrying that value is run through Config.validate
+          then: validation accepts it, so the published schema can never advertise a value the validator rejects
+        - name: internal/config/schema_test.go::TestSchemaRejectsUndeclaredEnumValue
+          given: "a value absent from a field's declared Values — specifically sourceTracking.type 'github', the exact value that caused issue #17"
+          when: a Config carrying it is run through Config.validate
+          then: validation rejects it, so the published schema can never omit a value the validator would accept
+        - name: cmd/constitution/testdata/script/config_schema.txtar
+          given: a repo with a valid constitution.yml
+          when: the command `constitution config schema` runs
+          then: it exits 0 and emits JSON listing sourceTracking.type's four values (none, generic, github-issue, jira) and phase's two (draft, sealed)
+      paths:
+        - internal/config/**
+        - cmd/constitution/config.go
+        - cmd/constitution/config_test.go
+        - cmd/constitution/main.go
+        - cmd/constitution/testdata/script/config_schema.txtar
+    steps:
+      - "[ ] Add internal/config/schema.go: a Field descriptor type and Schema() returning one entry per config field, sourcing every enum from the existing package constants (validSourceTrackingTypes, validTargets, validSkillTrees, the Phase and Consent consts) rather than re-listing them"
+      - "[ ] Add internal/config/schema_test.go with the two round-trip tests: every declared value validates, and a known-illegal value does not"
+      - "[ ] Add cmd/constitution/config.go with the `config` command group and its `schema` subcommand, writing indented JSON to cmd.Root().Writer"
+      - "[ ] Register the group in cmd/constitution/main.go"
+      - "[ ] Add the config_schema.txtar testscript"
+
+  - number: 2
+    slug: config-set-command
+    goal: Add `constitution config set <key> <value>` so no skill ever serializes YAML by hand
+    depends-on:
+      - config-schema-command
+    deliverables:
+      create:
+        - cmd/constitution/testdata/script/config_set.txtar — end-to-end testscript covering a legal set, an illegal enum value, and a governed-key refusal
+      modify:
+        - "cmd/constitution/config.go — add `configSetCommand()` and `runConfigSet`: load the config, apply one dotted key, re-validate the WHOLE resulting Config, and only then write it atomically"
+        - cmd/constitution/config_test.go — refusal and round-trip coverage
+    contract:
+      check: go build ./... && go vet ./... && golangci-lint run && go test ./...
+      criteria:
+        - name: cmd/constitution/config_test.go::TestConfigSetRejectsIllegalEnumValue
+          given: a repo whose constitution.yml is valid, and the command `config set sourceTracking.type github`
+          when: it runs
+          then: it exits 2 naming the four legal values, and constitution.yml is byte-identical to before — the failure is at the point of the write, not on some later command
+        - name: cmd/constitution/config_test.go::TestConfigSetRefusesGovernedKeys
+          given: the commands `config set phase sealed`, `config set categories architecture`, and `config set schemaVersion 2`
+          when: each runs
+          then: each exits 2 and names the correct owning verb instead — `constitution seal` for phase, `adr new --new-category` for categories, and no writer at all for schemaVersion
+        - name: cmd/constitution/testdata/script/config_set.txtar
+          given: a repo initialized with sourceTracking.type none
+          when: the command `constitution config set sourceTracking.type github-issue` runs, followed by `constitution guard`
+          then: the set exits 0, constitution.yml reloads cleanly, and guard reports clean
+      paths:
+        - cmd/constitution/config.go
+        - cmd/constitution/config_test.go
+        - cmd/constitution/testdata/script/config_set.txtar
+    steps:
+      - "[ ] Define the settable key allow-list — consent.policy, sourceTracking.type, sourceTracking.pattern, agentInstructions.targets, skills.trees — and the refusal set with its redirect messages (phase -> seal, categories -> adr new --new-category, schemaVersion -> not settable)"
+      - "[ ] Implement runConfigSet: load, apply, re-validate the whole Config, atomic write via internal/atomicwrite; a refusal writes nothing"
+      - "[ ] Leave config set OUT of the consent gate, matching init — the gate covers log mutation (adr new/edit/rm, supersede, deprecate, seal), and config is not the log"
+      - "[ ] Add the refusal + round-trip unit tests"
+      - "[ ] Add the config_set.txtar testscript"
+
+  - number: 3
+    slug: init-source-tracking-flags
+    goal: "Let `init` write sourceTracking from flags, deleting the hand-edit that caused issue #17"
+    depends-on:
+      - config-set-command
+    deliverables:
+      create:
+        - cmd/constitution/testdata/script/init_source_tracking.txtar — end-to-end testscript for init with source tracking enabled
+      modify:
+        - "cmd/constitution/init.go — add `--source-tracking` and `--source-pattern` flags and feed them into buildOrLoadConfig, replacing the hardcoded `SourceTracking{Type: config.SourceTrackingNone}` at init.go:195"
+        - cmd/constitution/init_test.go — coverage for the new flags and their usage errors
+    contract:
+      check: go build ./... && go vet ./... && golangci-lint run && go test ./...
+      criteria:
+        - name: cmd/constitution/init_test.go::TestInitWritesConfiguredSourceTracking
+          given: a fresh repo and `constitution init --source-tracking github-issue`
+          when: init completes
+          then: the written constitution.yml carries sourceTracking.type github-issue, so no post-init edit is needed to enable source tracking
+        - name: cmd/constitution/init_test.go::TestInitRejectsUnknownSourceTrackingValue
+          given: "a fresh repo and `constitution init --source-tracking github` (the illegal near-miss from issue #17)"
+          when: init runs
+          then: it exits 2 naming the four legal values and no constitution.yml is written, so an invalid value can never reach disk
+        - name: cmd/constitution/init_test.go::TestInitRejectsSourcePatternWithoutTracking
+          given: the command `constitution init --source-pattern '#\d+'` with no --source-tracking, or with --source-tracking none
+          when: init runs
+          then: it exits 2 explaining that a pattern is meaningless under type none, and nothing is written
+        - name: cmd/constitution/testdata/script/init_source_tracking.txtar
+          given: the command `constitution init --source-tracking jira --founding-file <body>` in a fresh repo
+          when: it runs, followed by `constitution guard`
+          then: "the seeded founding ADR carries the reserved `source: bootstrap` value (which bypasses the pattern check, init.go:310-313) and guard reports clean"
+      paths:
+        - cmd/constitution/init.go
+        - cmd/constitution/init_test.go
+        - cmd/constitution/testdata/script/init_source_tracking.txtar
+    steps:
+      - "[ ] Add the two flags to initCommand() with usage text naming the four legal types"
+      - "[ ] Validate both in buildOrLoadConfig before any bytes hit disk (exit 2 on an unknown type, and on a pattern given without a non-none type)"
+      - "[ ] Replace the hardcoded Type: none at init.go:195 with the resolved values"
+      - "[ ] Confirm the existing `source: bootstrap` branch at init.go:310-313 now actually fires at init time, and cover it in the testscript"
+      - "[ ] Add the three unit tests and the testscript"
+
+  - number: 4
+    slug: founding-file-is-an-adr-body
+    goal: Make the founding file an ordinary ADR body and delete init's bespoke founding grammar
+    depends-on:
+      - init-source-tracking-flags
+    deliverables:
+      modify:
+        - cmd/constitution/init.go — `--founding-file` now takes exactly what `adr new --body-file` takes; delete parseFoundingFile, the `principle` type, gatherPrinciples, foundingBody and foundingLabel; seed exactly one ADR whose body is the file verbatim; validate through the shared body path so valid-on-write and valid-on-read cannot drift; keep the category-vocabulary check at init.go:354-360; rewrite the command Description at init.go:38-49, which currently documents the removed grammar
+        - cmd/constitution/init_test.go — replace the removed-grammar tests with body-shape tests
+        - cmd/constitution/testdata/script/init_founding_file.txtar — rewrite against the new input shape
+        - "cmd/constitution/testdata/script/init_founding_blank_title.txtar — rework: there is no founding title to be blank any more, so this becomes a malformed-body case"
+      test:
+        - cmd/constitution/testdata/script/init_founding_body.txtar — proves a non-mandatory prose section survives into the log and never renders
+    contract:
+      check: go build ./... && go vet ./... && golangci-lint run && go test ./...
+      criteria:
+        - name: cmd/constitution/init_test.go::TestInitSeedsOneFoundingADRFromBody
+          given: a founding file that is a MADR body whose `## Rules` section spans two categories with two rules each
+          when: init runs on a fresh repo
+          then: exactly one ADR exists, it is ADR-0001, and it carries all four rules under both categories — one founding ADR, not one per principle
+        - name: cmd/constitution/init_test.go::TestInitRejectsFoundingBodyMissingMandatorySection
+          given: a founding file with no `## Decision Outcome`
+          when: init runs
+          then: it exits 2 naming the missing section and nothing is written, using the same body validator `adr new` uses rather than an init-specific error path
+        - name: cmd/constitution/testdata/script/init_founding_body.txtar
+          given: a founding body carrying a `## Deferred bets` prose section alongside its mandatory sections and its `## Rules` section
+          when: init runs and renders
+          then: the bets section is preserved verbatim in constitution/adr/ADR-0001-*.md and is absent from constitution/constitution.md — bets are durable in the log and never projected
+      paths:
+        - cmd/constitution/init.go
+        - cmd/constitution/init_test.go
+        - cmd/constitution/testdata/script/init_founding_*.txtar
+    steps:
+      - "[ ] Replace gatherPrinciples/parseFoundingFile with a single read of the founding file as an ADR body, validated through the same path as `adr new --body-file`"
+      - "[ ] Reduce seedFounding to composing one ADR around that body, keeping the empty-log guard (init.go:298) and the category-vocabulary check (init.go:354-360)"
+      - "[ ] Delete the `principle` type, foundingBody and foundingLabel, and with them the two bespoke parser errors at init.go:445-455 that only existed to disambiguate the `## Rules` overload"
+      - "[ ] Rewrite the initCommand Description (init.go:38-49) to describe an ADR body, and note that non-mandatory prose sections are preserved but never rendered"
+      - "[ ] Delete cmd/constitution/testdata/script/init_founding_rule_first_heading.txtar — the error it asserts no longer exists"
+      - "[ ] Rework init_founding_blank_title.txtar and init_founding_file.txtar against the new input shape; add init_founding_body.txtar for the bets-section case"
+
+  - number: 5
+    slug: realistic-founding-fixture
+    goal: Add a realistic full-project fixture and judge the render against it
+    depends-on:
+      - founding-file-is-an-adr-body
+    deliverables:
+      create:
+        - "internal/render/testdata/golden/realistic/ — input ADRs plus the expected constitution.md, modelled on the kafka-dq founding interview in issue #20's appendix A"
+        - cmd/constitution/testdata/script/init_founding_realistic.txtar — the same content driven end to end through `constitution init`
+      modify:
+        - internal/render/golden_test.go — register the new fixture
+    contract:
+      check: go build ./... && go vet ./... && golangci-lint run && go test ./...
+      criteria:
+        - name: internal/render/golden_test.go::TestGoldenRealisticProject
+          given: a fixture of several multi-rule, multi-category ADRs spanning at least five categories, with at least two record-only ADRs and paragraph-length rule text — none of which any existing fixture combines
+          when: the projection is rendered
+          then: the output matches the checked-in golden byte for byte
+        - name: cmd/constitution/testdata/script/init_founding_realistic.txtar
+          given: the realistic founding body passed to `constitution init`
+          when: init runs and renders
+          then: constitution.md groups rules under the configured categories in config order, record-only content is absent, and `constitution guard` reports clean
+      paths:
+        - internal/render/testdata/golden/realistic/**
+        - internal/render/golden_test.go
+        - cmd/constitution/testdata/script/init_founding_realistic.txtar
+    steps:
+      - "[ ] Author the fixture from issue #20's appendix A: at least five categories, several ADRs carrying rules in more than one category, two or more record-only ADRs, rule text at real paragraph length"
+      - "[ ] Generate the golden with the existing -update flow and READ the rendered output before committing it — this fixture exists to be judged by reading, per #20's acceptance"
+      - "[ ] Register the fixture in golden_test.go"
+      - "[ ] Add the end-to-end testscript driving the same content through init"
+
+  - number: 6
+    slug: interview-restructure
+    goal: Rewrite constitution-init's interview onto the Found/Validate/Settle roadmap and the new founding grammar
+    depends-on:
+      - founding-file-is-an-adr-body
+    deliverables:
+      create:
+        - skill_doc_test.go — package constitution, at the repo root so it can read SkillsFS; structural assertions on the shipped skill text
+      modify:
+        - skills/constitution-init/SKILL.md — the full rewrite described in the steps
+    contract:
+      check: go build ./... && go vet ./... && golangci-lint run && go test ./...
+      criteria:
+        - name: skill_doc_test.go::TestConstitutionInitTeachesFoundValidateSettle
+          given: skills/constitution-init/SKILL.md as read from the embedded SkillsFS
+          when: its headings are scanned in document order
+          then: "the roadmap section naming Found, Validate and Settle appears BEFORE the interview question catalog — the ordering defect issue #19 opens with"
+        - name: skill_doc_test.go::TestConstitutionInitDropsStaleGrammarAndHandEdits
+          given: the same embedded SKILL.md
+          when: it is scanned for the superseded instructions
+          then: it no longer tells the agent to hand-edit constitution.yml, and no longer documents the multi-principle founding grammar (one principle per `## ` heading with an attached `## Rules` block)
+        - name: skill_doc_test.go::TestConstitutionInitElicitsPurpose
+          given: the same embedded SKILL.md
+          when: the question catalog is read
+          then: "it contains an explicit question eliciting what the project is for — the gap issue #19 names, where `purpose` shipped in the starter vocabulary but nothing ever asked for it"
+      paths:
+        - skills/constitution-init/**
+        - skill_doc_test.go
+    steps:
+      - "[ ] Move the roadmap above the question catalog and make it a spoken preamble delivered before question one"
+      - "[ ] Rename the roadmap's three moments to Found / Validate / Settle; keep numbers for the interview's own parts only; do not reuse `phase`, which constitution.yml already owns"
+      - "[ ] Add the bridging sentence: part 3 asks what is already decided and surfaces what is still a bet; settled answers become rules now, bets stay recorded until Validate and are promoted during Settle"
+      - "[ ] Restructure the catalog into three announced parts: (1) logistics — issue tracking, agent targets, spec process; (2) business purpose and product, carrying SEVERAL questions; (3) technical architecture bounded to what is already settled"
+      - "[ ] Actually elicit purpose in part 2, and say that settled purpose lands as rules under the `purpose` category"
+      - "[ ] Remove the old Q5 recurring-hows, or reduce it to an optional settled-conventions-only prompt"
+      - "[ ] Add the fourth triage outcome — record nothing, it was background — and state that most part-2 material is context rather than ADR material"
+      - "[ ] State that this is high-level context, not requirements elicitation"
+      - "[ ] Rewrite the founding-file section: the founding file is an ADR body, seeding ONE founding ADR; bets go in a non-mandatory prose section that is durable in the log and never rendered"
+      - "[ ] Rewrite the projection-model section (currently SKILL.md:49-66) against the same grammar"
+      - "[ ] Replace the constitution.yml hand-edit instructions with `init --source-tracking/--source-pattern` and `constitution config set`, and replace the hand-copied four-row enum table with `constitution config schema`"
+      - "[ ] Teach draft/seal as the enforcement of Found -> Validate -> Settle: the log stays mutable via `adr edit`/`adr rm` while `phase: draft`, and `constitution seal` is the explicit human act that makes it immutable"
+      - "[ ] Add skill_doc_test.go with the three structural assertions"
+
+  - number: 7
+    slug: ship-docs-and-plugin-bump
+    goal: Bump the plugin version and sync every doc that still teaches the removed grammar or the hand-edit
+    depends-on:
+      - realistic-founding-fixture
+      - interview-restructure
+    deliverables:
+      modify:
+        - ".claude-plugin/plugin.json — bump version from 0.2.1; `claude plugin update` diffs this field, not content, so a bundled-skill edit that ships without a bump never reaches installed copies (precedent: #17 shipped only after 2379bde)"
+        - README.md — founding-file description and any config hand-edit guidance
+        - skills/adr-draft/SKILL.md — config vocabulary guidance now points at `constitution config schema`
+        - skills/constitution-gov/SKILL.md — same, plus the draft/seal wording
+        - adr-sourced-constitution.md — spec text describing the founding-file format
+        - implementation-plan.md — status note recording that the founding file is now an ADR body
+        - skill_doc_test.go — add the version and doc-sweep assertions
+    contract:
+      check: go build ./... && go vet ./... && golangci-lint run && go test ./...
+      criteria:
+        - name: skill_doc_test.go::TestPluginVersionAheadOfLastRelease
+          given: .claude-plugin/plugin.json
+          when: its version field is parsed and compared against 0.2.1, the version that shipped the skills this change rewrites
+          then: it is strictly greater, so the bundled-skill edits cannot ship inert
+        - name: skill_doc_test.go::TestNoShippedDocTeachesTheRemovedFoundingGrammar
+          given: README.md, adr-sourced-constitution.md, and all four skills/*/SKILL.md files
+          when: each is scanned for the superseded instructions
+          then: none describes a multi-principle founding file with an attached `## Rules` block, and none instructs a direct edit of constitution.yml
+      paths:
+        - .claude-plugin/plugin.json
+        - README.md
+        - adr-sourced-constitution.md
+        - implementation-plan.md
+        - skills/adr-draft/**
+        - skills/constitution-gov/**
+        - skill_doc_test.go
+    steps:
+      - "[ ] Bump .claude-plugin/plugin.json to 0.3.0 — the founding-file input shape is a breaking change for anyone scripting against it"
+      - "[ ] Sweep README.md and adr-sourced-constitution.md for the removed founding grammar and rewrite those passages"
+      - "[ ] Update skills/adr-draft/SKILL.md and skills/constitution-gov/SKILL.md to point at `constitution config schema` instead of restating the vocabulary"
+      - "[ ] Add a status note to implementation-plan.md recording the founding-file change and the new config command group"
+      - "[ ] Leave docs/proposal-v0.2-next-iteration.md alone — it is a historical proposal, not live guidance"
+      - "[ ] Add the two doc-sweep assertions to skill_doc_test.go"

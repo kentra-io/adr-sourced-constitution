@@ -52,6 +52,11 @@ func renderFixture(t *testing.T, name string) []byte {
 //     (plan §2.12 category omission).
 //   - empty: no active ADR is rule-bearing (one record-only accepted, one
 //     deprecated rule) — the placeholder form (plan §2.12).
+//
+// realistic (a full-project founding log modelled on the kafka-dq founding
+// interview) has its own TestGoldenRealisticProject below, rather than
+// joining this loop, since it's asserted separately per the milestone
+// contract.
 func TestGolden(t *testing.T) {
 	for _, name := range []string{"fixture1", "empty"} {
 		t.Run(name, func(t *testing.T) {
@@ -110,5 +115,33 @@ func TestGoldenFixture1Determinism(t *testing.T) {
 		if !bytes.Equal(got, first) {
 			t.Fatalf("render.Render is nondeterministic: run %d differs from run 0", i)
 		}
+	}
+}
+
+// TestGoldenRealisticProject is the M5 realistic-fixture DoD: a
+// full-project founding log modelled on the kafka-dq founding interview
+// (issue #20 appendix A), combining several fixture properties none of
+// fixture1/empty combine — 9 ADRs spanning 5 categories (purpose,
+// architecture, testing, tooling, process), three ADRs carrying rules in
+// more than one category (ADR-0003 architecture+tooling, ADR-0004
+// architecture+testing, ADR-0005 process+tooling), 3 record-only ADRs
+// (ADR-0007..0009), and paragraph-length rule text throughout — asserting
+// the projection matches a checked-in golden byte for byte.
+func TestGoldenRealisticProject(t *testing.T) {
+	got := renderFixture(t, "realistic")
+
+	golden := filepath.Join("testdata", "golden", "realistic", "constitution", "constitution.md")
+	if *update {
+		if err := os.WriteFile(golden, got, 0o644); err != nil {
+			t.Fatalf("write golden: %v", err)
+		}
+	}
+
+	want, err := os.ReadFile(golden)
+	if err != nil {
+		t.Fatalf("read golden: %v (run go test -update to create it)", err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Errorf("rendered output does not match golden %s\n--- got ---\n%s\n--- want ---\n%s", golden, got, want)
 	}
 }

@@ -10,10 +10,18 @@ exitcode 2 constitution init --founding-file principles.md --category architectu
 stderr 'rule category "bogus" is not in the configured vocabulary \[architecture process\]'
 
 # no founding ADR was seeded
-! exists constitution/adr/ADR-0001-p.md
+! exists constitution/adr/ADR-0001-founding-constitution.md
 
 -- principles.md --
-## P
+## Context and Problem Statement
+
+x
+
+## Considered Options
+
+- a
+
+## Decision Outcome
 
 The body.
 

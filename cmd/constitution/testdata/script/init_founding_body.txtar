@@ -1,0 +1,48 @@
+# A founding body may carry non-mandatory prose sections beyond the MADR
+# mandatory set and '## Rules' — e.g. a "## Deferred bets" section recording
+# open research bets alongside the founding decisions. ExtractSections is
+# permissive about which headings appear (body.go), so such a section is
+# preserved verbatim in the log (constitution/adr/ADR-0001-*.md) but is never
+# rendered into constitution/constitution.md — bets are durable, never
+# projected (milestone #4, plan-wide decision #20(b)).
+
+env CONSTITUTION_TODAY=2026-07-02
+
+exec constitution init --founding-file founding.md --target claude
+
+grep 'Deferred bets' constitution/adr/ADR-0001-founding-constitution.md
+grep 'Transport stays an open research bet until stage-2 lands.' constitution/adr/ADR-0001-founding-constitution.md
+grep 'Hexagonal core.' constitution/adr/ADR-0001-founding-constitution.md
+
+# the bets section is durable in the log but never projected.
+! grep 'Deferred bets' constitution/constitution.md
+! grep 'Transport stays an open research bet' constitution/constitution.md
+grep 'Hexagonal core.' constitution/constitution.md
+
+exec constitution guard
+stdout 'clean'
+
+-- founding.md --
+## Context and Problem Statement
+
+Established at project bootstrap by `constitution init`.
+
+## Considered Options
+
+- Adopt this founding decision
+- Leave the convention implicit
+
+## Decision Outcome
+
+Hexagonal core.
+
+## Rules
+
+### architecture
+
+#### hex-core
+Hexagonal core.
+
+## Deferred bets
+
+Transport stays an open research bet until stage-2 lands.

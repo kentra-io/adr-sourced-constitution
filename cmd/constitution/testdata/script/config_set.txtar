@@ -1,0 +1,57 @@
+# `constitution config set` end-to-end (issue #18): set a legal
+# constitution.yml key without hand-serializing YAML, then prove the
+# rewritten config reloads cleanly by running a real read-path command
+# against it — plus an illegal enum value and a governed-key refusal, both
+# proven to write nothing.
+
+exec constitution config set sourceTracking.type github-issue
+stdout 'set sourceTracking.type = github-issue'
+grep 'type: github-issue' constitution.yml
+
+# constitution.yml reloads cleanly and the log still guards clean.
+exec constitution guard
+stdout 'guard: clean'
+
+# Snapshot the now-legal-set config: the two refusals below must leave it
+# byte-identical to THIS state, not the original one.
+cp constitution.yml constitution.yml.snapshot
+
+# --- illegal enum value: exit 2, naming the legal values, nothing written ---
+! exec constitution config set sourceTracking.type github
+stderr 'field "sourceTracking\.type": must be one of "none", "generic", "github-issue", "jira" \(got "github"\)'
+cmp constitution.yml constitution.yml.snapshot
+
+# --- governed-key refusal: phase belongs to `constitution seal`, nothing written ---
+! exec constitution config set phase sealed
+stderr 'not settable via config set; use constitution seal instead'
+cmp constitution.yml constitution.yml.snapshot
+
+-- constitution.yml --
+schemaVersion: 1
+phase: draft
+consent:
+  policy: off
+sourceTracking:
+  type: none
+categories:
+  - architecture
+
+-- constitution/adr/ADR-0001-first.md --
+---
+id: ADR-0001
+title: First
+date: 2026-07-01
+status: accepted
+---
+
+## Context and Problem Statement
+
+x
+
+## Considered Options
+
+- a
+
+## Decision Outcome
+
+y

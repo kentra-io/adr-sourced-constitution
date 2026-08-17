@@ -53,8 +53,15 @@ for linux/darwin/windows × amd64/arm64. Pick the channel for your environment:
 
 The [design](./adr-sourced-constitution.md) and [v1 build plan](./implementation-plan.md)
 are implemented and shipped through v0.2 (M1–M4 merged 2026-07-23, plugin 0.2.0;
-v0.1.1 is the latest git tag — v0.2.0 not yet tagged). The deferred **code-validation**
-sweep (README use #3) is the remaining roadmap item.
+v0.1.1 is the latest git tag — v0.2.0 not yet tagged). A follow-on change
+(issues #18–#20, plugin 0.3.0) replaced the founding file's original
+one-ADR-per-principle grammar with a single MADR body — the same shape
+`adr new --body-file` takes — so `init` now always seeds exactly one founding
+ADR (`ADR-0001`); it also added a `constitution config` command group
+(`config schema` to introspect the `constitution.yml` vocabulary, `config set`
+to change one key atomically) so no skill ever hand-edits `constitution.yml`.
+The deferred **code-validation** sweep (README use #3) is the remaining
+roadmap item.
 
 ## License
 

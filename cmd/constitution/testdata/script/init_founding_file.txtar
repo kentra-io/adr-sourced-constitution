@@ -1,36 +1,39 @@
-# `--founding-file` seeds one founding ADR per '## ' heading: the heading is
-# the ADR title, the text beneath it is the Decision Outcome. A '## Rules'
-# heading immediately following a principle carries that principle's standing
-# rules in the '### <category>' / '#### <slug>' grammar, making the founding
-# ADR rule-bearing (its rules project into constitution.md); a principle with
-# no '## Rules' is a catalog-only record (plan §2.12). Under the default
-# sourceTracking.type (none) they carry no source field (plan §2.8).
+# `--founding-file` takes exactly what `adr new --body-file` takes: a MADR
+# body (the '## ' sections). init seeds it verbatim as the single founding
+# ADR, ADR-0001 (milestone #4 — the pre-v0.2 one-ADR-per-'## '-heading
+# grammar is gone). A '## Rules' section in the body makes the founding ADR
+# rule-bearing (its rules project into constitution.md); under the default
+# sourceTracking.type (none) it carries no source field (plan §2.8).
 
 env CONSTITUTION_TODAY=2026-07-02
 
-exec constitution init --founding-file principles.md --target claude
-stdout 'created .*ADR-0001-tests-are-mandatory\.md'
-stdout 'created .*ADR-0002-small-focused-prs\.md'
+exec constitution init --founding-file founding.md --target claude
+stdout 'created .*ADR-0001-founding-constitution\.md'
 
-! grep 'source:' constitution/adr/ADR-0001-tests-are-mandatory.md
-grep 'Every change ships with tests, no exceptions.' constitution/adr/ADR-0001-tests-are-mandatory.md
-grep 'Keep pull requests focused and small.' constitution/adr/ADR-0002-small-focused-prs.md
+! grep 'source:' constitution/adr/ADR-0001-founding-constitution.md
+grep 'Every change ships with tests, no exceptions.' constitution/adr/ADR-0001-founding-constitution.md
 
-# ADR-0001 has a '## Rules' section -> rule-bearing -> its rule projects
-# under the rule's slug heading.
-grep '## Rules' constitution/adr/ADR-0001-tests-are-mandatory.md
-grep '#### tests-required' constitution/adr/ADR-0001-tests-are-mandatory.md
+# the body's '## Rules' section makes ADR-0001 rule-bearing -> its rule
+# projects under the rule's slug heading.
+grep '## Rules' constitution/adr/ADR-0001-founding-constitution.md
+grep '#### tests-required' constitution/adr/ADR-0001-founding-constitution.md
 grep 'Every change ships with tests.' constitution/constitution.md
 grep '### tests-required' constitution/constitution.md
-# ADR-0002 has no '## Rules' -> record-only -> stays in the log, does not project.
-! grep '## Rules' constitution/adr/ADR-0002-small-focused-prs.md
-! grep 'Small focused PRs' constitution/constitution.md
 
 exec constitution guard
 stdout 'clean'
 
--- principles.md --
-## Tests are mandatory
+-- founding.md --
+## Context and Problem Statement
+
+Established at project bootstrap by `constitution init`.
+
+## Considered Options
+
+- Adopt this founding decision
+- Leave the convention implicit
+
+## Decision Outcome
 
 Every change ships with tests, no exceptions.
 
@@ -40,7 +43,3 @@ Every change ships with tests, no exceptions.
 
 #### tests-required
 Every change ships with tests.
-
-## Small focused PRs
-
-Keep pull requests focused and small.

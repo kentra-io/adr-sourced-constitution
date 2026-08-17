@@ -1,22 +1,31 @@
 # A founding-file rule entry ('#### <slug>') with no text is a hard error
 # (exit 2), not a silently-dropped rule: rule input is validated, never
-# silently swallowed. So is a present-but-empty '## Rules' section. The
-# message names the offending rule/section. Nothing is seeded.
+# silently swallowed. So is a present-but-empty '## Rules' section. Both are
+# caught by the same body validator `adr new --body-file` uses. The message
+# names the offending rule/section. Nothing is seeded.
 
 env CONSTITUTION_TODAY=2026-07-02
 
 # --- '#### <slug>' with no text beneath it ---
 exitcode 2 constitution init --founding-file principles.md
 stderr 'rule "testing/no-text" has no text'
-! exists constitution/adr/ADR-0001-tests-are-mandatory.md
+! exists constitution/adr/ADR-0001-founding-constitution.md
 
 # --- '## Rules' present but empty ---
 exitcode 2 constitution init --founding-file empty-rules.md
 stderr 'the "## Rules" section is present but empty'
-! exists constitution/adr/ADR-0001-tests-are-mandatory.md
+! exists constitution/adr/ADR-0001-founding-constitution.md
 
 -- principles.md --
-## Tests are mandatory
+## Context and Problem Statement
+
+x
+
+## Considered Options
+
+- a
+
+## Decision Outcome
 
 Every change ships with tests.
 
@@ -27,7 +36,15 @@ Every change ships with tests.
 #### no-text
 
 -- empty-rules.md --
-## Tests are mandatory
+## Context and Problem Statement
+
+x
+
+## Considered Options
+
+- a
+
+## Decision Outcome
 
 Every change ships with tests.
 

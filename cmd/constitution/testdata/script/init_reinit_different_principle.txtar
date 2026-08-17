@@ -1,28 +1,51 @@
-# Founding-ADR seeding is a one-time bootstrap action: a re-init of a repo whose
-# log already has ADRs is a no-op on the log, even when --founding-file names
-# a DIFFERENT principle. No new ADR is seeded, the existing one is untouched,
-# and init still exits 0 (it just refreshes integration).
+# Founding-ADR seeding is a one-time bootstrap action: a re-init of a repo
+# whose log already has ADRs is a no-op on the log, even when --founding-file
+# points at a file with completely different content. (Pre-milestone-#4 this
+# was framed as "a different principle" — per-heading founding files no
+# longer exist, so the scenario is now "different founding-file content";
+# the underlying re-init idempotency it proves is unchanged.) No new ADR is
+# seeded, the existing one is byte-identical, and init still exits 0 (it
+# just refreshes integration).
 
 env CONSTITUTION_TODAY=2026-07-02
 
 exec constitution init --founding-file first.md --target claude
-exists constitution/adr/ADR-0001-first-principle.md
-cp constitution/adr/ADR-0001-first-principle.md snap.adr
+exists constitution/adr/ADR-0001-founding-constitution.md
+grep 'The first statement.' constitution/adr/ADR-0001-founding-constitution.md
+cp constitution/adr/ADR-0001-founding-constitution.md snap.adr
 
 # re-init with a totally different founding file
 exec constitution init --founding-file second.md --target claude
 stdout 'init: constitution ready'
 
-# no second founding ADR seeded on a non-empty log; the log is unchanged
-! exists constitution/adr/ADR-0002-totally-different-principle.md
-cmp constitution/adr/ADR-0001-first-principle.md snap.adr
+# the log is unchanged: the second file's content never landed, and no
+# second founding ADR was seeded (init only ever seeds ADR-0001)
+! grep 'A completely different statement.' constitution/adr/ADR-0001-founding-constitution.md
+cmp constitution/adr/ADR-0001-founding-constitution.md snap.adr
+! exists constitution/adr/ADR-0002-founding-constitution.md
 
 -- first.md --
-## First principle
+## Context and Problem Statement
+
+x
+
+## Considered Options
+
+- a
+
+## Decision Outcome
 
 The first statement.
 
 -- second.md --
-## Totally different principle
+## Context and Problem Statement
 
-A different statement.
+x
+
+## Considered Options
+
+- a
+
+## Decision Outcome
+
+A completely different statement.

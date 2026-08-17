@@ -1,11 +1,14 @@
 # The founding lifecycle end-to-end (v0.2 proposal §3 acceptance — the
 # kafka-dq wipe, replayed as CLI verbs instead of rm -rf): init founds in
-# draft; a welded tech bet is dropped with one `adr edit`; a dead-end
-# supersede chain is undone with `adr rm` (heal) and the dead end removed;
-# `seal` baselines; after seal the draft verbs refuse and change flows
-# through supersede; guard stays green throughout and the from-empty replay
-# (delete every projection, regen) converges. Consent policy stays strict —
-# every mutation runs non-TTY with --approve, the sanctioned agent path.
+# draft with a single founding ADR (milestone #4 — the founding file is an
+# ADR body, not one heading per principle); a second ADR is added via the
+# ordinary `adr new` path; a welded tech bet is dropped with one `adr edit`;
+# a dead-end supersede chain is undone with `adr rm` (heal) and the dead end
+# removed; `seal` baselines; after seal the draft verbs refuse and change
+# flows through supersede; guard stays green throughout and the from-empty
+# replay (delete every projection, regen) converges. Consent policy stays
+# strict — every mutation runs non-TTY with --approve, the sanctioned agent
+# path.
 
 env CONSTITUTION_TODAY=2026-07-10
 exec constitution init --founding-file founding.md
@@ -13,9 +16,13 @@ stdout 'phase is draft'
 grep 'phase: draft' constitution.yml
 ! exists constitution/adr/.manifest.sha256
 grep 'Hexagonal core\.' constitution/constitution.md
+
+# --- a second decision, added the ordinary way (not seeded by init — init
+#     only ever seeds the single founding ADR, ADR-0001) ---
+exec constitution adr new --title 'Transport choice' --body-file transport.md --approve
 grep 'welded to RabbitMQ' constitution/adr/ADR-0002-transport-choice.md
 
-# --- wipe #1 replay: the tech bet welded into a founding ADR is dropped by
+# --- wipe #1 replay: the tech bet welded into ADR-0002 is dropped by
 #     editing that ADR, not by wiping the repo ---
 exec constitution adr edit ADR-0002 --body-file transport-revised.md --approve
 stdout 'edited'
@@ -66,7 +73,16 @@ exec constitution guard
 stdout 'guard: clean'
 
 -- founding.md --
-## Hexagonal architecture
+## Context and Problem Statement
+
+Established at project bootstrap by `constitution init`.
+
+## Considered Options
+
+- Adopt a hexagonal architecture
+- Leave the architecture unstated
+
+## Decision Outcome
 
 Hexagonal core.
 
@@ -77,7 +93,16 @@ Hexagonal core.
 #### hex-core
 Hexagonal core.
 
-## Transport choice
+-- transport.md --
+## Context and Problem Statement
+
+x
+
+## Considered Options
+
+- a
+
+## Decision Outcome
 
 The service is welded to RabbitMQ for all transport.
 
