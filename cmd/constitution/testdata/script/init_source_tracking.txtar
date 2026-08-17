@@ -1,0 +1,24 @@
+# `constitution init --source-tracking` end-to-end (issues #17/#18/#19/#20):
+# init writes sourceTracking straight from flags — no post-init hand-edit —
+# and the seeded founding ADR carries the reserved `source: bootstrap` value,
+# which bypasses the configured pattern check even though jira's default
+# pattern would otherwise reject a bare title-derived source. guard stays
+# clean afterward.
+
+env CONSTITUTION_TODAY=2026-07-02
+
+exec constitution init --source-tracking jira --founding-file founding.md
+stdout 'init: constitution ready'
+! stderr .
+
+grep 'type: jira' constitution.yml
+
+exec constitution guard
+stdout 'clean'
+
+grep 'source: bootstrap' constitution/adr/ADR-0001-all-code-must-have-tests.md
+
+-- founding.md --
+## All code must have tests
+
+Every change ships with tests, no exceptions.

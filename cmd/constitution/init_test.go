@@ -1,12 +1,18 @@
 package main
 
 import (
+	"bytes"
+	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/urfave/cli/v3"
+
 	"github.com/kentra-io/adr-sourced-constitution/internal/adr"
+	"github.com/kentra-io/adr-sourced-constitution/internal/config"
 )
 
 // TestParseFoundingFileValid confirms the happy path: one principle per
@@ -179,5 +185,121 @@ func TestInitFoundingUnknownCategory(t *testing.T) {
 	entries, _ := os.ReadDir(filepath.Join("constitution", "adr"))
 	if len(entries) != 0 {
 		t.Errorf("constitution/adr has %d entries, want none seeded", len(entries))
+	}
+}
+
+// TestInitWritesConfiguredSourceTracking proves `init --source-tracking
+// github-issue` writes that value straight into constitution.yml — no
+// post-init hand-edit needed to enable source tracking (issue #17/#20).
+func TestInitWritesConfiguredSourceTracking(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+
+	if err := runCLI(t, "init", "--source-tracking", "github-issue"); err != nil {
+		t.Fatalf("init --source-tracking github-issue = %v, want nil", err)
+	}
+
+	cfg, err := config.Load(filepath.Join(dir, "constitution.yml"))
+	if err != nil {
+		t.Fatalf("reloading constitution.yml: %v", err)
+	}
+	if cfg.SourceTracking.Type != config.SourceTrackingGitHubIssue {
+		t.Errorf("sourceTracking.type = %q, want %q", cfg.SourceTracking.Type, config.SourceTrackingGitHubIssue)
+	}
+}
+
+// TestInitRejectsUnknownSourceTrackingValue proves the illegal near-miss
+// from issue #17 ("github" instead of "github-issue") is refused at exit 2,
+// naming the four legal values, with no constitution.yml written at all.
+func TestInitRejectsUnknownSourceTrackingValue(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+
+	err := runCLI(t, "init", "--source-tracking", "github")
+	if err == nil {
+		t.Fatal("init --source-tracking github = nil, want error")
+	}
+	if got := exitCode(err); got != 2 {
+		t.Errorf("exitCode = %d, want 2", got)
+	}
+	for _, v := range []string{`"none"`, `"generic"`, `"github-issue"`, `"jira"`} {
+		if !strings.Contains(err.Error(), v) {
+			t.Errorf("error = %q, want it to name legal value %s", err, v)
+		}
+	}
+	if _, statErr := os.Stat(filepath.Join(dir, "constitution.yml")); !os.IsNotExist(statErr) {
+		t.Errorf("constitution.yml exists after a refused init, want nothing written (stat err = %v)", statErr)
+	}
+}
+
+// TestInitRejectsSourcePatternWithoutTracking proves --source-pattern given
+// with no --source-tracking (or with it explicitly "none") is refused at
+// exit 2 — a pattern is meaningless with nothing to check it against — and
+// nothing is written.
+func TestInitRejectsSourcePatternWithoutTracking(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+	}{
+		{"unset", []string{"init", "--source-pattern", `#\d+`}},
+		{"explicit-none", []string{"init", "--source-tracking", "none", "--source-pattern", `#\d+`}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			dir := t.TempDir()
+			t.Chdir(dir)
+
+			err := runCLI(t, c.args...)
+			if err == nil {
+				t.Fatalf("init(%v) = nil, want error", c.args)
+			}
+			if got := exitCode(err); got != 2 {
+				t.Errorf("exitCode = %d, want 2", got)
+			}
+			if !strings.Contains(err.Error(), "source-pattern") || !strings.Contains(err.Error(), `"none"`) {
+				t.Errorf("error = %q, want it to explain --source-pattern is meaningless under type none", err)
+			}
+			if _, statErr := os.Stat(filepath.Join(dir, "constitution.yml")); !os.IsNotExist(statErr) {
+				t.Errorf("constitution.yml exists after a refused init, want nothing written (stat err = %v)", statErr)
+			}
+		})
+	}
+}
+
+// TestInitReinitNoticesIgnoredSourceTrackingFlags proves a re-run against a
+// repo that already has a constitution.yml reports --source-tracking (and
+// --source-pattern) among the ignored flags — the existing config still
+// wins, but the ignoring is honest rather than silent. Without this, the
+// illegal near-miss from issue #17 (--source-tracking github) would exit 0
+// on a re-run with no signal at all, even though nothing was written.
+func TestInitReinitNoticesIgnoredSourceTrackingFlags(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+
+	if err := runCLI(t, "init"); err != nil {
+		t.Fatalf("initial init = %v, want nil", err)
+	}
+	before := mustReadFile(t, "constitution.yml")
+
+	// runCLI (new_test.go) drives run(), which lets cli/v3 default ErrWriter
+	// to the real os.Stderr — fine for the other tests here, which only
+	// check exit codes and disk state, but this test needs to inspect the
+	// notice text, so it builds its own root with ErrWriter captured
+	// (same pattern config_test.go's runConfigSchemaCLI uses for stdout).
+	var stderr bytes.Buffer
+	root := &cli.Command{
+		Name:      "constitution",
+		Writer:    io.Discard,
+		ErrWriter: &stderr,
+		Commands:  []*cli.Command{initCommand()},
+	}
+	if err := root.Run(context.Background(), []string{"constitution", "init", "--source-tracking", "github"}); err != nil {
+		t.Fatalf("re-run init --source-tracking github = %v, want nil (existing config wins, not an error)", err)
+	}
+	if !strings.Contains(stderr.String(), "ignoring") || !strings.Contains(stderr.String(), "--source-tracking") {
+		t.Errorf("stderr = %q, want a notice naming --source-tracking as ignored", stderr.String())
+	}
+	if after := mustReadFile(t, "constitution.yml"); after != before {
+		t.Errorf("constitution.yml changed on a re-run despite existing config winning:\nbefore: %s\nafter:  %s", before, after)
 	}
 }

@@ -54,6 +54,10 @@ func initCommand() *cli.Command {
 			&cli.StringSliceFlag{Name: "skills-tree", Usage: "skills fan-out tree: claude|agents|cursor (repeatable; default: all three)"},
 			&cli.StringSliceFlag{Name: "category", Usage: "category vocabulary entry (repeatable; default: the starter list)"},
 			&cli.StringFlag{Name: "consent", Value: config.ConsentStrict, Usage: "consent policy written to config: strict|off"},
+			&cli.StringFlag{Name: "source-tracking", Value: config.SourceTrackingNone,
+				Usage: "sourceTracking.type written to config: none|generic|github-issue|jira"},
+			&cli.StringFlag{Name: "source-pattern",
+				Usage: "sourceTracking.pattern written to config (only meaningful with --source-tracking other than \"none\")"},
 			&cli.BoolFlag{Name: "force", Usage: "overwrite a managed target that drifted from what init last wrote"},
 		},
 		Action: func(_ context.Context, cmd *cli.Command) error {
@@ -188,18 +192,36 @@ func buildOrLoadConfig(cmd *cli.Command, root string, stderr io.Writer) (cfg *co
 		}
 	}
 
-	return &config.Config{
+	sourceTrackingType := cmd.String("source-tracking")
+	sourcePattern := cmd.String("source-pattern")
+	if sourcePattern != "" && sourceTrackingType == config.SourceTrackingNone {
+		return nil, false, &exitError{
+			err: fmt.Errorf(
+				"init: --source-pattern is meaningless when --source-tracking is %q (or unset): pass a non-%q --source-tracking value",
+				config.SourceTrackingNone, config.SourceTrackingNone),
+			code: 2,
+		}
+	}
+
+	cfg = &config.Config{
 		SchemaVersion:     config.SchemaVersion,
 		AgentInstructions: config.AgentInstructions{Targets: targets},
 		Consent:           config.Consent{Policy: consent},
-		SourceTracking:    config.SourceTracking{Type: config.SourceTrackingNone},
+		SourceTracking:    config.SourceTracking{Type: sourceTrackingType, Pattern: sourcePattern},
 		// A fresh constitution starts in draft (v0.2 proposal A3): founding
 		// is a staged process, and sealing is always an explicit,
 		// human-approved act — init never sells finality.
 		Phase:      config.PhaseDraft,
 		Categories: categories,
 		Skills:     config.Skills{Trees: trees},
-	}, true, nil
+	}
+	// Reuse Config's own validator for sourceTracking.type instead of
+	// hand-listing the four legal values a second time here (issue #17 was
+	// exactly that kind of duplicated vocabulary going stale).
+	if err := cfg.Validate(); err != nil {
+		return nil, false, &exitError{err: fmt.Errorf("init: %w", err), code: 2}
+	}
+	return cfg, true, nil
 }
 
 // noticeIgnoredReinitFlags prints a one-line stderr notice when init is run
@@ -209,7 +231,7 @@ func buildOrLoadConfig(cmd *cli.Command, root string, stderr io.Writer) (cfg *co
 // it just makes the "existing config wins" contract honest rather than silent.
 func noticeIgnoredReinitFlags(cmd *cli.Command, stderr io.Writer) {
 	var ignored []string
-	for _, f := range []string{"target", "skills-tree", "category", "consent"} {
+	for _, f := range []string{"target", "skills-tree", "category", "consent", "source-tracking", "source-pattern"} {
 		if cmd.IsSet(f) {
 			ignored = append(ignored, "--"+f)
 		}
