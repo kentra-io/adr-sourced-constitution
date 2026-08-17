@@ -119,7 +119,12 @@ relax it: you still never pre-approve or route around that harness prompt.
    There is no `--category` flag — categories ride on the rules themselves,
    either as `### <category>` subsections in the body's `## Rules` section or as
    the `<category>` segment of a `--rule "<category>/<slug>: <text>"` flag. Pick
-   the category from the project's configured vocabulary (see `constitution.yml`);
+   the category from the project's configured vocabulary — it's per-project
+   data with no fixed enum (unlike, say, `sourceTracking.type`), so read it
+   straight from `constitution.yml` (see `categories:`); reading the file is
+   fine, only a hand-edit of it is not — config changes go through
+   `constitution config set`, though `categories` specifically grows only via
+   `--new-category` below, never `config set`;
    an unknown category is rejected unless you add `--new-category <name>`, which
    you should only do with the human's explicit say-so. If the project's
    `sourceTracking.type` is not `none`, add `--source <ref>`. For a standing

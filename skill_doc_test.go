@@ -6,7 +6,11 @@
 package constitution
 
 import (
+	"encoding/json"
+	"fmt"
+	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -217,5 +221,242 @@ func TestConstitutionInitElicitsPurpose(t *testing.T) {
 	if !strings.Contains(catalog, "`purpose` category") {
 		t.Errorf("the catalog asks about purpose but never states that a settled answer lands as " +
 			"rules under the `purpose` category (expected the literal phrase \"`purpose` category\")")
+	}
+}
+
+// --- Milestone 7 ("ship-docs-and-plugin-bump"): plugin-version and
+// doc-sweep assertions, added on top of the M6 skill-text checks above. ---
+
+// pluginManifestPath is .claude-plugin/plugin.json — not embedded (SkillsFS
+// only carries skills/), read straight off disk. This package's directory
+// is the repo root, so it's a direct sibling of this test file.
+const pluginManifestPath = ".claude-plugin/plugin.json"
+
+// lastSkillReleaseVersion is the plugin version that shipped the skills
+// this change (issues #18-#20) rewrites (README.md, adr-sourced-constitution.md,
+// skills/adr-draft/SKILL.md, skills/constitution-gov/SKILL.md) — see
+// tasks/lessons "plugin-version-is-the-update-trigger": `claude plugin
+// update` diffs plugin.json's version field, not skill content, so an edit
+// that ships without a version bump past this never reaches an installed
+// copy (precedent: issue #17's fix shipped only after 2379bde bumped 0.2.0
+// -> 0.2.1).
+const lastSkillReleaseVersion = "0.2.1"
+
+// TestPluginVersionAheadOfLastRelease is milestone 7's criterion 1:
+// .claude-plugin/plugin.json's version must be strictly greater than
+// lastSkillReleaseVersion, so the bundled-skill edits in this change cannot
+// ship inert.
+func TestPluginVersionAheadOfLastRelease(t *testing.T) {
+	b, err := os.ReadFile(pluginManifestPath)
+	if err != nil {
+		t.Fatalf("reading %s: %v", pluginManifestPath, err)
+	}
+
+	var manifest struct {
+		Version string `json:"version"`
+	}
+	if err := json.Unmarshal(b, &manifest); err != nil {
+		t.Fatalf("parsing %s: %v", pluginManifestPath, err)
+	}
+	if manifest.Version == "" {
+		t.Fatalf("%s has no \"version\" field", pluginManifestPath)
+	}
+
+	cmp, err := compareSemver(manifest.Version, lastSkillReleaseVersion)
+	if err != nil {
+		t.Fatalf("comparing %s's version %q against %q: %v",
+			pluginManifestPath, manifest.Version, lastSkillReleaseVersion, err)
+	}
+	if cmp <= 0 {
+		t.Errorf("%s version %q is not strictly greater than %q (the version that shipped the "+
+			"skills this change rewrites) — claude plugin update diffs only plugin.json's version "+
+			"field, never skill content, so the bundled-skill edits in this change would ship inert",
+			pluginManifestPath, manifest.Version, lastSkillReleaseVersion)
+	}
+}
+
+// compareSemver compares two plain "major.minor.patch" version strings
+// (missing trailing components treated as 0) and returns -1/0/1 like
+// strings.Compare. No pre-release/build-metadata support — this repo's
+// plugin.json tags are plain semver, nothing fancier is needed.
+func compareSemver(a, b string) (int, error) {
+	pa, err := parseSemverInts(a)
+	if err != nil {
+		return 0, err
+	}
+	pb, err := parseSemverInts(b)
+	if err != nil {
+		return 0, err
+	}
+	for i := 0; i < 3; i++ {
+		if pa[i] != pb[i] {
+			if pa[i] < pb[i] {
+				return -1, nil
+			}
+			return 1, nil
+		}
+	}
+	return 0, nil
+}
+
+func parseSemverInts(v string) ([3]int, error) {
+	var out [3]int
+	parts := strings.Split(strings.TrimSpace(v), ".")
+	if len(parts) == 0 || len(parts) > 3 {
+		return out, fmt.Errorf("version %q must have 1-3 dot-separated integer components", v)
+	}
+	for i, p := range parts {
+		n, err := strconv.Atoi(strings.TrimSpace(p))
+		if err != nil {
+			return out, fmt.Errorf("version %q: component %q is not an integer: %w", v, p, err)
+		}
+		out[i] = n
+	}
+	return out, nil
+}
+
+// docsSweptForRemovedFoundingGrammar names every file milestone 7's
+// criterion 2 scans: README.md and adr-sourced-constitution.md (read
+// straight off disk — this package's directory is the repo root, and
+// neither file lives under skills/, so SkillsFS does not carry them) plus
+// all four skills/*/SKILL.md, read through the embedded SkillsFS so those
+// checks assert on what actually ships in the binary.
+func docsSweptForRemovedFoundingGrammar(t *testing.T) map[string]string {
+	t.Helper()
+	docs := make(map[string]string)
+
+	for _, path := range []string{"README.md", "adr-sourced-constitution.md"} {
+		b, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("reading %s off disk: %v", path, err)
+		}
+		docs[path] = string(b)
+	}
+
+	for _, skill := range []string{"adr-draft", "constitution-gov", "plan-gate", "constitution-init"} {
+		path := "skills/" + skill + "/SKILL.md"
+		b, err := SkillsFS.ReadFile(path)
+		if err != nil {
+			t.Fatalf("reading %s from the embedded SkillsFS: %v", path, err)
+		}
+		docs[path] = string(b)
+	}
+
+	return docs
+}
+
+// staleFoundingGrammarMarkers are substrings that only ever appear when a
+// doc describes the pre-M4 multi-principle founding-file grammar — the
+// exact grammar M4 deleted (parseFoundingFile, the principle type,
+// gatherPrinciples, foundingBody, foundingLabel): one principle per
+// "## <title>" heading, each optionally followed by its own attached
+// "## Rules" block, one ADR seeded per principle. Mirrors the marker list
+// TestConstitutionInitDropsStaleGrammarAndHandEdits already uses for
+// constitution-init/SKILL.md, applied here to every doc in scope. None of
+// the docs in scope need these markers to describe that grammar even
+// historically — adr-sourced-constitution.md §7's account of what M2/M3
+// shipped points at the current (M4-M6) description instead of restating
+// the old mechanics, specifically so this stays a safe, unambiguous
+// absence check.
+var staleFoundingGrammarMarkers = []string{
+	"one principle per",
+	"attached `## Rules`",
+	"attached ## Rules",
+	"per principle",
+}
+
+// staleFoundingGrammarSeedsPerPrinciple catches the "one ADR per principle"
+// idea by shape rather than exact phrase (init used to seed one ADR per
+// principle; it now always seeds exactly one, total).
+var staleFoundingGrammarSeedsPerPrinciple = regexp.MustCompile(`(?i)seeds? (one|a) (founding )?ADR per (each )?principle`)
+
+// supersededHandEditInstructionMarkers are literal phrases, matched
+// case-sensitively against whitespace-normalized doc text, that this repo's
+// real history shows were once genuine instructions to hand-edit
+// constitution.yml — not a general "sounds like an instruction" classifier,
+// a plain regression guard against specific known-bad text returning:
+//
+//   - "edit `constitution.yml`'s `sourceTracking` block now" shipped in
+//     skills/constitution-init/SKILL.md until issue #17's fix (commit
+//     905471e) replaced it with a real interview question that states the
+//     legal values instead of telling the model to go write YAML. That file
+//     is separately guarded by TestConstitutionInitDropsStaleGrammarAndHandEdits;
+//     this list extends the identical literal check across every doc in
+//     scope, in case the phrase (or a close cousin of it) crept in
+//     elsewhere.
+//   - The next three markers are milestone 7 (this change)'s own near-miss:
+//     an earlier draft of skills/adr-draft/SKILL.md and
+//     skills/constitution-gov/SKILL.md told the agent to run
+//     `constitution config schema` to learn the project's *category*
+//     vocabulary, and explicitly told it not to read constitution.yml for
+//     that. Verification against the built binary caught that `config
+//     schema`'s `categories` entry carries no `values` array — categories
+//     are per-project data with no closed enum — so that wording pointed an
+//     agent at the one place the answer can never be, while forbidding the
+//     one place it actually lives. These three phrases are that exact
+//     draft's wording, guarded here so it cannot silently return.
+//
+// WHAT THIS TEST DOES AND DOES NOT GUARANTEE: this is a regression guard
+// against these SPECIFIC known-bad phrasings reappearing verbatim (or
+// near-verbatim) — it is NOT a general detector of "does this doc instruct
+// a hand-edit of constitution.yml". A novel, differently-worded hand-edit
+// instruction that matches none of these markers will NOT be caught. An
+// earlier version of this test tried proximity-to-negation-word lexical
+// detection instead; it was dropped because it both let injected
+// instructions through (a trailing "Never" bullet elsewhere in the same doc
+// was enough to whitelist an unrelated injected instruction inside the
+// window) and flagged honest prose with no bearing on our own
+// constitution.yml (the Spec-Kit comparison cell in
+// adr-sourced-constitution.md, which describes a DIFFERENT tool's UX).
+// Catching a genuinely novel hand-edit instruction still requires a human
+// reading the diff — a green run of this test is evidence, not proof, that
+// no doc instructs one.
+var supersededHandEditInstructionMarkers = []string{
+	"edit `constitution.yml`'s `sourceTracking` block now",
+	"run `constitution config schema` to see it",
+	"never hand-read `constitution.yml` for this",
+	"`constitution config schema` for the current vocabulary — never a hand-edit",
+}
+
+// TestNoShippedDocTeachesTheRemovedFoundingGrammar is milestone 7's
+// criterion 2: none of README.md, adr-sourced-constitution.md, or the four
+// skills/*/SKILL.md files may still describe the removed multi-principle
+// founding-file grammar (staleFoundingGrammarMarkers /
+// staleFoundingGrammarSeedsPerPrinciple — a safe absence check, since no doc
+// in scope needs those phrases even to describe the grammar historically:
+// adr-sourced-constitution.md §7 points at the current description instead
+// of restating the old mechanics), or reintroduce one of this repo's
+// specific known-bad hand-edit instructions
+// (supersededHandEditInstructionMarkers — see that var's doc comment for
+// exactly what this test does and does not guarantee about hand-edit
+// instructions in general).
+func TestNoShippedDocTeachesTheRemovedFoundingGrammar(t *testing.T) {
+	docs := docsSweptForRemovedFoundingGrammar(t)
+
+	for path, doc := range docs {
+		normalized := strings.Join(strings.Fields(doc), " ")
+
+		for _, marker := range staleFoundingGrammarMarkers {
+			if strings.Contains(normalized, marker) {
+				t.Errorf("%s still contains %q, a marker of the removed multi-principle "+
+					"founding-file grammar (one principle per heading, one attached ## Rules "+
+					"block per principle, one ADR seeded per principle) — --founding-file now "+
+					"takes a single MADR body and init seeds exactly one founding ADR (ADR-0001)",
+					path, marker)
+			}
+		}
+		if staleFoundingGrammarSeedsPerPrinciple.MatchString(normalized) {
+			t.Errorf("%s still describes seeding one ADR per principle; init now seeds exactly "+
+				"one founding ADR (ADR-0001) total", path)
+		}
+
+		for _, marker := range supersededHandEditInstructionMarkers {
+			if strings.Contains(normalized, marker) {
+				t.Errorf("%s contains %q, a known-bad instruction to hand-edit constitution.yml "+
+					"(see supersededHandEditInstructionMarkers for why this exact phrase is "+
+					"guarded) — reading constitution.yml is fine, but nothing should tell an "+
+					"agent to write it directly", path, marker)
+			}
+		}
 	}
 }

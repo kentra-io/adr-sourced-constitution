@@ -75,15 +75,31 @@ check, not ignore.
 
 ## Phase note
 
-`constitution.yml` carries `phase: draft | sealed`. While `phase: draft`, the
-log is still a mutable working set — `adr edit`/`adr rm` are legitimate CLI
-paths for fixing a wrong entry, still gated by the same human consent as every
-other write, and the guard only checks parse validity, id uniqueness, and the
-category vocabulary. Once `constitution seal` runs, the log is append-only
-forever: edit/rm are refused, supersede/deprecate are the only paths, and the
-full guard semantics apply. The non-negotiable rules above hold in **both**
-phases without exception — draft is a looser change surface, not a suspension
-of governance.
+`constitution.yml` carries `phase: draft | sealed` — the one config field
+`constitution config set` refuses to touch; the only way to flip it is
+`constitution seal` (consent-gated). While `phase: draft`, the log is still a
+mutable working set — `adr edit`/`adr rm` are legitimate CLI paths for fixing
+a wrong entry, still gated by the same human consent as every other write, and
+the guard only checks parse validity, id uniqueness, and the category
+vocabulary — per-project data with no fixed enum, so read it straight from
+`constitution.yml` (see `categories:`); reading the file is fine, only a
+hand-edit of it is not. Once `constitution seal` runs, the log is
+append-only forever: edit/rm are refused, supersede/deprecate are the only
+paths, and the full guard semantics apply. The non-negotiable rules above
+hold in **both** phases without exception — draft is a looser change
+surface, not a suspension of governance.
+
+Every other config key (`consent.policy`, `sourceTracking.type`,
+`sourceTracking.pattern`, `agentInstructions.targets`, `skills.trees`) is
+settable in either phase via `constitution config set <key> <value>` —
+validated and written atomically, never a hand-edit; `categories` grows only
+via `adr new --new-category`, never `config set`. Config changes are not
+consent-gated (config is not the ADR log), unlike everything in
+"Non-negotiable rules" above. Closed config-value enums (e.g.
+`sourceTracking.type`'s legal values) come from `constitution config
+schema` — that command does not, however, list the category vocabulary,
+which is per-project data with no fixed enum; read that from
+`constitution.yml` as above.
 
 Under the strict consent policy in a non-interactive shell, the interactive
 `[y/N]` prompt always fails closed; `--approve` is the sanctioned path there,
