@@ -52,8 +52,8 @@ for linux/darwin/windows × amd64/arm64. Pick the channel for your environment:
 ## Status
 
 The [design](./adr-sourced-constitution.md) and [v1 build plan](./implementation-plan.md)
-are implemented and shipped through v0.2 (M1–M4 merged 2026-07-23, plugin 0.2.0;
-v0.1.1 is the latest git tag — v0.2.0 not yet tagged). A follow-on change
+are implemented and shipped through v0.2 (M1–M4 merged 2026-07-23, released as
+tag `v0.2.0` on 2026-08-11). A follow-on change released as `v0.3.0`
 (issues #18–#20, plugin 0.3.0) replaced the founding file's original
 one-ADR-per-principle grammar with a single MADR body — the same shape
 `adr new --body-file` takes — so `init` now always seeds exactly one founding
