@@ -12,7 +12,7 @@ cp CLAUDE.md snap.claude
 cp AGENTS.md snap.agents
 cp constitution/.state snap.state
 cp constitution/constitution.md snap.md
-cp constitution/adr/ADR-0001-idempotent-principle.md snap.adr
+cp constitution/adr/ADR-0001-founding-constitution.md snap.adr
 cp .claude/skills/adr-draft/SKILL.md snap.skill.claude
 cp .agents/skills/plan-gate/SKILL.md snap.skill.agents
 cp .cursor/skills/constitution-gov/SKILL.md snap.skill.cursor
@@ -29,15 +29,25 @@ cmp CLAUDE.md snap.claude
 cmp AGENTS.md snap.agents
 cmp constitution/.state snap.state
 cmp constitution/constitution.md snap.md
-cmp constitution/adr/ADR-0001-idempotent-principle.md snap.adr
+cmp constitution/adr/ADR-0001-founding-constitution.md snap.adr
 cmp .claude/skills/adr-draft/SKILL.md snap.skill.claude
 cmp .agents/skills/plan-gate/SKILL.md snap.skill.agents
 cmp .cursor/skills/constitution-gov/SKILL.md snap.skill.cursor
 
-# no second founding ADR was seeded (idempotent seeding)
-! exists constitution/adr/ADR-0002-idempotent-principle.md
+# no second founding ADR was seeded (idempotent seeding — init only ever
+# seeds the single founding ADR, ADR-0001)
+! exists constitution/adr/ADR-0002-founding-constitution.md
 
 -- founding.md --
-## Idempotent principle
+## Context and Problem Statement
+
+Established at project bootstrap by `constitution init`.
+
+## Considered Options
+
+- Adopt this founding decision
+- Leave the convention implicit
+
+## Decision Outcome
 
 The founding statement.

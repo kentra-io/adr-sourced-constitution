@@ -16,9 +16,18 @@ grep 'type: jira' constitution.yml
 exec constitution guard
 stdout 'clean'
 
-grep 'source: bootstrap' constitution/adr/ADR-0001-all-code-must-have-tests.md
+grep 'source: bootstrap' constitution/adr/ADR-0001-founding-constitution.md
 
 -- founding.md --
-## All code must have tests
+## Context and Problem Statement
+
+Established at project bootstrap by `constitution init`.
+
+## Considered Options
+
+- Adopt this founding decision
+- Leave the convention implicit
+
+## Decision Outcome
 
 Every change ships with tests, no exceptions.

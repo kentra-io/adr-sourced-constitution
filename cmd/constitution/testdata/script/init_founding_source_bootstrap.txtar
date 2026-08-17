@@ -1,18 +1,17 @@
 # When source tracking IS enabled (sourceTracking.type != none), founding ADRs
 # seeded by init carry the reserved `bootstrap` source — the counterpart to
 # init_happy/init_founding_file, which cover the default `none` case (no source
-# field). init cannot set the tracking type via a flag, so we pre-place a config
-# with type: generic; init loads it (existing config wins) and seeds against it.
-# `bootstrap` is a reserved value that bypasses the configured pattern check,
-# and regen + guard stay clean.
+# field). We pre-place a config with type: generic; init loads it (existing
+# config wins) and seeds against it. `bootstrap` is a reserved value that
+# bypasses the configured pattern check, and regen + guard stay clean.
 
 env CONSTITUTION_TODAY=2026-07-02
 
 exec constitution init --founding-file founding.md
 stdout 'init: constitution ready'
 
-grep 'status: accepted' constitution/adr/ADR-0001-all-code-must-have-tests.md
-grep 'source: bootstrap' constitution/adr/ADR-0001-all-code-must-have-tests.md
+grep 'status: accepted' constitution/adr/ADR-0001-founding-constitution.md
+grep 'source: bootstrap' constitution/adr/ADR-0001-founding-constitution.md
 
 exec constitution regen
 ! stderr .
@@ -20,7 +19,16 @@ exec constitution guard
 stdout 'clean'
 
 -- founding.md --
-## All code must have tests
+## Context and Problem Statement
+
+Established at project bootstrap by `constitution init`.
+
+## Considered Options
+
+- Adopt this founding decision
+- Leave the convention implicit
+
+## Decision Outcome
 
 Every change ships with tests, no exceptions.
 

@@ -11,7 +11,7 @@ stdout 'init: constitution ready'
 
 # --- scaffold structure ---
 exists constitution.yml
-exists constitution/adr/ADR-0001-all-code-must-have-tests.md
+exists constitution/adr/ADR-0001-founding-constitution.md
 exists constitution/constitution.md
 exists constitution/.state
 ! exists constitution/adr/.manifest.sha256
@@ -39,9 +39,9 @@ grep 'governing constitution and takes precedence' AGENTS.md
 
 # --- founding ADR is a real MADR record; under default sourceTracking.type
 #     (none) it carries NO source field (plan §2.8: none ⇒ no source allowed) ---
-grep 'status: accepted' constitution/adr/ADR-0001-all-code-must-have-tests.md
-! grep 'source:' constitution/adr/ADR-0001-all-code-must-have-tests.md
-grep '## Decision Outcome' constitution/adr/ADR-0001-all-code-must-have-tests.md
+grep 'status: accepted' constitution/adr/ADR-0001-founding-constitution.md
+! grep 'source:' constitution/adr/ADR-0001-founding-constitution.md
+grep '## Decision Outcome' constitution/adr/ADR-0001-founding-constitution.md
 
 # --- the skill stub has its invocation stance ---
 grep 'disable-model-invocation: true' .claude/skills/plan-gate/SKILL.md
@@ -53,6 +53,15 @@ exec constitution guard
 stdout 'clean'
 
 -- founding.md --
-## All code must have tests
+## Context and Problem Statement
+
+Established at project bootstrap by `constitution init`.
+
+## Considered Options
+
+- Adopt this founding decision
+- Leave the convention implicit
+
+## Decision Outcome
 
 Every change ships with tests, no exceptions.

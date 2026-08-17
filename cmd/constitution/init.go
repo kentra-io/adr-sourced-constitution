@@ -22,9 +22,17 @@ import (
 // (plan §2.5) — a suggestion only, overridable with repeated --category.
 var starterCategories = []string{"purpose", "architecture", "code-style", "testing", "process", "tooling", "security", "data"}
 
+// foundingTitle is the fixed title of the single ADR init seeds from
+// --founding-file. init only seeds on an empty log (the len(existing) > 0
+// guard in seedFounding), and adr.NextID returns 1 there, so the founding
+// ADR is always ADR-0001 deterministically — nothing needs to identify it
+// beyond that, so its title needs no per-run configurability. This mirrors
+// bootstrapSource: a fixed, reserved value rather than a new flag surface.
+const foundingTitle = "Founding constitution"
+
 // initCommand implements `constitution init` (plan §4). It scaffolds
-// constitution/adr/, writes constitution.yml at the repo root, seeds
-// founding ADRs (source: bootstrap only when source tracking is enabled) via
+// constitution/adr/, writes constitution.yml at the repo root, seeds a
+// founding ADR (source: bootstrap only when source tracking is enabled) via
 // the same internal write path as
 // `adr new`, renders the projection, and writes the managed pointer blocks +
 // fanned-out skills, all drift-protected via constitution/.state. A re-run is
@@ -34,22 +42,25 @@ var starterCategories = []string{"purpose", "architecture", "code-style", "testi
 func initCommand() *cli.Command {
 	return &cli.Command{
 		Name:  "init",
-		Usage: "scaffold a constitution: config, founding ADRs, pointer blocks, skills",
+		Usage: "scaffold a constitution: config, a founding ADR, pointer blocks, skills",
 		Description: "Creates constitution/adr/ and constitution.yml (repo root), seeds a\n" +
-			"founding ADR per section of --founding-file, renders\n" +
+			"single founding ADR (ADR-0001) from --founding-file, renders\n" +
 			"constitution/constitution.md, writes managed pointer blocks into the chosen\n" +
 			"agent-instruction targets (CLAUDE.md, AGENTS.md) and fans the Layer-2 skills\n" +
 			"out to .claude/, .agents/, .cursor/. Re-running is a no-op on a clean tree;\n" +
 			"a target hand-edited since init last wrote it requires --force.\n\n" +
-			"--founding-file format: one principle per '## <title>' heading; the heading\n" +
-			"becomes the ADR title and the text beneath it becomes its Decision Outcome.\n" +
-			"A '## Rules' heading immediately following a principle carries that\n" +
-			"principle's standing rules in the '### <category>' / '#### <slug>' grammar\n" +
-			"(categories must be in the configured vocabulary); a principle with no\n" +
-			"'## Rules' seeds a catalog-only record.",
+			"--founding-file takes exactly what `adr new --body-file` takes: a MADR\n" +
+			"body (the '## ' sections), or - for stdin. It must carry every mandatory\n" +
+			"section (Context and Problem Statement, Considered Options, Decision\n" +
+			"Outcome) and MAY carry a '## Rules' section in the same\n" +
+			"'### <category>' / '#### <slug>' grammar `adr new --rule` composes\n" +
+			"(categories must be in the configured vocabulary), making the founding\n" +
+			"ADR rule-bearing; omitting it seeds a catalog-only record. Any other,\n" +
+			"non-mandatory section (e.g. a prose '## Deferred bets') is preserved\n" +
+			"verbatim in the log but never rendered into constitution.md.",
 		ArgsUsage: " ", // no positional args
 		Flags: []cli.Flag{
-			&cli.StringFlag{Name: "founding-file", Usage: "path to a Markdown file of founding principles (one per '## ' heading)"},
+			&cli.StringFlag{Name: "founding-file", Usage: "path to a MADR body (the ## sections) to seed as the founding ADR (ADR-0001), or - for stdin"},
 			&cli.StringSliceFlag{Name: "target", Usage: "agent-instruction target for the pointer block: claude|agents (repeatable; default: both)"},
 			&cli.StringSliceFlag{Name: "skills-tree", Usage: "skills fan-out tree: claude|agents|cursor (repeatable; default: all three)"},
 			&cli.StringSliceFlag{Name: "category", Usage: "category vocabulary entry (repeatable; default: the starter list)"},
@@ -287,29 +298,19 @@ func normalizeChoices(flag string, given, def []string, allowed map[string]bool)
 	return out, nil
 }
 
-// principle is one founding decision: Title becomes the ADR heading,
-// Statement its Decision Outcome, and Rules the verbatim content of its
-// optional "## Rules" section (the h3/h4 grammar). HasRules distinguishes
-// a catalog-only principle from one whose Rules heading was present but
-// empty — the latter must compose an (invalid) empty section so the
-// grammar rejects it instead of silently seeding a record-only ADR.
-type principle struct {
-	Title     string
-	Statement string
-	Rules     string
-	HasRules  bool
-}
-
-// seedFounding writes one ADR per founding principle — but only on a fresh
-// log (no ADRs yet), so a re-run never double-seeds and the tree stays
-// byte-identical. Reuses the internal write path (id allocation, atomic
-// write); the manifest is refreshed by the regenCore that follows.
+// seedFounding writes the single founding ADR from --founding-file — but
+// only on a fresh log (no ADRs yet), so a re-run never double-seeds and the
+// tree stays byte-identical, and only when --founding-file was given at all
+// (init without one simply scaffolds an empty log). The body is validated
+// through adr.ValidateBody, the exact function `adr new --body-file` uses
+// (composeADRInput, writepath.go), so valid-on-write and valid-on-read can
+// never drift apart; the composed record is then run through the same
+// full-parse the read path uses, exactly like runNew does. Reuses the
+// internal write path (id allocation, atomic write); the manifest is
+// refreshed by the regenCore that follows.
 func seedFounding(cmd *cli.Command, cfg *config.Config, adrDir string, stdout io.Writer) error {
-	principles, err := gatherPrinciples(cmd)
-	if err != nil {
-		return err
-	}
-	if len(principles) == 0 {
+	foundingFile := cmd.String("founding-file")
+	if foundingFile == "" {
 		return nil
 	}
 
@@ -324,6 +325,15 @@ func seedFounding(cmd *cli.Command, cfg *config.Config, adrDir string, stdout io
 		return nil
 	}
 
+	body, err := readBody(foundingFile, os.Stdin)
+	if err != nil {
+		return fmt.Errorf("init: reading --founding-file: %w", err)
+	}
+	const label = "--founding-file"
+	if err := adr.ValidateBody(body, label); err != nil {
+		return &exitError{err: fmt.Errorf("init: %w", err), code: 2}
+	}
+
 	// Founding ADRs carry the reserved `bootstrap` source ONLY when source
 	// tracking is enabled: under `type: none` no ADR may carry a `source`
 	// field at all (plan §2.8; the "founding ADRs use bootstrap" sentence
@@ -334,19 +344,26 @@ func seedFounding(cmd *cli.Command, cfg *config.Config, adrDir string, stdout io
 		foundingSource = bootstrapSource
 	}
 
-	base, _, err := adr.NextID(adrDir)
+	_, id, err := adr.NextID(adrDir)
 	if err != nil {
 		return err
 	}
+	content := adr.Compose(adr.NewADR{
+		ID:     id,
+		Title:  foundingTitle,
+		Date:   today(),
+		Source: foundingSource,
+		Body:   string(body),
+	})
 
-	// Pre-flight: compose EVERY founding ADR and run it through the same
-	// read-path validator regen uses, before writing any of them. A single
-	// invalid principle (e.g. an empty '## ' heading yielding a blank title,
-	// or a malformed Rules section) must fail here — exit 2, nothing written —
-	// rather than land a poisoned record on disk that makes every later regen
-	// fail. Ids are allocated deterministically from `base` (the log is empty
-	// at this point, guaranteed by the len(existing)>0 guard above).
-	//
+	// Full parse of the composed record: the exact bytes about to be written
+	// must satisfy the read path (rules grammar, frontmatter refs) before
+	// anything else happens — same as runNew.
+	parsed, err := adr.ParseBytesUnnamed(content, label)
+	if err != nil {
+		return &exitError{err: fmt.Errorf("init: invalid %s: %w", label, err), code: 2}
+	}
+
 	// Seed rules may only use categories already in the configured vocabulary
 	// (--category / the starter list): there is no --new-category at init —
 	// the vocabulary was chosen seconds earlier, so an unknown category is a
@@ -355,161 +372,22 @@ func seedFounding(cmd *cli.Command, cfg *config.Config, adrDir string, stdout io
 	for _, c := range cfg.Categories {
 		vocab[c] = true
 	}
-	type seed struct {
-		dest    string
-		content []byte
-	}
-	seeds := make([]seed, len(principles))
-	for i, p := range principles {
-		id := adr.FormatID(base + i)
-		content := adr.Compose(adr.NewADR{
-			ID:     id,
-			Title:  p.Title,
-			Date:   today(),
-			Source: foundingSource,
-			Body:   foundingBody(p),
-		})
-		parsed, err := adr.ParseBytesUnnamed(content, foundingLabel(p.Title))
-		if err != nil {
-			return &exitError{err: fmt.Errorf("init: invalid %s: %w", foundingLabel(p.Title), err), code: 2}
+	for _, r := range parsed.Rules {
+		if !vocab[r.Category] {
+			return &exitError{err: fmt.Errorf(
+				"init: %s: rule category %q is not in the configured vocabulary %v",
+				label, r.Category, cfg.Categories), code: 2}
 		}
-		for _, r := range parsed.Rules {
-			if !vocab[r.Category] {
-				return &exitError{err: fmt.Errorf(
-					"init: %s: rule category %q is not in the configured vocabulary %v",
-					foundingLabel(p.Title), r.Category, cfg.Categories), code: 2}
-			}
-		}
-		seeds[i] = seed{dest: filepath.Join(adrDir, adr.Filename(id, p.Title)), content: content}
 	}
 
-	for i := range seeds {
-		if err := atomicwrite.WriteFile(seeds[i].dest, seeds[i].content, 0o644); err != nil {
-			return fmt.Errorf("init: writing %s: %w", foundingLabel(principles[i].Title), err)
-		}
-		if _, err := fmt.Fprintf(stdout, "created %s\n", seeds[i].dest); err != nil {
-			return err
-		}
+	dest := filepath.Join(adrDir, adr.Filename(id, foundingTitle))
+	if err := atomicwrite.WriteFile(dest, content, 0o644); err != nil {
+		return fmt.Errorf("init: writing %s: %w", label, err)
+	}
+	if _, err := fmt.Fprintf(stdout, "created %s\n", dest); err != nil {
+		return err
 	}
 	return nil
-}
-
-// foundingLabel names a founding principle for error/label text: quoted by
-// its title when it has one, or a bare description when the title is blank
-// (the case pre-flight validation is meant to catch).
-func foundingLabel(title string) string {
-	if t := strings.TrimSpace(title); t != "" {
-		return fmt.Sprintf("founding principle %q", t)
-	}
-	return "founding principle (empty title)"
-}
-
-// gatherPrinciples collects founding principles from --founding-file (one
-// per '## ' heading).
-func gatherPrinciples(cmd *cli.Command) ([]principle, error) {
-	var ps []principle
-	if f := cmd.String("founding-file"); f != "" {
-		data, err := os.ReadFile(f)
-		if err != nil {
-			return nil, fmt.Errorf("init: reading --founding-file: %w", err)
-		}
-		parsed, err := parseFoundingFile(string(data))
-		if err != nil {
-			return nil, &exitError{err: fmt.Errorf("init: --founding-file %s: %w", f, err), code: 2}
-		}
-		ps = append(ps, parsed...)
-	}
-	return ps, nil
-}
-
-// parseFoundingFile splits a founding-principles Markdown file on its '## '
-// headings: any heading starts a new principle (the heading is the title,
-// the text until the next heading is the statement, falling back to the
-// title if empty) — except "## Rules", which attaches its content verbatim
-// as the standing rules of the PRECEDING principle. A "## Rules" that is
-// the first heading, or that follows another "## Rules", has no principle
-// to attach to and is an error. The founding file is not an ADR body, so
-// this deliberately walks raw '## ' lines rather than ExtractSections
-// (whose section map would collapse the duplicate "Rules" headings two
-// rule-bearing principles produce).
-func parseFoundingFile(content string) ([]principle, error) {
-	var ps []principle
-	var body []string
-	cur := -1        // index into ps of the principle being accumulated
-	inRules := false // accumulating a "## Rules" section's content
-
-	// flush assigns the accumulated lines to the current principle's
-	// Statement or Rules, per the section being closed.
-	flush := func() {
-		if cur < 0 {
-			body = nil
-			return
-		}
-		text := strings.TrimSpace(strings.Join(body, "\n"))
-		if inRules {
-			ps[cur].Rules = text
-			ps[cur].HasRules = true
-		} else {
-			ps[cur].Statement = text
-		}
-		body = nil
-	}
-
-	for _, line := range strings.Split(content, "\n") {
-		h, ok := strings.CutPrefix(line, "## ")
-		if !ok {
-			if cur >= 0 {
-				body = append(body, line)
-			}
-			continue
-		}
-		heading := strings.TrimSpace(h)
-		if heading == adr.RulesSection {
-			if cur < 0 {
-				return nil, fmt.Errorf(
-					"\"## Rules\" cannot be the first heading: a Rules section carries the standing rules of the principle heading preceding it")
-			}
-			if inRules {
-				return nil, fmt.Errorf(
-					"\"## Rules\" directly after another \"## Rules\": each principle carries at most one Rules section")
-			}
-			flush()
-			inRules = true
-			continue
-		}
-		flush()
-		inRules = false
-		ps = append(ps, principle{Title: heading})
-		cur = len(ps) - 1
-	}
-	flush()
-
-	if len(ps) == 0 {
-		return nil, fmt.Errorf("no principles found (expected one or more '## ' headings)")
-	}
-	for i := range ps {
-		if ps[i].Statement == "" {
-			ps[i].Statement = ps[i].Title
-		}
-	}
-	return ps, nil
-}
-
-// foundingBody builds a minimal, MADR-valid body (all three mandatory
-// sections) around a principle's statement (its Decision Outcome), plus its
-// "## Rules" section verbatim when the founding file carried one.
-func foundingBody(p principle) string {
-	body := "## Context and Problem Statement\n\n" +
-		"Established at project bootstrap by `constitution init`.\n\n" +
-		"## Considered Options\n\n" +
-		"- Adopt this founding principle\n" +
-		"- Leave the convention implicit\n\n" +
-		"## Decision Outcome\n\n" +
-		p.Statement + "\n"
-	if p.HasRules {
-		body += "\n## " + adr.RulesSection + "\n\n" + p.Rules + "\n"
-	}
-	return body
 }
 
 // interactiveConfirm builds a y/N prompt reader for init's drift confirm on a
