@@ -152,3 +152,43 @@ func TestLoadInvalid(t *testing.T) {
 		})
 	}
 }
+
+// TestValidateRejectsIllegalValue proves the exported in-memory Validate
+// (added for `constitution config set`, which mutates a *Config it hasn't
+// written yet) enforces the same rules as Load: an illegal enum value is
+// rejected, naming the legal values, exactly like Load's own error text.
+func TestValidateRejectsIllegalValue(t *testing.T) {
+	cfg := &Config{
+		SchemaVersion:  SchemaVersion,
+		Phase:          PhaseSealed,
+		Categories:     []string{"architecture"},
+		SourceTracking: SourceTracking{Type: "github"},
+	}
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("Validate() error = nil, want the illegal sourceTracking.type rejected")
+	}
+	want := `field "sourceTracking.type": must be one of "none", "generic", "github-issue", "jira" (got "github")`
+	if !strings.Contains(err.Error(), want) {
+		t.Errorf("Validate() error = %q, want it to contain %q", err.Error(), want)
+	}
+}
+
+// TestValidateAcceptsLegalValue is TestValidateRejectsIllegalValue's
+// control: an otherwise-identical, legal Config passes, and Validate's
+// defaulting side effect (empty consent.policy/sourceTracking.type ->
+// their defaults) still applies in memory, matching Load's behavior.
+func TestValidateAcceptsLegalValue(t *testing.T) {
+	cfg := &Config{
+		SchemaVersion:  SchemaVersion,
+		Phase:          PhaseSealed,
+		Categories:     []string{"architecture"},
+		SourceTracking: SourceTracking{Type: SourceTrackingGitHubIssue},
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v, want nil", err)
+	}
+	if cfg.Consent.Policy != ConsentStrict {
+		t.Errorf("Validate() left Consent.Policy = %q, want the default %q applied", cfg.Consent.Policy, ConsentStrict)
+	}
+}

@@ -141,6 +141,22 @@ func Load(path string) (*Config, error) {
 	return &cfg, nil
 }
 
+// Validate re-runs Config's full validation rules — the same ones Load
+// enforces against a file on disk — against an in-memory Config that has no
+// (or not yet the real) backing file. Used by mutating verbs that build or
+// mutate a Config value before deciding whether to persist it (`constitution
+// config set`): re-validate the WHOLE resulting Config before writing a
+// single byte, so an illegal value never touches the real constitution.yml.
+//
+// Shares validate's one implementation (no rule duplication) and its
+// defaulting side effect: an empty consent.policy/sourceTracking.type is
+// defaulted to "strict"/"none" exactly as Load's defaulting does. Error
+// messages use the literal label "constitution.yml" in place of a real
+// path, since there may be none yet.
+func (c *Config) Validate() error {
+	return c.validate("constitution.yml")
+}
+
 func (c *Config) validate(path string) error {
 	if c.SchemaVersion != SchemaVersion {
 		return fmt.Errorf(
