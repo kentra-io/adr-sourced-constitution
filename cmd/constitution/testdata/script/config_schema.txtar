@@ -1,0 +1,28 @@
+# `constitution config schema` end-to-end (issue #18): print the
+# constitution.yml config vocabulary as machine-readable JSON, so a skill
+# can read the enum instead of hardcoding it (the "github" vs
+# "github-issue" drift that caused issue #17).
+
+exec constitution config schema
+
+# sourceTracking.type's four values are all present.
+stdout '"key": "sourceTracking.type"'
+stdout '"none"'
+stdout '"generic"'
+stdout '"github-issue"'
+stdout '"jira"'
+
+# phase's two values are all present.
+stdout '"key": "phase"'
+stdout '"draft"'
+stdout '"sealed"'
+
+-- constitution.yml --
+schemaVersion: 1
+phase: sealed
+consent:
+  policy: off
+sourceTracking:
+  type: none
+categories:
+  - architecture
