@@ -1,0 +1,264 @@
+# A realistic full-project founding body, modelled on the kafka-dq founding
+# interview (issue #20 appendix A): one MADR body carrying rules across all
+# 5 configured categories (several rules in the same "### architecture"
+# heading, since a single founding ADR may open each category heading only
+# once — v0.2 grammar), plus a non-mandatory "## Deferred bets" section
+# recording three open bets that stay in the log but never project.
+# single-container-packaging is filed under "tooling" (a container-build
+# concern) rather than "architecture" — matching the render golden fixture
+# (internal/render/testdata/golden/realistic) — so this founding ADR's
+# rules span architecture+tooling.
+#
+# The body's "### <category>" headings are deliberately NOT in config
+# order (architecture first, purpose second, ...) so this proves grouping
+# follows the configured category order, not body order (mirrors
+# rules_multi_category.txtar's approach at ADR-new scope, here at init/
+# founding scope).
+
+env CONSTITUTION_TODAY=2026-07-02
+
+exec constitution init --founding-file founding.md --category purpose --category architecture --category testing --category tooling --category process --source-tracking none --target claude
+stdout 'created .*ADR-0001-founding-constitution\.md'
+
+# the deferred bets are durable in the log ...
+grep 'Deferred bets' constitution/adr/ADR-0001-founding-constitution.md
+grep 'Micronaut vs\. Quarkus' constitution/adr/ADR-0001-founding-constitution.md
+grep 'container-local' constitution/adr/ADR-0001-founding-constitution.md
+
+# ... but record-only content never projects.
+! grep 'Deferred bets' constitution/constitution.md
+! grep 'Micronaut' constitution/constitution.md
+! grep 'container-local' constitution/constitution.md
+
+cmp constitution/constitution.md want-constitution.md
+
+exec constitution guard
+stdout 'clean'
+
+-- founding.md --
+## Context and Problem Statement
+
+kafka-dq is being founded: an open-source implementation of Confluent
+Schema Registry Data Quality Rules, evaluated against live Kafka topics to
+track semantic correctness. Recording the project's standing technical
+decisions now — purpose, architecture, testing discipline, tooling
+constraints, and process — means downstream work never has to re-litigate
+them.
+
+## Considered Options
+
+- Leave these decisions implicit and let them emerge ad hoc as the
+  project grows
+- Record them explicitly as the founding ADR, so every future decision
+  starts from a known, citable baseline
+
+## Decision Outcome
+
+Adopt the founding decisions below: conform to Confluent's Data Quality
+Rules semantics, structure the system as a library-first, hexagonal,
+two-application architecture, test it in three tiers, keep dependencies
+redistribution-safe, and run all non-trivial work through spec-lifecycle
+gates.
+
+## Rules
+
+### architecture
+
+#### library-first-engine
+The rule-evaluation engine is a standalone library, consumable
+independently of the Docker deployment, the Kafka runtime, and any JVM
+framework. Kafka, transport, storage, and framework concerns live in
+applications and adapters that depend on the library — never the reverse.
+
+#### two-application-topology
+The engine application and the UI application are separate standalone
+applications. They communicate only via Kafka topics — the engine
+consumes the source topic and publishes violations; the UI consumes the
+violations topic. No shared in-process module and no direct calls between
+them.
+
+#### hexagonal-per-skill
+Every application follows hexagonal architecture per the `java-hexagonal`
+skill. Dependencies point inward; the domain is pure Java with no
+framework imports and no I/O; non-JDK libraries in the domain require an
+explicit ArchUnit whitelist entry. Any framework is confined to the
+composition root, or to a thin framework module delegating to
+framework-free wiring underneath.
+
+### purpose
+
+#### confluent-dq-compatibility
+Implement the semantics of Confluent Schema Registry Data Quality Rules.
+Use CEL (Common Expression Language) as the rule expression syntax. Do not
+introduce a proprietary rule syntax or knowingly diverge from Confluent's
+semantics; where behaviour is ambiguous, follow Confluent's
+implementation.
+
+### process
+
+#### permissive-license
+Release this project under a permissive open-source licence (MIT or
+Apache-2.0).
+
+#### spec-lifecycle-gates
+Take all non-trivial work through spec-lifecycle. Read the relevant
+`openspec/changes/<change>/` artefacts before touching related code, and
+run `lifecycle status` to see gate state. Approve gates only via
+`lifecycle approve` — never by hand-editing `approval-state.json`.
+
+### testing
+
+#### three-tier-test-strategy
+Test in the three tiers the `java-hexagonal` skill defines: per-class
+unit tests where branching exists and for every mapper; domain tests with
+the real object graph and in-memory fakes for outbound ports; integration
+tests with Testcontainers and Awaitility. No DI container and no
+framework test context in any tier.
+
+#### portable-integration-tests
+Integration tests must pass against a standard Docker daemon, not only
+inside a proxied-socket environment. Read container ports at runtime and
+never hardcode them. The `testcontainers-java` skill is authoritative for
+container setup.
+
+### tooling
+
+#### single-container-packaging
+Both applications ship inside a single Docker container so the product
+deploys as one unit. The container build is the single release artefact;
+there is no per-application image and no separate deployment pipeline to
+keep in sync.
+
+#### license-compatible-dependencies
+Every dependency must be compatible with permissive redistribution. Do not
+introduce copyleft (GPL/AGPL/LGPL) or proprietary dependencies.
+
+## Deferred bets
+
+Three items remain open and are recorded here as durable log content, not
+standing rules:
+
+- The JVM framework choice (Micronaut vs. Quarkus) is deferred to
+  stage-2 research. `hexagonal-per-skill` binds the framework to the
+  composition root regardless of which wins.
+- UI persistence stays container-local for now; the datastore choice,
+  durability guarantees, and retention behaviour are unsettled.
+- Library packaging (in-repo module vs. a separately published artefact)
+  is undecided; `library-first-engine` constrains the dependency
+  direction, not the packaging mechanism.
+
+-- want-constitution.md --
+<!--
+  GENERATED FILE -- projection of the ADR log in constitution/adr/.
+  Do not hand-edit; changes will be overwritten by the next "constitution
+  regen". Only the rules (## Rules entries) of active ADRs project here; to
+  change a rule, add, supersede, or deprecate an ADR instead.
+-->
+
+# Constitution
+
+The source of truth for this project's standing technical decisions — how
+recurring problems are solved (architecture, mapping, testing, process) — so
+that requirements can stay functional and need not re-explain implementation
+choices.
+
+## purpose
+
+### confluent-dq-compatibility
+
+Implement the semantics of Confluent Schema Registry Data Quality Rules.
+Use CEL (Common Expression Language) as the rule expression syntax. Do not
+introduce a proprietary rule syntax or knowingly diverge from Confluent's
+semantics; where behaviour is ambiguous, follow Confluent's
+implementation.
+
+ADR-0001 · 2026-07-02
+
+## architecture
+
+### library-first-engine
+
+The rule-evaluation engine is a standalone library, consumable
+independently of the Docker deployment, the Kafka runtime, and any JVM
+framework. Kafka, transport, storage, and framework concerns live in
+applications and adapters that depend on the library — never the reverse.
+
+ADR-0001 · 2026-07-02
+
+### two-application-topology
+
+The engine application and the UI application are separate standalone
+applications. They communicate only via Kafka topics — the engine
+consumes the source topic and publishes violations; the UI consumes the
+violations topic. No shared in-process module and no direct calls between
+them.
+
+ADR-0001 · 2026-07-02
+
+### hexagonal-per-skill
+
+Every application follows hexagonal architecture per the `java-hexagonal`
+skill. Dependencies point inward; the domain is pure Java with no
+framework imports and no I/O; non-JDK libraries in the domain require an
+explicit ArchUnit whitelist entry. Any framework is confined to the
+composition root, or to a thin framework module delegating to
+framework-free wiring underneath.
+
+ADR-0001 · 2026-07-02
+
+## testing
+
+### three-tier-test-strategy
+
+Test in the three tiers the `java-hexagonal` skill defines: per-class
+unit tests where branching exists and for every mapper; domain tests with
+the real object graph and in-memory fakes for outbound ports; integration
+tests with Testcontainers and Awaitility. No DI container and no
+framework test context in any tier.
+
+ADR-0001 · 2026-07-02
+
+### portable-integration-tests
+
+Integration tests must pass against a standard Docker daemon, not only
+inside a proxied-socket environment. Read container ports at runtime and
+never hardcode them. The `testcontainers-java` skill is authoritative for
+container setup.
+
+ADR-0001 · 2026-07-02
+
+## tooling
+
+### single-container-packaging
+
+Both applications ship inside a single Docker container so the product
+deploys as one unit. The container build is the single release artefact;
+there is no per-application image and no separate deployment pipeline to
+keep in sync.
+
+ADR-0001 · 2026-07-02
+
+### license-compatible-dependencies
+
+Every dependency must be compatible with permissive redistribution. Do not
+introduce copyleft (GPL/AGPL/LGPL) or proprietary dependencies.
+
+ADR-0001 · 2026-07-02
+
+## process
+
+### permissive-license
+
+Release this project under a permissive open-source licence (MIT or
+Apache-2.0).
+
+ADR-0001 · 2026-07-02
+
+### spec-lifecycle-gates
+
+Take all non-trivial work through spec-lifecycle. Read the relevant
+`openspec/changes/<change>/` artefacts before touching related code, and
+run `lifecycle status` to see gate state. Approve gates only via
+`lifecycle approve` — never by hand-editing `approval-state.json`.
+
+ADR-0001 · 2026-07-02
