@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -250,4 +251,65 @@ func TestInitReinitNoticesIgnoredSourceTrackingFlags(t *testing.T) {
 	if after := mustReadFile(t, "constitution.yml"); after != before {
 		t.Errorf("constitution.yml changed on a re-run despite existing config winning:\nbefore: %s\nafter:  %s", before, after)
 	}
+}
+
+// assertNoInitTrace proves a refused init left the working tree as it
+// found it. Only files the test wrote itself (founding.md) may remain.
+func assertNoInitTrace(t *testing.T, dir string) {
+	t.Helper()
+	for _, p := range []string{"constitution.yml", "constitution"} {
+		_, err := os.Stat(filepath.Join(dir, p))
+		if err == nil {
+			t.Errorf("%s exists after a refused init; the failure must be atomic", p)
+			continue
+		}
+		if !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("stat %s: %v", p, err)
+		}
+	}
+}
+
+// TestInitWritesNothingWhenAFoundingCategoryIsUnknown is issues
+// #22/#30: init persisted constitution.yml BEFORE validating the
+// founding file's rule categories against the vocabulary it had just
+// written. The refusal then left a config on disk carrying the
+// offending vocabulary, and because a re-run honours an existing
+// config, every retry failed identically — with every documented
+// recovery path closed (no hand-edits, categories not settable via
+// config set, init "exactly once").
+func TestInitWritesNothingWhenAFoundingCategoryIsUnknown(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	founding := foundingMADRBody("Every change ships with tests.",
+		"### testing\n\n#### mandatory-tests\nEvery change ships with tests.")
+	mustWriteFile(t, "founding.md", founding)
+
+	err := runCLI(t, "init", "--category", "purpose", "--category", "architecture",
+		"--founding-file", "founding.md")
+	if err == nil {
+		t.Fatal("init(unknown founding category) = nil, want error")
+	}
+	if got := exitCode(err); got != 2 {
+		t.Errorf("exitCode = %d, want 2", got)
+	}
+	assertNoInitTrace(t, dir)
+}
+
+// TestInitWritesNothingWhenTheFoundingBodyIsMalformed covers the
+// other pre-flight failure on the same path: a body-shape refusal
+// must be just as atomic as a vocabulary one.
+func TestInitWritesNothingWhenTheFoundingBodyIsMalformed(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	mustWriteFile(t, "founding.md",
+		"## Context and Problem Statement\n\nx\n\n## Considered Options\n\n- a\n")
+
+	err := runCLI(t, "init", "--founding-file", "founding.md")
+	if err == nil {
+		t.Fatal("init(malformed founding body) = nil, want error")
+	}
+	if got := exitCode(err); got != 2 {
+		t.Errorf("exitCode = %d, want 2", got)
+	}
+	assertNoInitTrace(t, dir)
 }

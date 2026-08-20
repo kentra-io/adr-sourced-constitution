@@ -9,8 +9,19 @@ env CONSTITUTION_TODAY=2026-07-02
 exitcode 2 constitution init --founding-file principles.md --category architecture --category process
 stderr 'rule category "bogus" is not in the configured vocabulary \[architecture process\]'
 
-# no founding ADR was seeded
+# The refusal is atomic: no config, no log directory, nothing to clean
+# up by hand (issues #22/#30). Before this, constitution.yml landed on
+# disk carrying the trimmed vocabulary and every retry failed
+# identically against it.
 ! exists constitution/adr/ADR-0001-founding-constitution.md
+! exists constitution.yml
+! exists constitution
+
+# ...so re-running with a vocabulary that covers the rule just works.
+exec constitution init --founding-file principles.md --category architecture --category process --category bogus
+stdout 'init: constitution ready'
+exists constitution/adr/ADR-0001-founding-constitution.md
+grep '#### some-rule' constitution/adr/ADR-0001-founding-constitution.md
 
 -- principles.md --
 ## Context and Problem Statement
