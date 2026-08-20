@@ -155,6 +155,24 @@ Check `phase:` in `constitution.yml` before deciding how to fix a wrong ADR.
 - **`phase: sealed`** — the log is append-only forever; `edit`/`rm` are
   refused. `supersede`/`deprecate` are the only change paths from here on.
 
+**`--body-file` replaces your rules.** `adr edit --body-file` swaps the
+*entire* body, so any `## Rules` entry the replacement file does not
+reproduce is **deleted** from the constitution — with no warning at any
+layer. The ADR still validates, `guard` still reports clean, and the
+next `regen` simply drops the rule from `constitution.md`.
+
+For a prose-only fix (a reworded Decision Outcome, a corrected bullet),
+never regenerate the body from memory:
+
+1. Extract the stored body verbatim:
+   `sed -n '/^## /,$p' constitution/adr/<file>.md > /tmp/adr-body.md`
+2. Patch only the section you mean to change.
+3. Diff the two `## Rules` sections and confirm they are
+   **byte-identical** before running the edit.
+
+To change rules deliberately, use `--rule`, which replaces only the
+Rules section and leaves every other section untouched.
+
 ## Retiring a specific rule vs. superseding a whole ADR
 
 Not every fix is whole-ADR. If the new decision replaces or invalidates one or

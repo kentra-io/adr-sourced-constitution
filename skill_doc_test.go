@@ -460,3 +460,26 @@ func TestNoShippedDocTeachesTheRemovedFoundingGrammar(t *testing.T) {
 		}
 	}
 }
+
+// TestAdrDraftSkillWarnsAboutBodyFileRuleReplacement is issue #31:
+// `adr edit --body-file` replaces the ENTIRE body, so any rule the
+// replacement omits is deleted — silently. The ADR still validates,
+// guard still reports clean, and regen simply drops the rule from the
+// projection. The failure is silent at every layer, so the skill that
+// drives the command has to carry the warning.
+func TestAdrDraftSkillWarnsAboutBodyFileRuleReplacement(t *testing.T) {
+	b, err := SkillsFS.ReadFile("skills/adr-draft/SKILL.md")
+	if err != nil {
+		t.Fatalf("reading the adr-draft skill from the embedded SkillsFS: %v", err)
+	}
+	doc := string(b)
+
+	for _, want := range []string{"--body-file", "deleted", "--rule"} {
+		if !strings.Contains(doc, want) {
+			t.Errorf("adr-draft SKILL.md never mentions %q; the --body-file rule-loss hazard is undocumented", want)
+		}
+	}
+	if !strings.Contains(doc, "byte-identical") {
+		t.Error("adr-draft SKILL.md gives no procedure for proving a prose-only edit left the Rules section untouched")
+	}
+}
