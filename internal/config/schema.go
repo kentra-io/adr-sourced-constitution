@@ -16,12 +16,10 @@ type Field struct {
 }
 
 // Schema returns one Field per constitution.yml config field, in Config's
-// declaration order. Every enumerated Values list is derived from the
-// same vocabulary Config.validate enforces — the map-shaped ones
-// (validSourceTrackingTypes, validTargets, validSkillTrees) via
-// sortedKeys, and phase/consent (which validate checks by direct
-// comparison, not a map) from their own Phase/Consent consts — so
-// Schema() can never re-list an enum value out of step with validate.
+// declaration order. Every enumerated Values list is derived via
+// sortedKeys from the same map-shaped vocabulary Config.validate
+// enforces, so Schema() can never re-list an enum value out of step
+// with validate.
 func Schema() []Field {
 	return []Field{
 		{
@@ -42,7 +40,7 @@ func Schema() []Field {
 			Type:     "string",
 			Required: false,
 			Default:  ConsentStrict,
-			Values:   []string{ConsentStrict, ConsentOff},
+			Values:   sortedKeys(validConsentPolicies),
 			Doc:      "Whether mutating verbs require interactive or --approve confirmation (\"strict\") or proceed unattended (\"off\").",
 		},
 		{
@@ -63,7 +61,7 @@ func Schema() []Field {
 			Key:      "phase",
 			Type:     "string",
 			Required: true,
-			Values:   []string{PhaseDraft, PhaseSealed},
+			Values:   sortedKeys(validPhases),
 			Doc:      "The founding phase: \"draft\" (fully mutable working set, no manifest baseline) or \"sealed\" (append-only forever, full guard semantics). No default — sealing is always an explicit, human-approved act.",
 		},
 		{

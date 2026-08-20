@@ -123,6 +123,16 @@ var validSkillTrees = map[string]bool{
 	SkillTreeCursor: true,
 }
 
+var validPhases = map[string]bool{
+	PhaseDraft:  true,
+	PhaseSealed: true,
+}
+
+var validConsentPolicies = map[string]bool{
+	ConsentStrict: true,
+	ConsentOff:    true,
+}
+
 // Load reads and validates constitution.yml at path.
 func Load(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
@@ -179,9 +189,9 @@ func (c *Config) validate(path string) error {
 		seen[cat] = true
 	}
 
-	switch c.Phase {
-	case PhaseDraft, PhaseSealed:
-	case "":
+	switch {
+	case validPhases[c.Phase]:
+	case c.Phase == "":
 		return fmt.Errorf(
 			"%s: field %q: required — add 'phase: sealed' for an existing (append-only) log, or 'phase: draft' for an unsealed one",
 			path, "phase",
@@ -195,7 +205,7 @@ func (c *Config) validate(path string) error {
 
 	if c.Consent.Policy == "" {
 		c.Consent.Policy = ConsentStrict
-	} else if c.Consent.Policy != ConsentStrict && c.Consent.Policy != ConsentOff {
+	} else if !validConsentPolicies[c.Consent.Policy] {
 		return fmt.Errorf(
 			"%s: field %q: must be %q or %q (got %q)",
 			path, "consent.policy", ConsentStrict, ConsentOff, c.Consent.Policy,
