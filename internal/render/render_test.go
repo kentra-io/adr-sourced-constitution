@@ -29,13 +29,13 @@ func newADR(id string, num int, category string, status adr.Status) adr.ADR {
 
 // newRecordADR builds a record-only ADR: it has a Decision Outcome but no
 // rules (hence no category anywhere), so it stays in the log and never
-// projects.
-//
-//nolint:unparam // status is a real fixture-builder parameter (mirrors newADR); every call site currently wants an active record, but that's incidental, not a reason to drop the parameter.
-func newRecordADR(id string, num int, status adr.Status) adr.ADR {
+// projects. It always builds an ACTIVE (accepted) record; a future test
+// needing a non-accepted record should re-add a status parameter rather
+// than work around a fixed one.
+func newRecordADR(id string, num int) adr.ADR {
 	return adr.ADR{
 		ID: id, Num: num, Title: "Title " + id, Date: "2026-07-01",
-		Status: status, Path: "constitution/adr/" + id + "-x.md",
+		Status: adr.StatusAccepted, Path: "constitution/adr/" + id + "-x.md",
 		Sections: map[string]string{adr.DecisionOutcomeSection: "Outcome for " + id + "."},
 	}
 }
@@ -84,7 +84,7 @@ func TestUnknownCategoryOnInactiveADR(t *testing.T) {
 func TestRenderRecordOnlyDoesNotProject(t *testing.T) {
 	cfg := &config.Config{Categories: []string{"architecture"}}
 	rule := newADR("ADR-0001", 1, "architecture", adr.StatusAccepted)
-	record := newRecordADR("ADR-0002", 2, adr.StatusAccepted)
+	record := newRecordADR("ADR-0002", 2)
 
 	out, _, err := render.Render(cfg, []adr.ADR{rule, record})
 	if err != nil {
@@ -104,7 +104,7 @@ func TestRenderRecordOnlyDoesNotProject(t *testing.T) {
 func TestRenderEmptyConstitutionPlaceholder(t *testing.T) {
 	cfg := &config.Config{Categories: []string{"architecture"}}
 	adrs := []adr.ADR{
-		newRecordADR("ADR-0001", 1, adr.StatusAccepted),
+		newRecordADR("ADR-0001", 1),
 		newADR("ADR-0002", 2, "architecture", adr.StatusSuperseded), // rule-bearing but inactive
 	}
 	out, _, err := render.Render(cfg, adrs)
@@ -126,7 +126,7 @@ func TestRenderOmitsRecordOnlyCategory(t *testing.T) {
 	cfg := &config.Config{Categories: []string{"architecture", "process"}}
 	adrs := []adr.ADR{
 		newADR("ADR-0001", 1, "architecture", adr.StatusAccepted), // projects
-		newRecordADR("ADR-0002", 2, adr.StatusAccepted),           // record-only
+		newRecordADR("ADR-0002", 2),                               // record-only
 	}
 	out, _, err := render.Render(cfg, adrs)
 	if err != nil {
@@ -590,7 +590,7 @@ func TestRenderPopulatedPointsAtTheDecisionLog(t *testing.T) {
 	cfg := &config.Config{Categories: []string{"architecture"}}
 	adrs := []adr.ADR{
 		newADR("ADR-0001", 1, "architecture", adr.StatusAccepted),
-		newRecordADR("ADR-0002", 2, adr.StatusAccepted), // record-only: never projects
+		newRecordADR("ADR-0002", 2), // record-only: never projects
 	}
 
 	out, _, err := render.Render(cfg, adrs)
