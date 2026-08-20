@@ -24,7 +24,7 @@ var starterCategories = []string{"purpose", "architecture", "code-style", "testi
 
 // foundingTitle is the fixed title of the single ADR init seeds from
 // --founding-file. init only seeds on an empty log (the len(existing) > 0
-// guard in seedFounding), and adr.NextID returns 1 there, so the founding
+// guard in prepareFounding), and adr.NextID returns 1 there, so the founding
 // ADR is always ADR-0001 deterministically — nothing needs to identify it
 // beyond that, so its title needs no per-run configurability. This mirrors
 // bootstrapSource: a fixed, reserved value rather than a new flag surface.
@@ -334,14 +334,25 @@ func prepareFounding(cmd *cli.Command, cfg *config.Config, adrDir string) (*foun
 		return nil, nil
 	}
 
-	// The pre-flight runs before anything creates constitution/adr/,
-	// so a missing directory is simply an empty log.
-	existing, err := adr.ParseDir(adrDir)
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return nil, err
-	}
-	if len(existing) > 0 {
-		return nil, nil
+	// Decide "empty log" from the directory itself, not from ParseDir's
+	// aggregate error: ParseDir surfaces ENOENT from both os.ReadDir AND a
+	// per-file Parse, so tolerating ErrNotExist wholesale would misread a
+	// dangling symlink (or a file removed mid-scan) as an empty log and
+	// seed a founding ADR on top of a real one. prepareFounding runs
+	// before MkdirAll, so an absent directory is the one legitimate
+	// "empty" case.
+	if _, statErr := os.Stat(adrDir); statErr != nil {
+		if !errors.Is(statErr, os.ErrNotExist) {
+			return nil, statErr
+		}
+	} else {
+		existing, err := adr.ParseDir(adrDir)
+		if err != nil {
+			return nil, err
+		}
+		if len(existing) > 0 {
+			return nil, nil
+		}
 	}
 
 	body, err := readBody(foundingFile, os.Stdin)

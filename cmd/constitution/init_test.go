@@ -313,3 +313,49 @@ func TestInitWritesNothingWhenTheFoundingBodyIsMalformed(t *testing.T) {
 	}
 	assertNoInitTrace(t, dir)
 }
+
+// TestInitSeedsNothingWhenAnExistingADRIsUnreadable guards the
+// ParseDir-aggregate-error hole prepareFounding used to have: ParseDir
+// surfaces os.ErrNotExist from BOTH os.ReadDir (missing directory — the
+// legitimate "empty log" case, since prepareFounding runs before
+// MkdirAll) AND a per-file Parse (an individual ADR that can't be read,
+// e.g. a dangling symlink). The old code tolerated ErrNotExist from
+// ParseDir wholesale, so it misread a directory that already exists but
+// contains one unreadable entry as an empty log, and went on to seed a
+// founding ADR — while adr.NextID (which just lists filenames, never
+// reads content) saw the same dangling entry and allocated ID 2 for it,
+// so the seeded file would have been ADR-0002-founding-constitution.md,
+// landing on top of a real, if unreadable, ADR-0001. Here that must
+// refuse instead, leaving the directory exactly as it was found: only
+// the dangling symlink, nothing seeded.
+func TestInitSeedsNothingWhenAnExistingADRIsUnreadable(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+
+	adrDir := filepath.Join("constitution", "adr")
+	if err := os.MkdirAll(adrDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(%s): %v", adrDir, err)
+	}
+	danglingLink := filepath.Join(adrDir, "ADR-0001-x.md")
+	if err := os.Symlink(filepath.Join(dir, "nonexistent-target.md"), danglingLink); err != nil {
+		t.Fatalf("Symlink: %v", err)
+	}
+
+	founding := foundingMADRBody("Every change ships with tests.",
+		"### testing\n\n#### mandatory-tests\nEvery change ships with tests.")
+	mustWriteFile(t, "founding.md", founding)
+
+	err := runCLI(t, "init", "--category", "testing", "--founding-file", "founding.md")
+	if err == nil {
+		t.Fatal("init(dangling ADR symlink) = nil, want error")
+	}
+
+	matches, globErr := filepath.Glob(filepath.Join(adrDir, "ADR-*.md"))
+	if globErr != nil {
+		t.Fatalf("Glob: %v", globErr)
+	}
+	if len(matches) != 1 || matches[0] != danglingLink {
+		t.Errorf("constitution/adr/ADR-*.md = %v, want exactly the dangling symlink %q (nothing seeded)",
+			matches, danglingLink)
+	}
+}
