@@ -1,0 +1,52 @@
+# A sealed log in a git repo with NO commits (issue #25). Sealed guard
+# compares against HEAD, which does not exist yet, so it must say so
+# instead of leaking `fatal: bad revision 'HEAD'`. The --no-git escape
+# still works, and one commit restores ordinary git-mode checking.
+
+env CONSTITUTION_TODAY=2026-07-02
+env GIT_AUTHOR_NAME=guard-test
+env GIT_AUTHOR_EMAIL=guard-test@example.com
+env GIT_COMMITTER_NAME=guard-test
+env GIT_COMMITTER_EMAIL=guard-test@example.com
+env GIT_CONFIG_NOSYSTEM=1
+
+exec git init -q -b main
+exec constitution init --founding-file founding.md --category testing
+exec constitution seal --approve
+
+# No commit yet: an actionable message, and no git plumbing.
+exitcode 2 constitution guard
+stderr 'has no commits yet'
+stderr 'pass --no-git'
+! stderr 'bad revision'
+
+# The escape hatch the message names actually works.
+exec constitution guard --no-git
+stdout 'guard: clean'
+
+# One commit and git mode is back, unchanged.
+exec git add -A
+exec git commit -q -m init
+exec constitution guard
+stdout 'guard: clean \(1 ADR\(s\) checked, git mode vs HEAD\)'
+
+-- founding.md --
+## Context and Problem Statement
+
+Established at project bootstrap by `constitution init`.
+
+## Considered Options
+
+- Adopt this founding decision
+- Leave the convention implicit
+
+## Decision Outcome
+
+Every change ships with tests, no exceptions.
+
+## Rules
+
+### testing
+
+#### mandatory-tests
+Every change ships with tests.

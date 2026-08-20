@@ -362,3 +362,62 @@ func TestRunDraftExplicitGitBaseErrors(t *testing.T) {
 		}
 	}
 }
+
+// newUncommittedRepo builds a sealed-shape repo — one ADR plus a
+// manifest baseline — inside a git repository that has NO commits.
+// That is a plausible first-run state, not a contrived one: `init`
+// does not require a commit and nothing stops a user sealing before
+// their first one (issue #25).
+func newUncommittedRepo(t *testing.T) string {
+	t.Helper()
+	requireGit(t)
+
+	root := t.TempDir()
+	adrDir := filepath.Join(root, "constitution", "adr")
+	if err := os.MkdirAll(adrDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	gitIn(t, root, "init", "-q")
+
+	a := writeADR(t, adrDir, "ADR-0001", "First rule", "y")
+	if err := manifest.Write(adrDir, []adr.ADR{a}); err != nil {
+		t.Fatal(err)
+	}
+	return root
+}
+
+// TestGuardExplainsAnUnbornHEAD is issue #25: sealed guard compares
+// against HEAD, so in a repo with no commits every git command fails
+// and git's own plumbing ("fatal: bad revision 'HEAD'") reached the
+// user with no hint about what to do.
+func TestGuardExplainsAnUnbornHEAD(t *testing.T) {
+	root := newUncommittedRepo(t)
+
+	_, err := Run(Options{Root: root})
+	if err == nil {
+		t.Fatal("Run() error = nil, want the no-commits case reported")
+	}
+	if !strings.Contains(err.Error(), "no commits yet") {
+		t.Errorf("Run() error = %q, want it to name the no-commits condition", err.Error())
+	}
+	if !strings.Contains(err.Error(), "--no-git") {
+		t.Errorf("Run() error = %q, want it to name the --no-git escape", err.Error())
+	}
+	if strings.Contains(err.Error(), "bad revision") {
+		t.Errorf("Run() error = %q, want git plumbing kept out of the message", err.Error())
+	}
+}
+
+// TestGuardNoGitStillWorksWithoutCommits proves the escape hatch the
+// new message points at actually works from that state.
+func TestGuardNoGitStillWorksWithoutCommits(t *testing.T) {
+	root := newUncommittedRepo(t)
+
+	res, err := Run(Options{Root: root, NoGit: true})
+	if err != nil {
+		t.Fatalf("Run(NoGit) error = %v, want nil", err)
+	}
+	if !res.Summary.Clean {
+		t.Errorf("Run(NoGit) = %+v, want clean", res)
+	}
+}

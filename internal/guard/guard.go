@@ -326,6 +326,18 @@ func resolveGitMode(opts Options) (gitModeDecision, error) {
 		return gitModeDecision{}, nil
 	}
 
+	// A repository with no commits has no HEAD to diff against, so
+	// every git mode below would fail with git's own plumbing. Say what
+	// happened and what to do instead (issue #25). This applies whether
+	// or not a base was requested explicitly: --merge-base resolves
+	// against HEAD too.
+	if !headResolvable(opts.Root) {
+		return gitModeDecision{}, fmt.Errorf(
+			"guard: %s has no commits yet, so there is no HEAD for the sealed log to be compared against; commit the constitution first, or pass --no-git for manifest-only checking",
+			opts.Root,
+		)
+	}
+
 	base := "HEAD"
 	switch {
 	case opts.MergeBase != "":
