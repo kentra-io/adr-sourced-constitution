@@ -362,3 +362,145 @@ func TestRunDraftExplicitGitBaseErrors(t *testing.T) {
 		}
 	}
 }
+
+// newUncommittedRepo builds a sealed-shape repo — one ADR plus a
+// manifest baseline — inside a git repository that has NO commits.
+// That is a plausible first-run state, not a contrived one: `init`
+// does not require a commit and nothing stops a user sealing before
+// their first one (issue #25).
+func newUncommittedRepo(t *testing.T) string {
+	t.Helper()
+	requireGit(t)
+
+	root := t.TempDir()
+	adrDir := filepath.Join(root, "constitution", "adr")
+	if err := os.MkdirAll(adrDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	gitIn(t, root, "init", "-q")
+
+	a := writeADR(t, adrDir, "ADR-0001", "First rule", "y")
+	if err := manifest.Write(adrDir, []adr.ADR{a}); err != nil {
+		t.Fatal(err)
+	}
+	return root
+}
+
+// TestGuardExplainsAnUnbornHEAD is issue #25: sealed guard compares
+// against HEAD, so in a repo with no commits every git command fails
+// and git's own plumbing ("fatal: bad revision 'HEAD'") reached the
+// user with no hint about what to do.
+func TestGuardExplainsAnUnbornHEAD(t *testing.T) {
+	root := newUncommittedRepo(t)
+
+	_, err := Run(Options{Root: root})
+	if err == nil {
+		t.Fatal("Run() error = nil, want the no-commits case reported")
+	}
+	if !strings.Contains(err.Error(), "no commits yet") {
+		t.Errorf("Run() error = %q, want it to name the no-commits condition", err.Error())
+	}
+	if !strings.Contains(err.Error(), "--no-git") {
+		t.Errorf("Run() error = %q, want it to name the --no-git escape", err.Error())
+	}
+	if strings.Contains(err.Error(), "bad revision") {
+		t.Errorf("Run() error = %q, want git plumbing kept out of the message", err.Error())
+	}
+}
+
+// TestGuardNoGitStillWorksWithoutCommits proves the escape hatch the
+// new message points at actually works from that state.
+func TestGuardNoGitStillWorksWithoutCommits(t *testing.T) {
+	root := newUncommittedRepo(t)
+
+	res, err := Run(Options{Root: root, NoGit: true})
+	if err != nil {
+		t.Fatalf("Run(NoGit) error = %v, want nil", err)
+	}
+	if !res.Summary.Clean {
+		t.Errorf("Run(NoGit) = %+v, want clean", res)
+	}
+}
+
+// newUncommittedRepoWithRef builds the same sealed-shape, no-commits-yet
+// repo as newUncommittedRepo, but with a second twist: a real commit
+// exists on refName while the CURRENT branch (main) stays unborn — the
+// `git checkout --orphan` shape a real CI checkout can leave behind
+// (`git init && git fetch origin && git checkout origin/main -- .`, per
+// issue #25's verified regression report). This gives an explicit
+// --base <ref> something to resolve against without granting bare
+// `guard` or --merge-base a HEAD to work with.
+func newUncommittedRepoWithRef(t *testing.T) (root, refName string) {
+	t.Helper()
+	requireGit(t)
+
+	root = t.TempDir()
+	adrDir := filepath.Join(root, "constitution", "adr")
+	if err := os.MkdirAll(adrDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	gitIn(t, root, "init", "-q", "-b", "main")
+
+	a := writeADR(t, adrDir, "ADR-0001", "First rule", "y")
+	if err := manifest.Write(adrDir, []adr.ADR{a}); err != nil {
+		t.Fatal(err)
+	}
+
+	refName = "base-ref"
+	gitIn(t, root, "checkout", "-q", "--orphan", refName)
+	gitIn(t, root, "add", "-A")
+	gitIn(t, root, "commit", "-q", "-m", "ref commit")
+	// Back to an unborn current branch: `checkout --orphan` never
+	// touches the working tree/index, so refName keeps its commit and
+	// main goes back to having none of its own (git status: "No commits
+	// yet" on main, HEAD unresolvable) — verified by hand before writing
+	// this helper.
+	gitIn(t, root, "checkout", "-q", "--orphan", "main")
+	return root, refName
+}
+
+// TestRunExplicitBaseSucceedsOnUnbornHEAD pins the split resolveGitMode
+// makes for issue #25: an explicit --base <ref> only diffs <ref> against
+// the working tree (`git diff <ref> -- ...`, `git show <ref>:<path>`) and
+// never touches HEAD, so it must keep working even when the current
+// branch has no commits yet — unlike bare `guard` (TestGuardExplainsAn
+// UnbornHEAD) and --merge-base (TestRunMergeBaseErrorsOnUnbornHEAD
+// below), which do resolve against HEAD and correctly still refuse.
+// Before the fix, this hard-failed with the same "no commits yet"
+// refusal bare `guard` gets, even though the caller explicitly asked for
+// a check that needs no HEAD at all.
+func TestRunExplicitBaseSucceedsOnUnbornHEAD(t *testing.T) {
+	root, ref := newUncommittedRepoWithRef(t)
+
+	res, err := Run(Options{Root: root, Base: ref})
+	if err != nil {
+		t.Fatalf("Run(Base=%q) error = %v, want nil (an explicit --base needs no HEAD)", ref, err)
+	}
+	if !res.Summary.Clean {
+		t.Errorf("Run(Base=%q) = %+v, want clean", ref, res)
+	}
+	if res.Mode != "git" || res.Base != ref {
+		t.Errorf("Run(Base=%q).Mode/Base = %q/%q, want git/%q", ref, res.Mode, res.Base, ref)
+	}
+}
+
+// TestRunMergeBaseErrorsOnUnbornHEAD pins the other half of the split:
+// --merge-base computes `git merge-base <target> HEAD`, which DOES need
+// HEAD, so on an unborn current branch it must still get guard's
+// actionable "no commits yet" message rather than git's own plumbing
+// ("fatal: bad revision", "Not a valid object name") leaking through —
+// the same contract TestGuardExplainsAnUnbornHEAD pins for bare `guard`.
+func TestRunMergeBaseErrorsOnUnbornHEAD(t *testing.T) {
+	root, ref := newUncommittedRepoWithRef(t)
+
+	_, err := Run(Options{Root: root, MergeBase: ref})
+	if err == nil {
+		t.Fatal("Run(MergeBase) error = nil, want the no-commits case reported")
+	}
+	if !strings.Contains(err.Error(), "no commits yet") {
+		t.Errorf("Run(MergeBase) error = %q, want it to name the no-commits condition", err.Error())
+	}
+	if strings.Contains(err.Error(), "bad revision") || strings.Contains(err.Error(), "Not a valid object name") {
+		t.Errorf("Run(MergeBase) error = %q, want git plumbing kept out of the message", err.Error())
+	}
+}

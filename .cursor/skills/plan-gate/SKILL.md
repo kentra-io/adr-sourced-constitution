@@ -6,6 +6,15 @@ disable-model-invocation: true
 
 # plan-gate
 
+## Requires
+
+This skill is written for `constitution` 0.3.1 or newer. Before doing
+anything else, run `constitution --version`. If the binary is older,
+**stop** and report the mismatch — an older CLI does not have the
+flags this skill uses, and the workarounds an older skill taught (such
+as hand-editing `constitution.yml`) are forbidden here. Do not
+improvise around the gap.
+
 Check a plan against this repo's constitution *before* it is executed. You read
 every standing rule, reason about the plan rule-by-rule, and emit a
 `deviation.json` report that cites, by `ADR-NNNN`, every rule the plan would

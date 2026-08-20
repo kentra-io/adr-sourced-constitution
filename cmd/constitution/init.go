@@ -24,7 +24,7 @@ var starterCategories = []string{"purpose", "architecture", "code-style", "testi
 
 // foundingTitle is the fixed title of the single ADR init seeds from
 // --founding-file. init only seeds on an empty log (the len(existing) > 0
-// guard in seedFounding), and adr.NextID returns 1 there, so the founding
+// guard in prepareFounding), and adr.NextID returns 1 there, so the founding
 // ADR is always ADR-0001 deterministically — nothing needs to identify it
 // beyond that, so its title needs no per-run configurability. This mirrors
 // bootstrapSource: a fixed, reserved value rather than a new flag surface.
@@ -103,9 +103,21 @@ func runInit(cmd *cli.Command) error {
 		return err
 	}
 
-	// --- 2b. persist a freshly authored config (a re-run leaves the existing
-	// one untouched, so the tree stays byte-identical), then reload it so the
-	// config used downstream is the validated, on-disk verbatim ---
+	// --- 2b. pre-flight --founding-file: read, validate and compose it
+	// entirely in memory BEFORE any byte is written, so a bad founding
+	// file leaves the working tree untouched (issues #22/#30). The
+	// vocabulary it is checked against is the in-memory config; the
+	// on-disk reload below is still what everything downstream uses. ---
+	adrDir := filepath.Join(cwd, "constitution", "adr")
+	founding, err := prepareFounding(cmd, cfg, adrDir)
+	if err != nil {
+		return err
+	}
+
+	// --- 2c. persist a freshly authored config (a re-run leaves the
+	// existing one untouched, so the tree stays byte-identical), then
+	// reload it so the config used downstream is the validated, on-disk
+	// verbatim ---
 	if isNew {
 		configPath := filepath.Join(cwd, "constitution.yml")
 		if err := persistConfig(configPath, cfg); err != nil {
@@ -116,12 +128,12 @@ func runInit(cmd *cli.Command) error {
 		}
 	}
 
-	// --- 3. seed founding ADRs (only on a fresh log, so re-runs stay idempotent) ---
-	adrDir := filepath.Join(cwd, "constitution", "adr")
+	// --- 3. seed the founding ADR (only on a fresh log, so re-runs
+	// stay idempotent) ---
 	if err := os.MkdirAll(adrDir, 0o755); err != nil {
 		return err
 	}
-	if err := seedFounding(cmd, cfg, adrDir, stdout); err != nil {
+	if err := writeFounding(founding, stdout); err != nil {
 		return err
 	}
 
@@ -298,47 +310,63 @@ func normalizeChoices(flag string, given, def []string, allowed map[string]bool)
 	return out, nil
 }
 
-// seedFounding writes the single founding ADR from --founding-file — but
-// only on a fresh log (no ADRs yet), so a re-run never double-seeds and the
-// tree stays byte-identical, and only when --founding-file was given at all
-// (init without one simply scaffolds an empty log). The body is validated
-// through adr.ValidateBody, the exact function `adr new --body-file` uses
-// (composeADRInput, writepath.go), so valid-on-write and valid-on-read can
-// never drift apart; the composed record is then run through the same
-// full-parse the read path uses, exactly like runNew does. Reuses the
-// internal write path (id allocation, atomic write); the manifest is
-// refreshed by the regenCore that follows.
-func seedFounding(cmd *cli.Command, cfg *config.Config, adrDir string, stdout io.Writer) error {
+// foundingWrite is a fully validated founding ADR, composed in memory
+// and ready to write: by the time one exists, everything init can
+// refuse about --founding-file has already been refused.
+type foundingWrite struct {
+	dest    string
+	content []byte
+}
+
+// prepareFounding reads and fully validates --founding-file WITHOUT
+// writing anything (issues #22/#30). It returns nil when there is
+// nothing to seed: no --founding-file, or a log that already has ADRs
+// (bootstrap seeding is one-time, so a re-init of an established repo
+// refreshes integration, not the log).
+//
+// The body is validated through adr.ValidateBody — the exact function
+// `adr new --body-file` uses — and the composed record is then run
+// through the same full parse the read path uses, exactly like runNew
+// does, so valid-on-write and valid-on-read can never drift apart.
+func prepareFounding(cmd *cli.Command, cfg *config.Config, adrDir string) (*foundingWrite, error) {
 	foundingFile := cmd.String("founding-file")
 	if foundingFile == "" {
-		return nil
+		return nil, nil
 	}
 
-	existing, err := adr.ParseDir(adrDir)
-	if err != nil {
-		return err
-	}
-	if len(existing) > 0 {
-		// The log already has ADRs: bootstrap seeding is a one-time action, so
-		// this is a no-op (re-run idempotency). Not an error — a re-init of an
-		// established repo simply refreshes integration, not the log.
-		return nil
+	// Decide "empty log" from the directory itself, not from ParseDir's
+	// aggregate error: ParseDir surfaces ENOENT from both os.ReadDir AND a
+	// per-file Parse, so tolerating ErrNotExist wholesale would misread a
+	// dangling symlink (or a file removed mid-scan) as an empty log and
+	// seed a founding ADR on top of a real one. prepareFounding runs
+	// before MkdirAll, so an absent directory is the one legitimate
+	// "empty" case.
+	if _, statErr := os.Stat(adrDir); statErr != nil {
+		if !errors.Is(statErr, os.ErrNotExist) {
+			return nil, statErr
+		}
+	} else {
+		existing, err := adr.ParseDir(adrDir)
+		if err != nil {
+			return nil, err
+		}
+		if len(existing) > 0 {
+			return nil, nil
+		}
 	}
 
 	body, err := readBody(foundingFile, os.Stdin)
 	if err != nil {
-		return fmt.Errorf("init: reading --founding-file: %w", err)
+		return nil, fmt.Errorf("init: reading --founding-file: %w", err)
 	}
 	const label = "--founding-file"
 	if err := adr.ValidateBody(body, label); err != nil {
-		return &exitError{err: fmt.Errorf("init: %w", err), code: 2}
+		return nil, &exitError{err: fmt.Errorf("init: %w", err), code: 2}
 	}
 
-	// Founding ADRs carry the reserved `bootstrap` source ONLY when source
-	// tracking is enabled: under `type: none` no ADR may carry a `source`
-	// field at all (plan §2.8; the "founding ADRs use bootstrap" sentence
-	// applies only when type != none — erratum #8). When enabled, `bootstrap`
-	// is a reserved value that bypasses the configured pattern check.
+	// Founding ADRs carry the reserved `bootstrap` source ONLY when
+	// source tracking is enabled: under `type: none` no ADR may carry a
+	// `source` field at all (plan §2.8, erratum #8).
 	foundingSource := ""
 	if cfg.SourceTracking.Type != config.SourceTrackingNone {
 		foundingSource = bootstrapSource
@@ -346,7 +374,7 @@ func seedFounding(cmd *cli.Command, cfg *config.Config, adrDir string, stdout io
 
 	_, id, err := adr.NextID(adrDir)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	content := adr.Compose(adr.NewADR{
 		ID:     id,
@@ -356,38 +384,43 @@ func seedFounding(cmd *cli.Command, cfg *config.Config, adrDir string, stdout io
 		Body:   string(body),
 	})
 
-	// Full parse of the composed record: the exact bytes about to be written
-	// must satisfy the read path (rules grammar, frontmatter refs) before
-	// anything else happens — same as runNew.
 	parsed, err := adr.ParseBytesUnnamed(content, label)
 	if err != nil {
-		return &exitError{err: fmt.Errorf("init: invalid %s: %w", label, err), code: 2}
+		return nil, &exitError{err: fmt.Errorf("init: invalid %s: %w", label, err), code: 2}
 	}
 
-	// Seed rules may only use categories already in the configured vocabulary
-	// (--category / the starter list): there is no --new-category at init —
-	// the vocabulary was chosen seconds earlier, so an unknown category is a
-	// typo, not growth.
+	// Seed rules may only use categories already in the configured
+	// vocabulary: there is no --new-category at init — the vocabulary
+	// was chosen seconds earlier, so an unknown category is a typo.
 	vocab := make(map[string]bool, len(cfg.Categories))
 	for _, c := range cfg.Categories {
 		vocab[c] = true
 	}
 	for _, r := range parsed.Rules {
 		if !vocab[r.Category] {
-			return &exitError{err: fmt.Errorf(
+			return nil, &exitError{err: fmt.Errorf(
 				"init: %s: rule category %q is not in the configured vocabulary %v",
 				label, r.Category, cfg.Categories), code: 2}
 		}
 	}
 
-	dest := filepath.Join(adrDir, adr.Filename(id, foundingTitle))
-	if err := atomicwrite.WriteFile(dest, content, 0o644); err != nil {
-		return fmt.Errorf("init: writing %s: %w", label, err)
+	return &foundingWrite{
+		dest:    filepath.Join(adrDir, adr.Filename(id, foundingTitle)),
+		content: content,
+	}, nil
+}
+
+// writeFounding commits a prepared founding ADR to disk. A nil fw is
+// the "nothing to seed" case and writes nothing.
+func writeFounding(fw *foundingWrite, stdout io.Writer) error {
+	if fw == nil {
+		return nil
 	}
-	if _, err := fmt.Fprintf(stdout, "created %s\n", dest); err != nil {
-		return err
+	if err := atomicwrite.WriteFile(fw.dest, fw.content, 0o644); err != nil {
+		return fmt.Errorf("init: writing --founding-file: %w", err)
 	}
-	return nil
+	_, err := fmt.Fprintf(stdout, "created %s\n", fw.dest)
+	return err
 }
 
 // interactiveConfirm builds a y/N prompt reader for init's drift confirm on a

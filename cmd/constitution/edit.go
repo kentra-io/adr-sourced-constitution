@@ -30,8 +30,10 @@ func editCommand() *cli.Command {
 		Description: "Per-facet replacement on a draft-phase log:\n" +
 			"  --title        replaces the title (the file is renamed to the new slug)\n" +
 			"  --source       replaces the source ref (validated against sourceTracking)\n" +
-			"  --body-file    replaces the ENTIRE body, including the \"## Rules\" section's\n" +
-			"                 presence or absence — exactly the shape `adr new` accepts\n" +
+			"  --body-file    replaces the ENTIRE body: any \"## Rules\" entry the file\n" +
+			"                 does not reproduce is DELETED from the constitution. Use\n" +
+			"                 --rule to change rules; for a prose-only fix, start from\n" +
+			"                 the stored body rather than rewriting it\n" +
 			"  --rule         replaces only the \"## Rules\" section, keeping the other\n" +
 			"                 sections (combinable with --body-file if the file has no Rules)\n" +
 			"  --supersedes-rule / --removes-rule\n" +

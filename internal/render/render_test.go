@@ -29,11 +29,13 @@ func newADR(id string, num int, category string, status adr.Status) adr.ADR {
 
 // newRecordADR builds a record-only ADR: it has a Decision Outcome but no
 // rules (hence no category anywhere), so it stays in the log and never
-// projects.
-func newRecordADR(id string, num int, status adr.Status) adr.ADR {
+// projects. It always builds an ACTIVE (accepted) record; a future test
+// needing a non-accepted record should re-add a status parameter rather
+// than work around a fixed one.
+func newRecordADR(id string, num int) adr.ADR {
 	return adr.ADR{
 		ID: id, Num: num, Title: "Title " + id, Date: "2026-07-01",
-		Status: status, Path: "constitution/adr/" + id + "-x.md",
+		Status: adr.StatusAccepted, Path: "constitution/adr/" + id + "-x.md",
 		Sections: map[string]string{adr.DecisionOutcomeSection: "Outcome for " + id + "."},
 	}
 }
@@ -82,7 +84,7 @@ func TestUnknownCategoryOnInactiveADR(t *testing.T) {
 func TestRenderRecordOnlyDoesNotProject(t *testing.T) {
 	cfg := &config.Config{Categories: []string{"architecture"}}
 	rule := newADR("ADR-0001", 1, "architecture", adr.StatusAccepted)
-	record := newRecordADR("ADR-0002", 2, adr.StatusAccepted)
+	record := newRecordADR("ADR-0002", 2)
 
 	out, _, err := render.Render(cfg, []adr.ADR{rule, record})
 	if err != nil {
@@ -102,7 +104,7 @@ func TestRenderRecordOnlyDoesNotProject(t *testing.T) {
 func TestRenderEmptyConstitutionPlaceholder(t *testing.T) {
 	cfg := &config.Config{Categories: []string{"architecture"}}
 	adrs := []adr.ADR{
-		newRecordADR("ADR-0001", 1, adr.StatusAccepted),
+		newRecordADR("ADR-0001", 1),
 		newADR("ADR-0002", 2, "architecture", adr.StatusSuperseded), // rule-bearing but inactive
 	}
 	out, _, err := render.Render(cfg, adrs)
@@ -124,7 +126,7 @@ func TestRenderOmitsRecordOnlyCategory(t *testing.T) {
 	cfg := &config.Config{Categories: []string{"architecture", "process"}}
 	adrs := []adr.ADR{
 		newADR("ADR-0001", 1, "architecture", adr.StatusAccepted), // projects
-		newRecordADR("ADR-0002", 2, adr.StatusAccepted),           // record-only
+		newRecordADR("ADR-0002", 2),                               // record-only
 	}
 	out, _, err := render.Render(cfg, adrs)
 	if err != nil {
@@ -575,5 +577,37 @@ func TestFoldResurrectionSuppressedWhenReRetired(t *testing.T) {
 	}
 	if len(warns) != 0 {
 		t.Errorf("Render() warnings = %q, want none (ref re-retired by accepted ADR-0010)", warns)
+	}
+}
+
+// TestRenderPopulatedPointsAtTheDecisionLog is issue #24: the EMPTY
+// projection tells the reader where the decision log lives, the
+// populated one did not. Since only rule-bearing ADRs project, every
+// record-only ADR — the deliberate deferrals, the "we have not
+// decided X yet" records — was invisible to anyone reading
+// constitution.md, which is the artefact agents @-import.
+func TestRenderPopulatedPointsAtTheDecisionLog(t *testing.T) {
+	cfg := &config.Config{Categories: []string{"architecture"}}
+	adrs := []adr.ADR{
+		newADR("ADR-0001", 1, "architecture", adr.StatusAccepted),
+		newRecordADR("ADR-0002", 2), // record-only: never projects
+	}
+
+	out, _, err := render.Render(cfg, adrs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+
+	if !strings.Contains(got, "\nDecision log: constitution/adr/.\n") {
+		t.Errorf("populated projection carries no decision-log pointer:\n%s", got)
+	}
+	// The pointer orients the reader, so it belongs with the preamble,
+	// not trailing a rule list of unbounded length.
+	if strings.Index(got, "Decision log:") > strings.Index(got, "## architecture") {
+		t.Errorf("pointer must precede the first category heading:\n%s", got)
+	}
+	if strings.Contains(got, "No standing rules yet") {
+		t.Errorf("populated projection must not carry the placeholder text:\n%s", got)
 	}
 }

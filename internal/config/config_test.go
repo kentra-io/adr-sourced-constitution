@@ -192,3 +192,52 @@ func TestValidateAcceptsLegalValue(t *testing.T) {
 		t.Errorf("Validate() left Consent.Policy = %q, want the default %q applied", cfg.Consent.Policy, ConsentStrict)
 	}
 }
+
+// TestValidateRejectsUncompilablePattern is issue #23: both
+// `init --source-pattern` and `config set sourceTracking.pattern`
+// wrote a pattern to disk without ever compiling it, so the failure
+// surfaced much later, at the first `adr new --source ...`.
+func TestValidateRejectsUncompilablePattern(t *testing.T) {
+	cfg := baseValidConfig()
+	cfg.SourceTracking = SourceTracking{Type: SourceTrackingGeneric, Pattern: "(unclosed"}
+
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("Validate() error = nil, want the uncompilable pattern rejected before it can be written")
+	}
+	if !strings.Contains(err.Error(), `field "sourceTracking.pattern"`) {
+		t.Errorf("Validate() error = %q, want it to name the field", err.Error())
+	}
+	if !strings.Contains(err.Error(), "config set sourceTracking.pattern") {
+		t.Errorf("Validate() error = %q, want it to name the repair command", err.Error())
+	}
+}
+
+// TestLoadStaysLenientAboutPatterns pins the scope decision #23 asked
+// for explicitly: the compile check belongs to the WRITE path only.
+// A config that already carries a bad pattern keeps loading exactly
+// as it does today, so this change cannot brick an existing repo —
+// it only stops a new bad value reaching disk.
+func TestLoadStaysLenientAboutPatterns(t *testing.T) {
+	path := write(t, "schemaVersion: 1\nphase: draft\ncategories: [architecture]\n"+
+		"sourceTracking:\n  type: generic\n  pattern: '(unclosed'\n")
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v, want nil — read paths stay lenient about patterns", err)
+	}
+	if cfg.SourceTracking.Pattern != "(unclosed" {
+		t.Errorf("Pattern = %q, want it preserved verbatim", cfg.SourceTracking.Pattern)
+	}
+}
+
+// TestWrapSourcePatternAnchors pins the form both the validator and
+// validateSource compile. The two cannot disagree about VALIDITY
+// (wrapping a valid regexp in a non-capturing group is always valid),
+// but they could disagree about ANCHORING if either built the string
+// itself — which is what this helper prevents.
+func TestWrapSourcePatternAnchors(t *testing.T) {
+	if got, want := WrapSourcePattern("a|b"), "^(?:a|b)$"; got != want {
+		t.Errorf("WrapSourcePattern(%q) = %q, want %q", "a|b", got, want)
+	}
+}

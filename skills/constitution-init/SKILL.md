@@ -6,6 +6,15 @@ disable-model-invocation: true
 
 # constitution-init
 
+## Requires
+
+This skill is written for `constitution` 0.3.1 or newer. Before doing
+anything else, run `constitution --version`. If the binary is older,
+**stop** and report the mismatch — an older CLI does not have the
+flags this skill uses, and the workarounds an older skill taught (such
+as hand-editing `constitution.yml`) are forbidden here. Do not
+improvise around the gap.
+
 Bootstrap this repository's constitution through a real conversation, not a
 form. This is a **staged founding interview**: elicit fully, get the human's
 explicit confirmation, and only then write. Ask one thing at a time, in your

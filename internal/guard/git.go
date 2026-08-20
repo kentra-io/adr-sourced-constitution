@@ -40,6 +40,15 @@ func gitAvailable(dir string) bool {
 	return err == nil && strings.TrimSpace(out) == "true"
 }
 
+// headResolvable reports whether HEAD names a commit in dir. It is
+// false in a repository with no commits yet (an unborn branch), where
+// every `git diff ... HEAD` fails with git's own
+// "fatal: bad revision 'HEAD'" (issue #25).
+func headResolvable(dir string) bool {
+	_, err := runGit(dir, "rev-parse", "--verify", "--quiet", "HEAD")
+	return err == nil
+}
+
 // gitTopLevel returns the absolute path to the git repository root
 // containing dir.
 func gitTopLevel(dir string) (string, error) {

@@ -29,10 +29,17 @@ that requirements can stay functional and need not re-explain implementation
 choices.
 `
 
-// placeholderLine is the sole body line when no active ADR carries a rule:
-// the constitution is empty of standing rules, and the reader is pointed at
-// the decision log.
-const placeholderLine = "No standing rules yet. Decision log: constitution/adr/."
+// decisionLogPointer tells the reader where the full decision log
+// lives. It renders in BOTH forms of the projection: the placeholder
+// has always carried it, and a populated constitution.md needs it
+// just as much — only rule-bearing ADRs project, so every record-only
+// ADR is otherwise invisible to a reader of this file (issue #24).
+const decisionLogPointer = "Decision log: constitution/adr/."
+
+// placeholderLine is the sole body line when no active ADR carries a
+// rule: the constitution is empty of standing rules, and the reader is
+// pointed at the decision log.
+const placeholderLine = "No standing rules yet. " + decisionLogPointer
 
 // entryTmplText renders one projected rule entry: its slug as the rule
 // heading, the rule text verbatim, then the carrying ADR's metadata line.
@@ -78,8 +85,14 @@ func renderTemplate(sections []CategorySection) ([]byte, error) {
 
 	body := strings.Join(catChunks, "\n\n")
 	if body == "" {
-		// No projected rule from any active ADR: render the placeholder.
+		// No projected rule from any active ADR: the placeholder line
+		// already carries the pointer.
 		body = placeholderLine
+	} else {
+		// Populated: the pointer goes directly after the preamble,
+		// exactly where the placeholder form puts it, so both renders
+		// share one structure.
+		body = decisionLogPointer + "\n\n" + body
 	}
 	return []byte(header + "\n" + preamble + "\n" + body + "\n"), nil
 }

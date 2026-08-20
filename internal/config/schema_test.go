@@ -84,3 +84,39 @@ func TestSchemaRejectsUndeclaredEnumValue(t *testing.T) {
 		t.Errorf("validate() error = %q, want it to mention sourceTracking.type", err.Error())
 	}
 }
+
+// TestSchemaEnumValuesAreDerivedFromValidators is issue #26's
+// regression guard. Schema() must not RE-LIST any enumerated
+// vocabulary: every Values list has to come from the same map
+// validate enforces, so adding a value in one place cannot leave the
+// other stale. The check is structural (Values == sortedKeys(map)),
+// not a restatement of the same literals in a test file — #17's
+// lesson was that a literal list in a test proves nothing.
+func TestSchemaEnumValuesAreDerivedFromValidators(t *testing.T) {
+	tests := []struct {
+		key   string
+		vocab map[string]bool
+	}{
+		{"agentInstructions.targets", validTargets},
+		{"consent.policy", validConsentPolicies},
+		{"sourceTracking.type", validSourceTrackingTypes},
+		{"phase", validPhases},
+		{"skills.trees", validSkillTrees},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.key, func(t *testing.T) {
+			f := fieldByKey(t, tt.key)
+			want := sortedKeys(tt.vocab)
+			if len(f.Values) != len(want) {
+				t.Fatalf("Schema() %s Values = %v, want %v (derived from the validator map)",
+					tt.key, f.Values, want)
+			}
+			for i := range want {
+				if f.Values[i] != want[i] {
+					t.Errorf("Schema() %s Values[%d] = %q, want %q", tt.key, i, f.Values[i], want[i])
+				}
+			}
+		})
+	}
+}

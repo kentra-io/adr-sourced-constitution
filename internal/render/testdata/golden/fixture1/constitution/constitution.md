@@ -12,6 +12,8 @@ recurring problems are solved (architecture, mapping, testing, process) — so
 that requirements can stay functional and need not re-explain implementation
 choices.
 
+Decision log: constitution/adr/.
+
 ## architecture
 
 ### deterministic-projection

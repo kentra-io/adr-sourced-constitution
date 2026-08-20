@@ -47,6 +47,17 @@
 // cannot perform. --no-git always skips git mode outright, no detection
 // needed.
 //
+// A usable repository can still have no commits (an unborn HEAD). Whether
+// that is fatal depends on whether the resolved base actually needs HEAD
+// (issue #25): bare `guard` (base defaults to HEAD) and --merge-base (which
+// runs `git merge-base <target> HEAD`) both do, and get the same hard error
+// as an explicit-but-unusable repository — "no commits yet ... pass
+// --no-git" — rather than git's own "fatal: bad revision 'HEAD'" leaking
+// through. An explicit --base <ref> does not: its only git work is diffing
+// <ref> against the working tree (`git diff <ref> -- ...`, `git show
+// <ref>:<path>`), neither of which touches HEAD, so it runs normally even
+// with the current branch unborn.
+//
 // # Scope limit
 //
 // Git mode requires the constitution project root (the directory holding
@@ -324,6 +335,25 @@ func resolveGitMode(opts Options) (gitModeDecision, error) {
 			return gitModeDecision{}, err
 		}
 		return gitModeDecision{}, nil
+	}
+
+	// A repository with no commits has no HEAD to diff against, but that
+	// only matters for the paths that actually resolve a base against
+	// HEAD: the default (bare `guard`, base=HEAD) and --merge-base (which
+	// runs `git merge-base <target> HEAD`). An explicit --base <ref>
+	// diffs <ref> against the working tree and never touches HEAD, so it
+	// must NOT be blocked here — that was issue #25's regression: the
+	// probe below used to run unconditionally and rejected a working,
+	// documented --base invocation with a message that was also false in
+	// that state (the repo has commits; only the current branch is
+	// unborn). Say what happened and what to do instead only on the
+	// paths that need HEAD.
+	needsHead := opts.MergeBase != "" || opts.Base == ""
+	if needsHead && !headResolvable(opts.Root) {
+		return gitModeDecision{}, fmt.Errorf(
+			"guard: %s has no commits yet, so there is no HEAD for the sealed log to be compared against; commit the constitution first, or pass --no-git for manifest-only checking",
+			opts.Root,
+		)
 	}
 
 	base := "HEAD"

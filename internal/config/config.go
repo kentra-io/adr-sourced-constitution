@@ -6,6 +6,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"regexp"
 
 	yaml "go.yaml.in/yaml/v3"
 )
@@ -123,8 +124,50 @@ var validSkillTrees = map[string]bool{
 	SkillTreeCursor: true,
 }
 
+var validPhases = map[string]bool{
+	PhaseDraft:  true,
+	PhaseSealed: true,
+}
+
+var validConsentPolicies = map[string]bool{
+	ConsentStrict: true,
+	ConsentOff:    true,
+}
+
 // Load reads and validates constitution.yml at path.
 func Load(path string) (*Config, error) {
+	cfg, err := loadRaw(path)
+	if err != nil {
+		return nil, err
+	}
+	if err := cfg.validate(path); err != nil {
+		return nil, err
+	}
+	return cfg, nil
+}
+
+// LoadLenient reads constitution.yml at path WITHOUT validating it.
+//
+// It exists for ONE caller — `constitution config set` (issue #27) —
+// and every read path must keep using Load. The guarantee that
+// matters is that an invalid config is never WRITTEN, which config
+// set still enforces by validating the whole result before its
+// atomic write; the guarantee that backfired is that an invalid
+// config could never be EDITED, which froze the one supported writer
+// against exactly the files needing repair.
+//
+// Note the defaulting difference: validate applies the
+// consent.policy/sourceTracking.type defaults as a side effect, so a
+// LoadLenient'd Config carries raw zero values until the caller's own
+// Validate() runs.
+func LoadLenient(path string) (*Config, error) {
+	return loadRaw(path)
+}
+
+// loadRaw reads and unmarshals constitution.yml at path, applying no
+// validation and no defaulting. Shared by Load and LoadLenient so
+// the two cannot drift in how the file is read.
+func loadRaw(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -133,10 +176,6 @@ func Load(path string) (*Config, error) {
 	var cfg Config
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("%s: not valid YAML: %w", path, err)
-	}
-
-	if err := cfg.validate(path); err != nil {
-		return nil, err
 	}
 	return &cfg, nil
 }
@@ -153,8 +192,31 @@ func Load(path string) (*Config, error) {
 // defaulted to "strict"/"none" exactly as Load's defaulting does. Error
 // messages use the literal label "constitution.yml" in place of a real
 // path, since there may be none yet.
+//
+// Validate is strictly stronger than validate(path) on one field: it also
+// compiles sourceTracking.pattern (issue #23) and rejects a config whose
+// pattern cannot compile. That check lives HERE, on the exported
+// write-path validator, and deliberately NOT in validate(path), which
+// Load calls on every read. Validate() has exactly two callers, both
+// write paths — runConfigSet (cmd/constitution/config.go) and
+// buildOrLoadConfig (cmd/constitution/init.go) — so this stops a bad
+// pattern reaching disk without changing how any existing config loads.
+// Issue #23 flagged making it fail at Load as a behaviour change needing
+// a deliberate decision; this change does not take it.
 func (c *Config) Validate() error {
-	return c.validate("constitution.yml")
+	if err := c.validate("constitution.yml"); err != nil {
+		return err
+	}
+
+	if c.SourceTracking.Pattern != "" {
+		if _, err := regexp.Compile(WrapSourcePattern(c.SourceTracking.Pattern)); err != nil {
+			return fmt.Errorf(
+				"constitution.yml: field %q: %q is not a valid regexp: %w; repair it with `constitution config set sourceTracking.pattern <regexp>`",
+				"sourceTracking.pattern", c.SourceTracking.Pattern, err,
+			)
+		}
+	}
+	return nil
 }
 
 func (c *Config) validate(path string) error {
@@ -179,9 +241,9 @@ func (c *Config) validate(path string) error {
 		seen[cat] = true
 	}
 
-	switch c.Phase {
-	case PhaseDraft, PhaseSealed:
-	case "":
+	switch {
+	case validPhases[c.Phase]:
+	case c.Phase == "":
 		return fmt.Errorf(
 			"%s: field %q: required — add 'phase: sealed' for an existing (append-only) log, or 'phase: draft' for an unsealed one",
 			path, "phase",
@@ -195,7 +257,7 @@ func (c *Config) validate(path string) error {
 
 	if c.Consent.Policy == "" {
 		c.Consent.Policy = ConsentStrict
-	} else if c.Consent.Policy != ConsentStrict && c.Consent.Policy != ConsentOff {
+	} else if !validConsentPolicies[c.Consent.Policy] {
 		return fmt.Errorf(
 			"%s: field %q: must be %q or %q (got %q)",
 			path, "consent.policy", ConsentStrict, ConsentOff, c.Consent.Policy,

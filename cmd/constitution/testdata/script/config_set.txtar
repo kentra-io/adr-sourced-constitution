@@ -26,6 +26,11 @@ cmp constitution.yml constitution.yml.snapshot
 stderr 'not settable via config set; use constitution seal instead'
 cmp constitution.yml constitution.yml.snapshot
 
+# --- uncompilable pattern: exit 2, nothing written (issue #23) ---
+! exec constitution config set sourceTracking.pattern '(unclosed'
+stderr 'is not a valid regexp'
+cmp constitution.yml constitution.yml.snapshot
+
 -- constitution.yml --
 schemaVersion: 1
 phase: draft
