@@ -1,0 +1,2027 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/kentra-io/milestoned-plan-dag/main/schema/plan.schema.json
+#
+# ═══════════════════════════════════════════════════════════════════════════
+# Open-Issue Sweep — Implementation Plan
+#
+# For agentic workers: REQUIRED SUB-SKILL — use superpowers:subagent-driven-
+# development (recommended) or superpowers:executing-plans to implement this
+# plan milestone-by-milestone. Steps use checkbox (`[ ]`) syntax for tracking.
+# Run `milestoned-plan-dag render <this file>` for a readable view.
+#
+# Goal: close every v0.3.0 dogfooding issue whose fix is unambiguous, without
+# changing any decision that needs a human to make it.
+#
+# Architecture: nine independent, sequenced milestones over the existing
+# layout — `internal/config` (schema + validation), `cmd/constitution`
+# (the urfave/cli verb tree), `internal/guard` (git/manifest checking),
+# `internal/render` (the deterministic projection) and `skills/` (the
+# //go:embed-ed Layer-2 skills). Nothing is restructured: each milestone is
+# a small, test-first change inside a file that already exists, except two
+# new single-purpose files (internal/config/pattern.go, skillversion.go).
+#
+# Tech Stack: Go 1.25+/1.26, urfave/cli v3, go.yaml.in/yaml/v3,
+# rogpeppe/go-internal/testscript (txtar e2e under
+# cmd/constitution/testdata/script/), golangci-lint v2.12.2.
+#
+# Repo conventions this plan follows (from CLAUDE.md):
+#   - Build smoke binaries to a scratch path and NEVER name one
+#     `constitution` — the CLI creates a `constitution/` directory and the
+#     names collide. `go build -o /tmp/adrc-test ./cmd/constitution`.
+#   - Never hand-edit files under `constitution/adr/` or
+#     `constitution/constitution.md` (generated — edit ADRs, run regen).
+#   - `internal/render` goldens regenerate with `-update`; the cmd/ txtar
+#     suite has NO -update flag and is edited by hand.
+#   - Read a file before editing it.
+#
+# ═══════════════════════════════════════════════════════════════════════════
+# ISSUE TRIAGE
+#
+# Every issue below was re-reproduced on HEAD (de00401 == v0.3.0 == the
+# binary on PATH) on 2026-08-20 before this plan was written; none had been
+# fixed since filing.
+#
+# Closes: #22, #23, #24, #25, #26, #30, #32.
+# Advances but does NOT close: #27, #31.
+# Untouched: #28, #29.
+#
+# The bar for inclusion is deliberately high: none of these defects is
+# critical, and this plan is executed without human review of the diff. A fix
+# is in only if its shape is forced by the code or stated outright by the
+# issue. Anything that required PICKING between defensible designs was cut,
+# even where the issue argued for one.
+#
+# WHAT WAS CUT, AND WHY
+#
+#   #29 draft `--source`      — EXCLUDED ENTIRELY. The issue offers three
+#     (whole issue)             proposals and argues for the third (draft may
+#                               omit `source`; `seal` enforces it). That is a
+#                               deliberate change to the traceability
+#                               contract of a governance tool, not a bug fix:
+#                               it changes what `adr new` accepts and adds a
+#                               new refusal to `seal`. It needs a human to
+#                               choose. The workaround in the issue
+#                               (sourceTracking.type generic) holds until
+#                               then.
+#
+#   #28 project intro         — EXCLUDED ENTIRELY. Needs a design decision on
+#     (whole issue)             where the intro comes from (a
+#                               `purpose`-category rule, a config field, or a
+#                               founding-interview section). The hardcoded
+#                               `(architecture, mapping, testing, process)`
+#                               parenthetical is knowingly left alone too, so
+#                               the preamble is redesigned once rather than
+#                               churned twice.
+#
+#   #31 the guardrail         — M7 ships only the issue's option 3 (document
+#     (option 1)                the hazard in `--help` and in the skill).
+#                               Option 1 (diff-and-confirm behind
+#                               `--allow-rule-change`) would refuse an edit
+#                               that succeeds today — a UX change with real
+#                               design choices (flag name, refuse vs confirm,
+#                               what counts as a change). #31 stays open for
+#                               that call.
+#
+#   #27 governed-key repair   — M2 ships the issue's stated fix (load
+#     (the other half)          leniently on the write path), which unfreezes
+#                               `config set` for every SETTABLE key. It does
+#                               not make an invalid `phase` or `categories`
+#                               repairable: those are governed keys, and the
+#                               pre-write whole-config Validate still
+#                               correctly rejects the result. Whether
+#                               `config set` should gain a narrow repair
+#                               escape hatch for governed keys is policy.
+#                               #27 stays open on that half.
+#
+#   #23 strictness at Load    — the issue's note proposes config.validate()
+#                               as the home, then flags the consequence — an
+#                               already-broken config would start failing at
+#                               EVERY command — as "a behaviour change worth
+#                               a deliberate decision". M3 avoids the
+#                               decision entirely: the exported Validate() is
+#                               called from exactly two places, both write
+#                               paths (cmd/constitution/config.go:141 and
+#                               cmd/constitution/init.go:232), while every
+#                               read path goes through Load -> validate(path)
+#                               (verified by grep, 2026-08-20). Putting the
+#                               check in Validate() closes both halves of the
+#                               issue's repro with no effect on any existing
+#                               config. The late failure at `adr new` for a
+#                               config that is ALREADY broken is left as-is.
+#
+#   #25 manifest fallback     — M5 ships the issue's second option (an
+#                               actionable message), not the first (fall back
+#                               to manifest-only). The fallback would turn a
+#                               currently-failing guard into a passing one,
+#                               which is a real behaviour change in CI; the
+#                               message option keeps the exit code and fixes
+#                               the actual complaint, which is that
+#                               `fatal: bad revision 'HEAD'` reaches the user.
+#
+#   #24 deferred-ADR listing  — M6 ships only the pointer line, whose wording
+#                               the empty projection already proves. Listing
+#                               record-only ADRs under an "Open / deferred"
+#                               heading, and the metadata-line styling
+#                               remarks folded into the same issue, are
+#                               design calls and stay unaddressed.
+#
+# LOCKED DECISIONS (so an implementer does not re-litigate them)
+#
+#   #22/#30 are ONE defect    — the same non-atomic init, filed twice from
+#                               two angles. M4 closes both.
+#
+#   error text is frozen      — M1 switches phase/consent validation to map
+#                               lookups but leaves both refusal messages
+#                               byte-identical, so no test or txtar
+#                               expectation changes. The drift #26 reports is
+#                               in Schema(), not in the messages.
+#
+#   pointer placement         — M6 puts the decision-log line directly after
+#                               the preamble, where the EMPTY projection
+#                               already puts it, so both renders share one
+#                               structure and the pointer cannot be pushed
+#                               off-screen by a long rule list.
+#
+#   wrapped-vs-bare regexp    — #23 warns that validating a bare pattern
+#                               while USING the wrapped `^(?:...)$` form lets
+#                               the two disagree. They cannot actually
+#                               disagree about *validity* (wrapping any valid
+#                               regexp in a non-capturing group is always
+#                               valid), so M3 does not test for a divergence
+#                               that cannot exist. It removes the duplication
+#                               instead — one WrapSourcePattern helper both
+#                               sides call — so they cannot diverge in
+#                               ANCHORING, which is the real risk.
+#                               `source_rules.txtar` is the existing
+#                               end-to-end guard on that behaviour.
+#
+#   fan-out refresh           — found while planning: this repo's OWN fanned
+#                               skill copies are already stale
+#                               (.claude/skills/adr-draft/SKILL.md is 10865
+#                               bytes against skills/ at 11207 — nobody ran
+#                               regen after the skills changed in feb1a0b,
+#                               and .state records the stale hash so no drift
+#                               is reported). It is a live instance of the
+#                               #32 split-brain inside the primitive's own
+#                               repo. M8 refreshes them with the sanctioned
+#                               command and stops rather than forcing if
+#                               drift is reported.
+#
+#   release shape             — 0.3.1. With #29 and #31's guardrail cut, this
+#                               is a bugfix release plus one additive line in
+#                               the projection. M8 bumps SkillsMinCLIVersion,
+#                               .claude-plugin/plugin.json and
+#                               lastSkillReleaseVersion together, in one
+#                               milestone, so the suite is green at every
+#                               milestone boundary. Cutting the tag,
+#                               publishing the cask, and bumping the harness
+#                               submodule + CONSTITUTION_VERSION are human
+#                               acts OUTSIDE this plan and outside this
+#                               repository.
+#
+#   no self-governance ADR    — code and docs only, following the precedent
+#                               of the #18/#19/#20 plan. Nothing here changes
+#                               a decision this repo's own log records, and
+#                               constitution/adr/ is never written.
+#
+#   PR hygiene                — the PR body carries `Fixes #22`, `#23`,
+#                               `#24`, `#25`, `#26`, `#30`, `#32`. #27 and
+#                               #31 get a comment naming the half that
+#                               shipped and the half left open; neither is
+#                               closed.
+#
+# Ordering rationale (a sequential chain by design, not for lack of
+# independence): the config milestones come first because they are pure and
+# self-contained; init and guard behaviour follow; the projection change is
+# late so its golden churn lands once, on top of every txtar the earlier
+# milestones add; the two skills-text milestones are serialized because they
+# edit the same SKILL.md files.
+schemaVersion: 0.1.0
+
+milestones:
+  - number: 1
+    slug: config-enum-vocabularies
+    goal: "Derive every enumerated config vocabulary from the map the validator enforces, so Schema() cannot drift (#26)"
+    deliverables:
+      modify:
+        - "internal/config/config.go — add `validPhases` and `validConsentPolicies` (map[string]bool, the shape the three existing vocabulary maps already use) and switch validate's two direct-comparison branches to map lookups. Both refusal messages keep their current wording verbatim"
+        - "internal/config/schema.go — `phase` and `consent.policy` take `Values: sortedKeys(validPhases)` / `sortedKeys(validConsentPolicies)`; the schema.go:19-22 comment documenting the asymmetry is deleted"
+      test:
+        - "internal/config/schema_test.go — TestSchemaEnumValuesAreDerivedFromValidators: the structural guard that fails when Schema() and a validator map disagree"
+    contract:
+      check: go build ./... && go vet ./... && golangci-lint run && go test ./...
+      criteria:
+        - name: internal/config/schema_test.go::TestSchemaEnumValuesAreDerivedFromValidators
+          given: each of the five enumerated config fields and the validator map that governs it
+          when: Schema()'s Values for that field is compared against sortedKeys of that map
+          then: the two are identical for every field, so a value added to a validator map reaches `config schema` with no second edit — the structural guard #17 taught, not a restatement of the same literal list
+        - name: internal/config/config_test.go::TestValidateRejectsIllegalValue
+          given: the existing validation tests and the whole txtar corpus
+          when: they run against the map-lookup implementation
+          then: they pass unchanged, because no error string moved — this milestone changes how the check is performed, not what the user sees
+      paths:
+        - internal/config/**
+    steps:
+      - |
+        [ ] **Step 1: Write the failing test**
+
+        Append to `internal/config/schema_test.go` (it already has the
+        `fieldByKey` helper this uses):
+
+        ```go
+        // TestSchemaEnumValuesAreDerivedFromValidators is issue #26's
+        // regression guard. Schema() must not RE-LIST any enumerated
+        // vocabulary: every Values list has to come from the same map
+        // validate enforces, so adding a value in one place cannot leave the
+        // other stale. The check is structural (Values == sortedKeys(map)),
+        // not a restatement of the same literals in a test file — #17's
+        // lesson was that a literal list in a test proves nothing.
+        func TestSchemaEnumValuesAreDerivedFromValidators(t *testing.T) {
+        	tests := []struct {
+        		key   string
+        		vocab map[string]bool
+        	}{
+        		{"agentInstructions.targets", validTargets},
+        		{"consent.policy", validConsentPolicies},
+        		{"sourceTracking.type", validSourceTrackingTypes},
+        		{"phase", validPhases},
+        		{"skills.trees", validSkillTrees},
+        	}
+
+        	for _, tt := range tests {
+        		t.Run(tt.key, func(t *testing.T) {
+        			f := fieldByKey(t, tt.key)
+        			want := sortedKeys(tt.vocab)
+        			if len(f.Values) != len(want) {
+        				t.Fatalf("Schema() %s Values = %v, want %v (derived from the validator map)",
+        					tt.key, f.Values, want)
+        			}
+        			for i := range want {
+        				if f.Values[i] != want[i] {
+        					t.Errorf("Schema() %s Values[%d] = %q, want %q", tt.key, i, f.Values[i], want[i])
+        				}
+        			}
+        		})
+        	}
+        }
+        ```
+      - |
+        [ ] **Step 2: Run it and watch it fail**
+
+        Run: `go test ./internal/config -run TestSchemaEnumValuesAreDerivedFromValidators`
+
+        Expected: a COMPILE failure — `undefined: validConsentPolicies` and
+        `undefined: validPhases`. Those maps are what this milestone adds; the
+        test naming them is what forces them into existence.
+      - |
+        [ ] **Step 3: Add the two vocabulary maps**
+
+        In `internal/config/config.go`, directly after the existing
+        `validSkillTrees` block (~line 124):
+
+        ```go
+        var validPhases = map[string]bool{
+        	PhaseDraft:  true,
+        	PhaseSealed: true,
+        }
+
+        var validConsentPolicies = map[string]bool{
+        	ConsentStrict: true,
+        	ConsentOff:    true,
+        }
+        ```
+      - |
+        [ ] **Step 4: Switch validate to map lookups, messages untouched**
+
+        In `internal/config/config.go`'s `validate`, replace the phase switch
+        and the consent.policy comparison. Copy the two `fmt.Errorf` calls
+        across CHARACTER FOR CHARACTER — `init_flag_errors.txtar` and
+        `config_test.go` assert on this text.
+
+        ```go
+        	switch {
+        	case validPhases[c.Phase]:
+        	case c.Phase == "":
+        		return fmt.Errorf(
+        			"%s: field %q: required — add 'phase: sealed' for an existing (append-only) log, or 'phase: draft' for an unsealed one",
+        			path, "phase",
+        		)
+        	default:
+        		return fmt.Errorf(
+        			"%s: field %q: must be %q or %q (got %q)",
+        			path, "phase", PhaseDraft, PhaseSealed, c.Phase,
+        		)
+        	}
+
+        	if c.Consent.Policy == "" {
+        		c.Consent.Policy = ConsentStrict
+        	} else if !validConsentPolicies[c.Consent.Policy] {
+        		return fmt.Errorf(
+        			"%s: field %q: must be %q or %q (got %q)",
+        			path, "consent.policy", ConsentStrict, ConsentOff, c.Consent.Policy,
+        		)
+        	}
+        ```
+      - |
+        [ ] **Step 5: Derive the two Schema() Values lists**
+
+        In `internal/config/schema.go`, change the `consent.policy` field's
+        `Values: []string{ConsentStrict, ConsentOff}` to
+        `Values: sortedKeys(validConsentPolicies)` and the `phase` field's
+        `Values: []string{PhaseDraft, PhaseSealed}` to
+        `Values: sortedKeys(validPhases)`.
+
+        Then delete the now-false clause in the `Schema()` doc comment
+        (schema.go:19-22) that says phase/consent come "from their own
+        Phase/Consent consts" because "validate checks by direct comparison,
+        not a map". Every enum is map-derived now; the comment should just say
+        so.
+      - |
+        [ ] **Step 6: Run the tests and verify they pass**
+
+        Run: `go test ./internal/config -run 'TestSchema|TestValidate|TestLoad' -v`
+        Expected: PASS, including the pre-existing
+        `TestSchemaEnumsAcceptedByValidator` and
+        `TestSchemaRejectsUndeclaredEnumValue`.
+
+        Then the whole suite: `go test ./...`
+        Expected: PASS with **zero** test or txtar edits. If
+        `init_flag_errors.txtar` fails, a message was not copied verbatim in
+        Step 4 — fix the message, do not update the expectation.
+      - |
+        [ ] **Step 7: Commit**
+
+        ```bash
+        git add internal/config/config.go internal/config/schema.go internal/config/schema_test.go
+        git commit -m "config: derive phase and consent.policy enums from validator maps (#26)"
+        ```
+
+  - number: 2
+    slug: config-set-lenient-load
+    goal: "Let `config set` repair a config that fails validation, instead of refusing to read it (#27, settable-key half)"
+    deliverables:
+      create:
+        - cmd/constitution/testdata/script/config_set_repair.txtar — end-to-end proof that a config broken in a settable key is repairable through the one supported writer
+      modify:
+        - "internal/config/config.go — split Load into `loadRaw` (read + unmarshal, no validation) and Load (loadRaw + validate); add `LoadLenient(path)` exposing loadRaw for the write path only"
+        - "cmd/constitution/config.go — runConfigSet loads via LoadLenient; the pre-write whole-config Validate and the atomic write are untouched"
+      test:
+        - "cmd/constitution/config_test.go — TestConfigSetRepairsInvalidSettableKey, TestConfigSetStillRefusesAnInvalidResult, and the corruptConfigKey helper"
+    contract:
+      check: go build ./... && go vet ./... && golangci-lint run && go test ./...
+      criteria:
+        - name: cmd/constitution/config_test.go::TestConfigSetRepairsInvalidSettableKey
+          given: a constitution.yml whose consent.policy is the illegal value "stricter"
+          when: "`constitution config set consent.policy off` runs"
+          then: it exits 0 and the config on disk is valid again — the one supported writer is usable on exactly the files that need repair
+        - name: cmd/constitution/config_test.go::TestConfigSetStillRefusesAnInvalidResult
+          given: a valid constitution.yml
+          when: "`constitution config set consent.policy maybe` runs"
+          then: it exits 2 and constitution.yml is byte-identical to before, proving the relaxed pre-read gate did not relax the pre-write one
+        - name: cmd/constitution/testdata/script/config_set_repair.txtar
+          given: a repo whose constitution.yml carries an illegal consent.policy, so ordinary read-path commands refuse it
+          when: "`constitution config set consent.policy off` runs, then `constitution guard`"
+          then: the set exits 0 and guard reports clean — the repo is usable again without the hand-edit the skills forbid
+      paths:
+        - internal/config/config.go
+        - internal/config/config_test.go
+        - cmd/constitution/config.go
+        - cmd/constitution/config_test.go
+        - cmd/constitution/testdata/script/config_set_repair.txtar
+    steps:
+      - |
+        [ ] **Step 1: Write the failing tests**
+
+        Append to `cmd/constitution/config_test.go`. `setupRepo`, `runCLI`,
+        `mustReadFile` and `mustWriteFile` are the package's existing helpers
+        (defined in `new_test.go`):
+
+        ```go
+        // corruptConfigKey rewrites one line of the constitution.yml
+        // setupRepo wrote, so a test can start from a config that fails
+        // validation exactly the way a hand-edit breaks it.
+        func corruptConfigKey(t *testing.T, oldLine, newLine string) {
+        	t.Helper()
+        	before := mustReadFile(t, "constitution.yml")
+        	after := strings.Replace(before, oldLine, newLine, 1)
+        	if after == before {
+        		t.Fatalf("corruptConfigKey: %q not found in constitution.yml:\n%s", oldLine, before)
+        	}
+        	mustWriteFile(t, "constitution.yml", after)
+        }
+
+        // TestConfigSetRepairsInvalidSettableKey is issue #27's core case:
+        // config set validated the WHOLE config before applying anything, so
+        // it refused to operate on any file that failed validation —
+        // including when the invalid value was the very key being set. The
+        // skills forbid hand-editing constitution.yml, so that left an agent
+        // with no recovery path at all.
+        func TestConfigSetRepairsInvalidSettableKey(t *testing.T) {
+        	setupRepo(t, "off", "architecture")
+        	corruptConfigKey(t, "  policy: off", "  policy: stricter")
+
+        	if err := runCLI(t, "config", "set", "consent.policy", "off"); err != nil {
+        		t.Fatalf("config set(consent.policy, off) against a config broken in that same key = %v, want nil", err)
+        	}
+
+        	cfg, err := config.Load("constitution.yml")
+        	if err != nil {
+        		t.Fatalf("reload after repair: %v", err)
+        	}
+        	if cfg.Consent.Policy != config.ConsentOff {
+        		t.Errorf("Consent.Policy = %q, want %q", cfg.Consent.Policy, config.ConsentOff)
+        	}
+        }
+
+        // TestConfigSetStillRefusesAnInvalidResult is the control: relaxing
+        // the pre-READ gate must not relax the pre-WRITE one. An illegal
+        // result is still refused, and constitution.yml is untouched.
+        func TestConfigSetStillRefusesAnInvalidResult(t *testing.T) {
+        	setupRepo(t, "off", "architecture")
+        	before := mustReadFile(t, "constitution.yml")
+
+        	err := runCLI(t, "config", "set", "consent.policy", "maybe")
+        	if err == nil {
+        		t.Fatal("config set(consent.policy, maybe) = nil, want the illegal value refused")
+        	}
+        	if got := exitCode(err); got != 2 {
+        		t.Errorf("exitCode = %d, want 2", got)
+        	}
+        	if after := mustReadFile(t, "constitution.yml"); after != before {
+        		t.Errorf("constitution.yml changed despite the refusal:\nbefore: %s\nafter:  %s", before, after)
+        	}
+        }
+        ```
+      - |
+        [ ] **Step 2: Run them and watch the first fail**
+
+        Run: `go test ./cmd/constitution -run 'TestConfigSet(Repairs|StillRefuses)' -v`
+
+        Expected: `TestConfigSetRepairsInvalidSettableKey` FAILS with
+        `config set(consent.policy, off) ... = constitution.yml: field
+        "consent.policy": must be "strict" or "off" (got "stricter")` —
+        the refusal comes from the LOAD, before the key is even applied.
+        `TestConfigSetStillRefusesAnInvalidResult` passes already; it is the
+        regression guard for the next step.
+      - |
+        [ ] **Step 3: Split Load and add LoadLenient**
+
+        In `internal/config/config.go`, replace `Load` with:
+
+        ```go
+        // Load reads and validates constitution.yml at path.
+        func Load(path string) (*Config, error) {
+        	cfg, err := loadRaw(path)
+        	if err != nil {
+        		return nil, err
+        	}
+        	if err := cfg.validate(path); err != nil {
+        		return nil, err
+        	}
+        	return cfg, nil
+        }
+
+        // LoadLenient reads constitution.yml at path WITHOUT validating it.
+        //
+        // It exists for ONE caller — `constitution config set` (issue #27) —
+        // and every read path must keep using Load. The guarantee that
+        // matters is that an invalid config is never WRITTEN, which config
+        // set still enforces by validating the whole result before its
+        // atomic write; the guarantee that backfired is that an invalid
+        // config could never be EDITED, which froze the one supported writer
+        // against exactly the files needing repair.
+        //
+        // Note the defaulting difference: validate applies the
+        // consent.policy/sourceTracking.type defaults as a side effect, so a
+        // LoadLenient'd Config carries raw zero values until the caller's own
+        // Validate() runs.
+        func LoadLenient(path string) (*Config, error) {
+        	return loadRaw(path)
+        }
+
+        // loadRaw reads and unmarshals constitution.yml at path, applying no
+        // validation and no defaulting. Shared by Load and LoadLenient so
+        // the two cannot drift in how the file is read.
+        func loadRaw(path string) (*Config, error) {
+        	data, err := os.ReadFile(path)
+        	if err != nil {
+        		return nil, err
+        	}
+
+        	var cfg Config
+        	if err := yaml.Unmarshal(data, &cfg); err != nil {
+        		return nil, fmt.Errorf("%s: not valid YAML: %w", path, err)
+        	}
+        	return &cfg, nil
+        }
+        ```
+      - |
+        [ ] **Step 4: Point runConfigSet at it**
+
+        In `cmd/constitution/config.go`, in `runConfigSet` (~line 115),
+        change the one line:
+
+        ```go
+        	cfg, err := config.LoadLenient(configPath)
+        ```
+
+        Leave everything after it exactly as it is — the governed-key
+        refusal, `applyConfigKey`, the `cfg.Validate()` before the write, and
+        `persistConfig`. The pre-write validation is what keeps
+        `TestConfigSetStillRefusesAnInvalidResult` green.
+      - |
+        [ ] **Step 5: Run the tests and verify they pass**
+
+        Run: `go test ./cmd/constitution -run 'TestConfigSet' -v`
+        Expected: PASS, all of them, including the pre-existing
+        `TestConfigSetRefusesGovernedKeys` and `TestConfigSetRoundTrip`.
+
+        Then confirm the one-caller rule holds:
+        `grep -rn "LoadLenient" cmd internal`
+        Expected: exactly two hits — the definition and `runConfigSet`.
+      - |
+        [ ] **Step 6: Add the end-to-end testscript**
+
+        Create `cmd/constitution/testdata/script/config_set_repair.txtar`:
+
+        ```
+        # A constitution.yml that fails validation is still repairable through
+        # the one supported writer (issue #27): config set loads leniently, so
+        # the file that needs repair is not frozen against its own repair
+        # tool. The pre-WRITE validation is unchanged — the RESULT must be
+        # valid — so this relaxes the read gate only.
+
+        # The starting config is invalid: consent.policy is "stricter".
+        # Ordinary read-path commands refuse it, which is the state issue #27
+        # reports as unrecoverable.
+        ! exec constitution guard
+        stderr 'field "consent\.policy"'
+
+        exec constitution config set consent.policy off
+        stdout 'set consent.policy = off'
+
+        # Repaired: the read paths work again.
+        exec constitution guard
+        stdout 'guard: clean'
+
+        # ...and the pre-write gate still refuses an invalid RESULT.
+        cp constitution.yml constitution.yml.snapshot
+        ! exec constitution config set consent.policy maybe
+        stderr 'field "consent\.policy": must be "strict" or "off" \(got "maybe"\)'
+        cmp constitution.yml constitution.yml.snapshot
+
+        -- constitution.yml --
+        schemaVersion: 1
+        phase: draft
+        consent:
+          policy: stricter
+        sourceTracking:
+          type: none
+        categories:
+          - architecture
+
+        -- constitution/adr/ADR-0001-first.md --
+        ---
+        id: ADR-0001
+        title: First
+        date: 2026-07-01
+        status: accepted
+        ---
+
+        ## Context and Problem Statement
+
+        x
+
+        ## Considered Options
+
+        - a
+
+        ## Decision Outcome
+
+        y
+        ```
+
+        Run: `go test ./cmd/constitution -run 'TestScripts/config_set_repair' -v`
+        Expected: PASS.
+      - |
+        [ ] **Step 7: Run the full suite and commit**
+
+        Run: `go build ./... && go vet ./... && golangci-lint run && go test ./...`
+        Expected: PASS.
+
+        ```bash
+        git add internal/config/config.go cmd/constitution/config.go \
+                cmd/constitution/config_test.go \
+                cmd/constitution/testdata/script/config_set_repair.txtar
+        git commit -m "config set: load leniently so an invalid config stays repairable (#27)"
+        ```
+
+  - number: 3
+    slug: source-pattern-write-validation
+    goal: "Stop an uncompilable sourceTracking.pattern from reaching disk via init or config set (#23)"
+    deliverables:
+      create:
+        - "internal/config/pattern.go — `WrapSourcePattern(pattern string) string`, the single definition of the anchored `^(?:...)$` form both the write-path validator and the CLI's source check compile"
+      modify:
+        - "internal/config/config.go — the EXPORTED Validate() compiles the wrapped pattern and rejects a compile error naming the field and the repair command. Deliberately NOT in the unexported validate(path) that Load calls"
+        - "cmd/constitution/writepath.go — validateSource compiles via config.WrapSourcePattern instead of building the wrapped string itself"
+        - cmd/constitution/testdata/script/init_source_tracking.txtar — an uncompilable `--source-pattern` now exits 2 and writes nothing
+        - cmd/constitution/testdata/script/config_set.txtar — an uncompilable `config set sourceTracking.pattern` now exits 2 and leaves the config byte-identical
+      test:
+        - "internal/config/config_test.go — TestValidateRejectsUncompilablePattern, TestLoadStaysLenientAboutPatterns, TestWrapSourcePatternAnchors"
+    contract:
+      check: go build ./... && go vet ./... && golangci-lint run && go test ./...
+      criteria:
+        - name: internal/config/config_test.go::TestValidateRejectsUncompilablePattern
+          given: a Config whose sourceTracking.pattern is "(unclosed"
+          when: the exported Validate() runs
+          then: it is rejected naming sourceTracking.pattern, quoting the regexp error, and naming `constitution config set sourceTracking.pattern` as the repair
+        - name: internal/config/config_test.go::TestLoadStaysLenientAboutPatterns
+          given: an on-disk constitution.yml carrying that same uncompilable pattern
+          when: config.Load reads it
+          then: it loads without error, exactly as today — this milestone closes the write path only, so no existing repo starts failing on commands that work for it now
+        - name: cmd/constitution/testdata/script/init_source_tracking.txtar
+          given: "`constitution init --source-tracking generic --source-pattern '['`"
+          when: it runs
+          then: it exits 2 and neither constitution.yml nor constitution/ exists — the pattern never reaches disk
+        - name: cmd/constitution/testdata/script/source_rules.txtar
+          given: the existing end-to-end source-pattern behaviour suite
+          when: it runs against the shared WrapSourcePattern helper
+          then: it passes unchanged, proving the refactor preserved anchoring — a source that matches only a prefix is still rejected
+      paths:
+        - internal/config/**
+        - cmd/constitution/writepath.go
+        - cmd/constitution/testdata/script/init_source_tracking.txtar
+        - cmd/constitution/testdata/script/config_set.txtar
+    steps:
+      - |
+        [ ] **Step 1: Write the failing tests**
+
+        Append to `internal/config/config_test.go` (`baseValidConfig` lives in
+        `schema_test.go`, same package):
+
+        ```go
+        // TestValidateRejectsUncompilablePattern is issue #23: both
+        // `init --source-pattern` and `config set sourceTracking.pattern`
+        // wrote a pattern to disk without ever compiling it, so the failure
+        // surfaced much later, at the first `adr new --source ...`.
+        func TestValidateRejectsUncompilablePattern(t *testing.T) {
+        	cfg := baseValidConfig()
+        	cfg.SourceTracking = SourceTracking{Type: SourceTrackingGeneric, Pattern: "(unclosed"}
+
+        	err := cfg.Validate()
+        	if err == nil {
+        		t.Fatal("Validate() error = nil, want the uncompilable pattern rejected before it can be written")
+        	}
+        	if !strings.Contains(err.Error(), `field "sourceTracking.pattern"`) {
+        		t.Errorf("Validate() error = %q, want it to name the field", err.Error())
+        	}
+        	if !strings.Contains(err.Error(), "config set sourceTracking.pattern") {
+        		t.Errorf("Validate() error = %q, want it to name the repair command", err.Error())
+        	}
+        }
+
+        // TestLoadStaysLenientAboutPatterns pins the scope decision #23 asked
+        // for explicitly: the compile check belongs to the WRITE path only.
+        // A config that already carries a bad pattern keeps loading exactly
+        // as it does today, so this change cannot brick an existing repo —
+        // it only stops a new bad value reaching disk.
+        func TestLoadStaysLenientAboutPatterns(t *testing.T) {
+        	path := write(t, "schemaVersion: 1\nphase: draft\ncategories: [architecture]\n"+
+        		"sourceTracking:\n  type: generic\n  pattern: '(unclosed'\n")
+
+        	cfg, err := Load(path)
+        	if err != nil {
+        		t.Fatalf("Load() error = %v, want nil — read paths stay lenient about patterns", err)
+        	}
+        	if cfg.SourceTracking.Pattern != "(unclosed" {
+        		t.Errorf("Pattern = %q, want it preserved verbatim", cfg.SourceTracking.Pattern)
+        	}
+        }
+
+        // TestWrapSourcePatternAnchors pins the form both the validator and
+        // validateSource compile. The two cannot disagree about VALIDITY
+        // (wrapping a valid regexp in a non-capturing group is always valid),
+        // but they could disagree about ANCHORING if either built the string
+        // itself — which is what this helper prevents.
+        func TestWrapSourcePatternAnchors(t *testing.T) {
+        	if got, want := WrapSourcePattern("a|b"), "^(?:a|b)$"; got != want {
+        		t.Errorf("WrapSourcePattern(%q) = %q, want %q", "a|b", got, want)
+        	}
+        }
+        ```
+      - |
+        [ ] **Step 2: Run them and watch two fail**
+
+        Run: `go test ./internal/config -run 'TestValidateRejectsUncompilablePattern|TestLoadStaysLenient|TestWrapSourcePattern' -v`
+
+        Expected: a COMPILE failure — `undefined: WrapSourcePattern`. Comment
+        out `TestWrapSourcePatternAnchors` for a moment if you want to see the
+        other two run: `TestValidateRejectsUncompilablePattern` FAILS
+        ("Validate() error = nil"), `TestLoadStaysLenientAboutPatterns`
+        already PASSES and must still pass at the end.
+      - |
+        [ ] **Step 3: Add the shared helper**
+
+        Create `internal/config/pattern.go`:
+
+        ```go
+        package config
+
+        // WrapSourcePattern returns the anchored form of a
+        // sourceTracking.pattern that both the write-path validator
+        // (Config.Validate) and the CLI's source check
+        // (cmd/constitution/writepath.go's validateSource) compile:
+        // `^(?:<pattern>)$`.
+        //
+        // It exists so the two cannot build that string differently. Issue
+        // #23 flagged the risk as validating one form and using another;
+        // validity cannot actually diverge (wrapping a valid regexp in a
+        // non-capturing group is always valid), but anchoring can, and a
+        // silently unanchored source check would accept a ref that merely
+        // CONTAINS a match.
+        func WrapSourcePattern(pattern string) string {
+        	return "^(?:" + pattern + ")$"
+        }
+        ```
+      - |
+        [ ] **Step 4: Compile the pattern in the exported Validate() only**
+
+        In `internal/config/config.go`, add `"regexp"` to the imports and
+        replace the body of the exported `Validate`:
+
+        ```go
+        func (c *Config) Validate() error {
+        	if err := c.validate("constitution.yml"); err != nil {
+        		return err
+        	}
+
+        	// The pattern compile check lives HERE, on the exported write-path
+        	// validator, and deliberately NOT in validate(path), which Load
+        	// calls on every read. Validate() has exactly two callers, both
+        	// write paths — runConfigSet (cmd/constitution/config.go) and
+        	// buildOrLoadConfig (cmd/constitution/init.go) — so this stops a
+        	// bad pattern reaching disk without changing how any existing
+        	// config loads. Issue #23 flagged making it fail at Load as a
+        	// behaviour change needing a deliberate decision; this change does
+        	// not take it.
+        	if c.SourceTracking.Pattern != "" {
+        		if _, err := regexp.Compile(WrapSourcePattern(c.SourceTracking.Pattern)); err != nil {
+        			return fmt.Errorf(
+        				"constitution.yml: field %q: %q is not a valid regexp: %w; repair it with `constitution config set sourceTracking.pattern <regexp>`",
+        				"sourceTracking.pattern", c.SourceTracking.Pattern, err,
+        			)
+        		}
+        	}
+        	return nil
+        }
+        ```
+
+        Keep the existing doc comment above `Validate` and add a sentence
+        noting it is strictly stronger than `validate(path)` on this one
+        field.
+      - |
+        [ ] **Step 5: Make validateSource use the helper**
+
+        In `cmd/constitution/writepath.go`, in `validateSource` (~line 351),
+        change:
+
+        ```go
+        	re, err := regexp.Compile(config.WrapSourcePattern(pattern))
+        ```
+
+        The surrounding error handling stays as it is — that path is what a
+        pre-existing bad on-disk pattern still hits, and its message is what
+        issue #23 quotes.
+      - |
+        [ ] **Step 6: Run the tests and verify they pass**
+
+        Run: `go test ./internal/config ./cmd/constitution -v -run 'Pattern|Source|TestLoad'`
+        Expected: PASS, including `TestScripts/source_rules`, which is the
+        end-to-end guard that anchoring survived the refactor.
+      - |
+        [ ] **Step 7: Extend the two testscripts**
+
+        In `cmd/constitution/testdata/script/init_source_tracking.txtar`,
+        append before the `-- founding.md --` block:
+
+        ```
+        # An uncompilable --source-pattern is refused at the point of the
+        # write (issue #23), not later at the first `adr new --source`.
+        # Nothing is left behind: this runs in a fresh subdirectory precisely
+        # so the refusal can be checked against an empty tree.
+        mkdir badpattern
+        cd badpattern
+        cp ../founding.md founding.md
+        exitcode 2 constitution init --source-tracking generic --source-pattern '[' --founding-file founding.md
+        stderr 'sourceTracking\.pattern'
+        ! exists constitution.yml
+        ! exists constitution
+        cd ..
+        ```
+
+        In `cmd/constitution/testdata/script/config_set.txtar`, append after
+        the existing governed-key refusal block (the snapshot file is already
+        in scope there):
+
+        ```
+        # --- uncompilable pattern: exit 2, nothing written (issue #23) ---
+        ! exec constitution config set sourceTracking.pattern '(unclosed'
+        stderr 'is not a valid regexp'
+        cmp constitution.yml constitution.yml.snapshot
+        ```
+
+        Run: `go test ./cmd/constitution -run 'TestScripts/(init_source_tracking|config_set)' -v`
+        Expected: PASS.
+      - |
+        [ ] **Step 8: Run the full suite and commit**
+
+        Run: `go build ./... && go vet ./... && golangci-lint run && go test ./...`
+        Expected: PASS.
+
+        ```bash
+        git add internal/config/pattern.go internal/config/config.go \
+                internal/config/config_test.go cmd/constitution/writepath.go \
+                cmd/constitution/testdata/script/init_source_tracking.txtar \
+                cmd/constitution/testdata/script/config_set.txtar
+        git commit -m "config: refuse an uncompilable sourceTracking.pattern on the write path (#23)"
+        ```
+
+  - number: 4
+    slug: init-atomic-founding
+    goal: "Make `init` atomic: validate the founding file fully before any byte is written (#22, #30)"
+    deliverables:
+      modify:
+        - "cmd/constitution/init.go — split seedFounding into `prepareFounding` (read, validate, compose — pure, no writes) and `writeFounding` (the atomic write and its stdout line), introduce the `foundingWrite` struct, and reorder runInit so preparation happens before persistConfig and before MkdirAll"
+        - "cmd/constitution/testdata/script/init_founding_category_error.txtar — assert the refusal leaves no trace, then that a corrected re-run succeeds"
+      test:
+        - "cmd/constitution/init_test.go — TestInitWritesNothingWhenAFoundingCategoryIsUnknown, TestInitWritesNothingWhenTheFoundingBodyIsMalformed, and the assertNoInitTrace helper"
+    contract:
+      check: go build ./... && go vet ./... && golangci-lint run && go test ./...
+      criteria:
+        - name: cmd/constitution/init_test.go::TestInitWritesNothingWhenAFoundingCategoryIsUnknown
+          given: a founding file whose rule uses category "testing" and an `init --category purpose --category architecture` that omits it
+          when: init runs
+          then: it exits 2 and neither constitution.yml nor constitution/ exists — the failure is atomic, so the retry loop the issue describes cannot start
+        - name: cmd/constitution/init_test.go::TestInitWritesNothingWhenTheFoundingBodyIsMalformed
+          given: a founding file missing the mandatory "## Decision Outcome" section
+          when: init runs
+          then: it exits 2 and the working tree is unchanged, so body-shape failures are atomic too
+        - name: cmd/constitution/testdata/script/init_founding_category_error.txtar
+          given: the refused init above, followed by a re-run whose --category set includes the missing category
+          when: both run in sequence
+          then: the first exits 2 leaving no constitution.yml, and the second exits 0 seeding ADR-0001 — the recovery path an agent following the shipped skill can actually take
+        - name: cmd/constitution/testdata/script/init_idempotent.txtar
+          given: the existing idempotency, drift and re-init testscripts
+          when: they run against the reordered init
+          then: they pass unchanged — a re-run on an established repo still no-ops and still leaves the tree byte-identical
+      paths:
+        - cmd/constitution/init.go
+        - cmd/constitution/init_test.go
+        - cmd/constitution/testdata/script/init_founding_category_error.txtar
+    steps:
+      - |
+        [ ] **Step 1: Write the failing tests**
+
+        Append to `cmd/constitution/init_test.go`, and add `"errors"` to its
+        import block:
+
+        ```go
+        // assertNoInitTrace proves a refused init left the working tree as it
+        // found it. Only files the test wrote itself (founding.md) may remain.
+        func assertNoInitTrace(t *testing.T, dir string) {
+        	t.Helper()
+        	for _, p := range []string{"constitution.yml", "constitution"} {
+        		_, err := os.Stat(filepath.Join(dir, p))
+        		if err == nil {
+        			t.Errorf("%s exists after a refused init; the failure must be atomic", p)
+        			continue
+        		}
+        		if !errors.Is(err, os.ErrNotExist) {
+        			t.Fatalf("stat %s: %v", p, err)
+        		}
+        	}
+        }
+
+        // TestInitWritesNothingWhenAFoundingCategoryIsUnknown is issues
+        // #22/#30: init persisted constitution.yml BEFORE validating the
+        // founding file's rule categories against the vocabulary it had just
+        // written. The refusal then left a config on disk carrying the
+        // offending vocabulary, and because a re-run honours an existing
+        // config, every retry failed identically — with every documented
+        // recovery path closed (no hand-edits, categories not settable via
+        // config set, init "exactly once").
+        func TestInitWritesNothingWhenAFoundingCategoryIsUnknown(t *testing.T) {
+        	dir := t.TempDir()
+        	t.Chdir(dir)
+        	founding := foundingMADRBody("Every change ships with tests.",
+        		"### testing\n\n#### mandatory-tests\nEvery change ships with tests.")
+        	mustWriteFile(t, "founding.md", founding)
+
+        	err := runCLI(t, "init", "--category", "purpose", "--category", "architecture",
+        		"--founding-file", "founding.md")
+        	if err == nil {
+        		t.Fatal("init(unknown founding category) = nil, want error")
+        	}
+        	if got := exitCode(err); got != 2 {
+        		t.Errorf("exitCode = %d, want 2", got)
+        	}
+        	assertNoInitTrace(t, dir)
+        }
+
+        // TestInitWritesNothingWhenTheFoundingBodyIsMalformed covers the
+        // other pre-flight failure on the same path: a body-shape refusal
+        // must be just as atomic as a vocabulary one.
+        func TestInitWritesNothingWhenTheFoundingBodyIsMalformed(t *testing.T) {
+        	dir := t.TempDir()
+        	t.Chdir(dir)
+        	mustWriteFile(t, "founding.md",
+        		"## Context and Problem Statement\n\nx\n\n## Considered Options\n\n- a\n")
+
+        	err := runCLI(t, "init", "--founding-file", "founding.md")
+        	if err == nil {
+        		t.Fatal("init(malformed founding body) = nil, want error")
+        	}
+        	if got := exitCode(err); got != 2 {
+        		t.Errorf("exitCode = %d, want 2", got)
+        	}
+        	assertNoInitTrace(t, dir)
+        }
+        ```
+      - |
+        [ ] **Step 2: Run them and watch them fail**
+
+        Run: `go test ./cmd/constitution -run 'TestInitWritesNothing' -v`
+
+        Expected: both FAIL with
+        `constitution.yml exists after a refused init; the failure must be
+        atomic` (and `constitution exists ...`). That is the defect, reproduced
+        as a test.
+      - |
+        [ ] **Step 3: Split seedFounding into a pure half and a writing half**
+
+        In `cmd/constitution/init.go`, replace `seedFounding` with the two
+        functions below. Every validation is carried over unchanged — same
+        calls, same order, same error strings and exit codes; only the write
+        moves out.
+
+        ```go
+        // foundingWrite is a fully validated founding ADR, composed in memory
+        // and ready to write: by the time one exists, everything init can
+        // refuse about --founding-file has already been refused.
+        type foundingWrite struct {
+        	dest    string
+        	content []byte
+        }
+
+        // prepareFounding reads and fully validates --founding-file WITHOUT
+        // writing anything (issues #22/#30). It returns nil when there is
+        // nothing to seed: no --founding-file, or a log that already has ADRs
+        // (bootstrap seeding is one-time, so a re-init of an established repo
+        // refreshes integration, not the log).
+        //
+        // The body is validated through adr.ValidateBody — the exact function
+        // `adr new --body-file` uses — and the composed record is then run
+        // through the same full parse the read path uses, exactly like runNew
+        // does, so valid-on-write and valid-on-read can never drift apart.
+        func prepareFounding(cmd *cli.Command, cfg *config.Config, adrDir string) (*foundingWrite, error) {
+        	foundingFile := cmd.String("founding-file")
+        	if foundingFile == "" {
+        		return nil, nil
+        	}
+
+        	// The pre-flight runs before anything creates constitution/adr/,
+        	// so a missing directory is simply an empty log.
+        	existing, err := adr.ParseDir(adrDir)
+        	if err != nil && !errors.Is(err, os.ErrNotExist) {
+        		return nil, err
+        	}
+        	if len(existing) > 0 {
+        		return nil, nil
+        	}
+
+        	body, err := readBody(foundingFile, os.Stdin)
+        	if err != nil {
+        		return nil, fmt.Errorf("init: reading --founding-file: %w", err)
+        	}
+        	const label = "--founding-file"
+        	if err := adr.ValidateBody(body, label); err != nil {
+        		return nil, &exitError{err: fmt.Errorf("init: %w", err), code: 2}
+        	}
+
+        	// Founding ADRs carry the reserved `bootstrap` source ONLY when
+        	// source tracking is enabled: under `type: none` no ADR may carry a
+        	// `source` field at all (plan §2.8, erratum #8).
+        	foundingSource := ""
+        	if cfg.SourceTracking.Type != config.SourceTrackingNone {
+        		foundingSource = bootstrapSource
+        	}
+
+        	_, id, err := adr.NextID(adrDir)
+        	if err != nil {
+        		return nil, err
+        	}
+        	content := adr.Compose(adr.NewADR{
+        		ID:     id,
+        		Title:  foundingTitle,
+        		Date:   today(),
+        		Source: foundingSource,
+        		Body:   string(body),
+        	})
+
+        	parsed, err := adr.ParseBytesUnnamed(content, label)
+        	if err != nil {
+        		return nil, &exitError{err: fmt.Errorf("init: invalid %s: %w", label, err), code: 2}
+        	}
+
+        	// Seed rules may only use categories already in the configured
+        	// vocabulary: there is no --new-category at init — the vocabulary
+        	// was chosen seconds earlier, so an unknown category is a typo.
+        	vocab := make(map[string]bool, len(cfg.Categories))
+        	for _, c := range cfg.Categories {
+        		vocab[c] = true
+        	}
+        	for _, r := range parsed.Rules {
+        		if !vocab[r.Category] {
+        			return nil, &exitError{err: fmt.Errorf(
+        				"init: %s: rule category %q is not in the configured vocabulary %v",
+        				label, r.Category, cfg.Categories), code: 2}
+        		}
+        	}
+
+        	return &foundingWrite{
+        		dest:    filepath.Join(adrDir, adr.Filename(id, foundingTitle)),
+        		content: content,
+        	}, nil
+        }
+
+        // writeFounding commits a prepared founding ADR to disk. A nil fw is
+        // the "nothing to seed" case and writes nothing.
+        func writeFounding(fw *foundingWrite, stdout io.Writer) error {
+        	if fw == nil {
+        		return nil
+        	}
+        	if err := atomicwrite.WriteFile(fw.dest, fw.content, 0o644); err != nil {
+        		return fmt.Errorf("init: writing --founding-file: %w", err)
+        	}
+        	_, err := fmt.Fprintf(stdout, "created %s\n", fw.dest)
+        	return err
+        }
+        ```
+      - |
+        [ ] **Step 4: Reorder runInit so preparation precedes every write**
+
+        In `cmd/constitution/init.go`'s `runInit`, replace sections 2b and 3
+        with:
+
+        ```go
+        	// --- 2b. pre-flight --founding-file: read, validate and compose it
+        	// entirely in memory BEFORE any byte is written, so a bad founding
+        	// file leaves the working tree untouched (issues #22/#30). The
+        	// vocabulary it is checked against is the in-memory config; the
+        	// on-disk reload below is still what everything downstream uses. ---
+        	adrDir := filepath.Join(cwd, "constitution", "adr")
+        	founding, err := prepareFounding(cmd, cfg, adrDir)
+        	if err != nil {
+        		return err
+        	}
+
+        	// --- 2c. persist a freshly authored config (a re-run leaves the
+        	// existing one untouched, so the tree stays byte-identical), then
+        	// reload it so the config used downstream is the validated, on-disk
+        	// verbatim ---
+        	if isNew {
+        		configPath := filepath.Join(cwd, "constitution.yml")
+        		if err := persistConfig(configPath, cfg); err != nil {
+        			return err
+        		}
+        		if cfg, err = config.Load(configPath); err != nil {
+        			return err
+        		}
+        	}
+
+        	// --- 3. seed the founding ADR (only on a fresh log, so re-runs
+        	// stay idempotent) ---
+        	if err := os.MkdirAll(adrDir, 0o755); err != nil {
+        		return err
+        	}
+        	if err := writeFounding(founding, stdout); err != nil {
+        		return err
+        	}
+        ```
+
+        Add `"errors"` to init.go's imports if it is not already there (it is
+        — `errors.As` is used for MarkerError), and delete the now-unused
+        `seedFounding`.
+      - |
+        [ ] **Step 5: Run the tests and verify they pass**
+
+        Run: `go test ./cmd/constitution -run 'TestInit' -v`
+        Expected: PASS — the two new tests plus every pre-existing one,
+        including `TestInitSeedsOneFoundingADRFromBody`,
+        `TestInitFoundingUnknownCategory` and
+        `TestInitRejectsFoundingBodyMissingMandatorySection`.
+
+        Then the idempotency e2e specifically:
+        `go test ./cmd/constitution -run 'TestScripts/init_' -v`
+        Expected: PASS. A failure in `init_idempotent` or `init_drift` means
+        the reorder changed re-run behaviour — the re-run path must still
+        return a nil `foundingWrite` and write nothing.
+      - |
+        [ ] **Step 6: Extend the category-error testscript**
+
+        In `cmd/constitution/testdata/script/init_founding_category_error.txtar`,
+        replace the `# no founding ADR was seeded` block with:
+
+        ```
+        # The refusal is atomic: no config, no log directory, nothing to clean
+        # up by hand (issues #22/#30). Before this, constitution.yml landed on
+        # disk carrying the trimmed vocabulary and every retry failed
+        # identically against it.
+        ! exists constitution/adr/ADR-0001-founding-constitution.md
+        ! exists constitution.yml
+        ! exists constitution
+
+        # ...so re-running with a vocabulary that covers the rule just works.
+        exec constitution init --founding-file principles.md --category architecture --category process --category bogus
+        stdout 'init: constitution ready'
+        exists constitution/adr/ADR-0001-founding-constitution.md
+        grep '#### some-rule' constitution/adr/ADR-0001-founding-constitution.md
+        ```
+
+        Run: `go test ./cmd/constitution -run 'TestScripts/init_founding_category_error' -v`
+        Expected: PASS.
+      - |
+        [ ] **Step 7: Run the full suite and commit**
+
+        Run: `go build ./... && go vet ./... && golangci-lint run && go test ./...`
+        Expected: PASS.
+
+        ```bash
+        git add cmd/constitution/init.go cmd/constitution/init_test.go \
+                cmd/constitution/testdata/script/init_founding_category_error.txtar
+        git commit -m "init: validate the founding file before any write (#22, #30)"
+        ```
+
+  - number: 5
+    slug: guard-no-commits-message
+    goal: "Replace guard's raw git plumbing in a repo with no commits with an actionable message (#25)"
+    deliverables:
+      create:
+        - cmd/constitution/testdata/script/guard_no_commits.txtar — end-to-end coverage of the message, the --no-git escape, and the restored git mode after one commit
+      modify:
+        - "internal/guard/git.go — `headResolvable(dir string) bool`, running `git rev-parse --verify --quiet HEAD`"
+        - "internal/guard/guard.go — resolveGitMode returns an actionable guard error when HEAD does not resolve, before any diff runs"
+      test:
+        - "internal/guard/guard_test.go — TestGuardExplainsAnUnbornHEAD, TestGuardNoGitStillWorksWithoutCommits, and the newUncommittedRepo helper"
+    contract:
+      check: go build ./... && go vet ./... && golangci-lint run && go test ./...
+      criteria:
+        - name: internal/guard/guard_test.go::TestGuardExplainsAnUnbornHEAD
+          given: a sealed-shape repo (one ADR plus a manifest baseline) inside a git repository with zero commits
+          when: guard runs
+          then: it fails with a message naming the no-commits condition and the --no-git escape, and the text "bad revision" appears nowhere in it
+        - name: internal/guard/guard_test.go::TestGuardNoGitStillWorksWithoutCommits
+          given: the same repository
+          when: guard runs with NoGit set
+          then: it reports clean — the documented escape hatch is unaffected
+        - name: cmd/constitution/testdata/script/guard_no_commits.txtar
+          given: "`git init` with no commit, then init, then `seal --approve`"
+          when: guard runs, then guard --no-git, then a git commit followed by guard
+          then: the first exits 2 with the actionable message, the second exits 0, and the third reports git mode vs HEAD — the normal path is untouched
+        - name: cmd/constitution/testdata/script/guard_draft.txtar
+          given: the existing draft-phase guard testscript
+          when: it runs
+          then: it passes unchanged — draft guard never enters git mode, so a draft repo with no commits behaves exactly as before
+      paths:
+        - internal/guard/**
+        - cmd/constitution/testdata/script/guard_no_commits.txtar
+    steps:
+      - |
+        [ ] **Step 1: Write the failing tests**
+
+        Append to `internal/guard/guard_test.go` (`gitIn`, `writeADR` and
+        `requireGit` are the package's existing helpers):
+
+        ```go
+        // newUncommittedRepo builds a sealed-shape repo — one ADR plus a
+        // manifest baseline — inside a git repository that has NO commits.
+        // That is a plausible first-run state, not a contrived one: `init`
+        // does not require a commit and nothing stops a user sealing before
+        // their first one (issue #25).
+        func newUncommittedRepo(t *testing.T) string {
+        	t.Helper()
+        	requireGit(t)
+
+        	root := t.TempDir()
+        	adrDir := filepath.Join(root, "constitution", "adr")
+        	if err := os.MkdirAll(adrDir, 0o755); err != nil {
+        		t.Fatal(err)
+        	}
+        	gitIn(t, root, "init", "-q")
+
+        	a := writeADR(t, adrDir, "ADR-0001", "First rule", "y")
+        	if err := manifest.Write(adrDir, []adr.ADR{a}); err != nil {
+        		t.Fatal(err)
+        	}
+        	return root
+        }
+
+        // TestGuardExplainsAnUnbornHEAD is issue #25: sealed guard compares
+        // against HEAD, so in a repo with no commits every git command fails
+        // and git's own plumbing ("fatal: bad revision 'HEAD'") reached the
+        // user with no hint about what to do.
+        func TestGuardExplainsAnUnbornHEAD(t *testing.T) {
+        	root := newUncommittedRepo(t)
+
+        	_, err := Run(Options{Root: root})
+        	if err == nil {
+        		t.Fatal("Run() error = nil, want the no-commits case reported")
+        	}
+        	if !strings.Contains(err.Error(), "no commits yet") {
+        		t.Errorf("Run() error = %q, want it to name the no-commits condition", err.Error())
+        	}
+        	if !strings.Contains(err.Error(), "--no-git") {
+        		t.Errorf("Run() error = %q, want it to name the --no-git escape", err.Error())
+        	}
+        	if strings.Contains(err.Error(), "bad revision") {
+        		t.Errorf("Run() error = %q, want git plumbing kept out of the message", err.Error())
+        	}
+        }
+
+        // TestGuardNoGitStillWorksWithoutCommits proves the escape hatch the
+        // new message points at actually works from that state.
+        func TestGuardNoGitStillWorksWithoutCommits(t *testing.T) {
+        	root := newUncommittedRepo(t)
+
+        	res, err := Run(Options{Root: root, NoGit: true})
+        	if err != nil {
+        		t.Fatalf("Run(NoGit) error = %v, want nil", err)
+        	}
+        	if !res.Summary.Clean {
+        		t.Errorf("Run(NoGit) = %+v, want clean", res)
+        	}
+        }
+        ```
+      - |
+        [ ] **Step 2: Run them and watch the first fail**
+
+        Run: `go test ./internal/guard -run 'TestGuard(ExplainsAnUnbornHEAD|NoGitStillWorks)' -v`
+
+        Expected: `TestGuardExplainsAnUnbornHEAD` FAILS — the error reads
+        `guard: git diff against HEAD: git diff --name-status -z -M HEAD --
+        constitution/adr: fatal: bad revision 'HEAD'`, which is exactly the
+        output the issue reports. `TestGuardNoGitStillWorksWithoutCommits`
+        passes already and must keep passing.
+      - |
+        [ ] **Step 3: Add the HEAD probe**
+
+        In `internal/guard/git.go`, after `gitAvailable`:
+
+        ```go
+        // headResolvable reports whether HEAD names a commit in dir. It is
+        // false in a repository with no commits yet (an unborn branch), where
+        // every `git diff ... HEAD` fails with git's own
+        // "fatal: bad revision 'HEAD'" (issue #25).
+        func headResolvable(dir string) bool {
+        	_, err := runGit(dir, "rev-parse", "--verify", "--quiet", "HEAD")
+        	return err == nil
+        }
+        ```
+      - |
+        [ ] **Step 4: Refuse with an actionable message in resolveGitMode**
+
+        In `internal/guard/guard.go`'s `resolveGitMode`, insert between the
+        `requireRepoRootIsGitTop` block and the `base := "HEAD"` line:
+
+        ```go
+        	// A repository with no commits has no HEAD to diff against, so
+        	// every git mode below would fail with git's own plumbing. Say what
+        	// happened and what to do instead (issue #25). This applies whether
+        	// or not a base was requested explicitly: --merge-base resolves
+        	// against HEAD too.
+        	if !headResolvable(opts.Root) {
+        		return gitModeDecision{}, fmt.Errorf(
+        			"guard: %s has no commits yet, so there is no HEAD for the sealed log to be compared against; commit the constitution first, or pass --no-git for manifest-only checking",
+        			opts.Root,
+        		)
+        	}
+        ```
+      - |
+        [ ] **Step 5: Run the tests and verify they pass**
+
+        Run: `go test ./internal/guard -v`
+        Expected: PASS — the two new tests plus every existing git-mode test
+        (`TestRunCleanRepoIsClean`, `TestRunDetectsBodyEditInGitMode`, the
+        merge-base and rename cases), all of which run in repos that DO have
+        commits and must be unaffected.
+      - |
+        [ ] **Step 6: Add the end-to-end testscript**
+
+        Create `cmd/constitution/testdata/script/guard_no_commits.txtar`:
+
+        ```
+        # A sealed log in a git repo with NO commits (issue #25). Sealed guard
+        # compares against HEAD, which does not exist yet, so it must say so
+        # instead of leaking `fatal: bad revision 'HEAD'`. The --no-git escape
+        # still works, and one commit restores ordinary git-mode checking.
+
+        env CONSTITUTION_TODAY=2026-07-02
+        env GIT_AUTHOR_NAME=guard-test
+        env GIT_AUTHOR_EMAIL=guard-test@example.com
+        env GIT_COMMITTER_NAME=guard-test
+        env GIT_COMMITTER_EMAIL=guard-test@example.com
+        env GIT_CONFIG_NOSYSTEM=1
+
+        exec git init -q -b main
+        exec constitution init --founding-file founding.md --category testing
+        exec constitution seal --approve
+
+        # No commit yet: an actionable message, and no git plumbing.
+        exitcode 2 constitution guard
+        stderr 'has no commits yet'
+        stderr 'pass --no-git'
+        ! stderr 'bad revision'
+
+        # The escape hatch the message names actually works.
+        exec constitution guard --no-git
+        stdout 'guard: clean'
+
+        # One commit and git mode is back, unchanged.
+        exec git add -A
+        exec git commit -q -m init
+        exec constitution guard
+        stdout 'guard: clean \(1 ADR\(s\) checked, git mode vs HEAD\)'
+
+        -- founding.md --
+        ## Context and Problem Statement
+
+        Established at project bootstrap by `constitution init`.
+
+        ## Considered Options
+
+        - Adopt this founding decision
+        - Leave the convention implicit
+
+        ## Decision Outcome
+
+        Every change ships with tests, no exceptions.
+
+        ## Rules
+
+        ### testing
+
+        #### mandatory-tests
+        Every change ships with tests.
+        ```
+
+        Run: `go test ./cmd/constitution -run 'TestScripts/guard_no_commits' -v`
+        Expected: PASS.
+      - |
+        [ ] **Step 7: Run the full suite and commit**
+
+        Run: `go build ./... && go vet ./... && golangci-lint run && go test ./...`
+        Expected: PASS.
+
+        ```bash
+        git add internal/guard/git.go internal/guard/guard.go internal/guard/guard_test.go \
+                cmd/constitution/testdata/script/guard_no_commits.txtar
+        git commit -m "guard: explain an unborn HEAD instead of leaking git plumbing (#25)"
+        ```
+
+  - number: 6
+    slug: render-decision-log-pointer
+    goal: "Point every rendered constitution.md at the decision log, not just the empty one (#24)"
+    deliverables:
+      modify:
+        - "internal/render/template.go — extract `decisionLogPointer` from the placeholder line and emit it in the populated projection too, directly after the preamble"
+        - "internal/render/testdata/golden/{fixture1,realistic}/constitution/constitution.md — regenerated with `go test ./internal/render -update` (the `empty` golden is unchanged)"
+        - "cmd/constitution/testdata/script/{crash_deprecate,init_founding_realistic,lifecycle,regen_happy_path,rules_two_in_category,rules_multi_category}.txtar — the six testscripts whose embedded want-constitution.md carries a populated projection, hand-edited (the cmd suite has no -update flag)"
+      test:
+        - "internal/render/render_test.go — TestRenderPopulatedPointsAtTheDecisionLog, plus the existing TestRenderEmptyConstitutionPlaceholder as the unchanged-empty guard"
+    contract:
+      check: go build ./... && go vet ./... && golangci-lint run && go test ./...
+      criteria:
+        - name: internal/render/render_test.go::TestRenderPopulatedPointsAtTheDecisionLog
+          given: an ADR log with one rule-bearing ADR and one record-only ADR
+          when: the projection is rendered
+          then: the pointer line sits between the preamble and the first category heading, so a reader who sees only constitution.md still learns where the deferrals live
+        - name: internal/render/render_test.go::TestRenderEmptyConstitutionPlaceholder
+          given: a log with no rule-bearing ADR
+          when: it is rendered
+          then: its single placeholder line is byte-identical to before — the empty case gains no second pointer
+        - name: internal/render/golden_test.go::TestGoldenRealisticProject
+          given: the realistic fixture, which carries three record-only ADRs
+          when: it is rendered and compared byte-for-byte against its golden
+          then: it matches, with the pointer line present exactly once
+        - given: this repository's own constitution/constitution.md
+          when: the milestone is complete
+          then: "`git status` shows it unmodified — this repo has no standing rules, so it renders the empty projection and a populated-render change cannot touch it"
+      paths:
+        - internal/render/**
+        - cmd/constitution/testdata/script/**
+    steps:
+      - |
+        [ ] **Step 1: Write the failing test**
+
+        Append to `internal/render/render_test.go` (`newADR` and
+        `newRecordADR` are the file's existing fixture builders):
+
+        ```go
+        // TestRenderPopulatedPointsAtTheDecisionLog is issue #24: the EMPTY
+        // projection tells the reader where the decision log lives, the
+        // populated one did not. Since only rule-bearing ADRs project, every
+        // record-only ADR — the deliberate deferrals, the "we have not
+        // decided X yet" records — was invisible to anyone reading
+        // constitution.md, which is the artefact agents @-import.
+        func TestRenderPopulatedPointsAtTheDecisionLog(t *testing.T) {
+        	cfg := &config.Config{Categories: []string{"architecture"}}
+        	adrs := []adr.ADR{
+        		newADR("ADR-0001", 1, "architecture", adr.StatusAccepted),
+        		newRecordADR("ADR-0002", 2, adr.StatusAccepted), // record-only: never projects
+        	}
+
+        	out, _, err := render.Render(cfg, adrs)
+        	if err != nil {
+        		t.Fatal(err)
+        	}
+        	got := string(out)
+
+        	if !strings.Contains(got, "\nDecision log: constitution/adr/.\n") {
+        		t.Errorf("populated projection carries no decision-log pointer:\n%s", got)
+        	}
+        	// The pointer orients the reader, so it belongs with the preamble,
+        	// not trailing a rule list of unbounded length.
+        	if strings.Index(got, "Decision log:") > strings.Index(got, "## architecture") {
+        		t.Errorf("pointer must precede the first category heading:\n%s", got)
+        	}
+        	if strings.Contains(got, "No standing rules yet") {
+        		t.Errorf("populated projection must not carry the placeholder text:\n%s", got)
+        	}
+        }
+        ```
+      - |
+        [ ] **Step 2: Run it and watch it fail**
+
+        Run: `go test ./internal/render -run TestRenderPopulatedPointsAtTheDecisionLog -v`
+        Expected: FAIL — `populated projection carries no decision-log
+        pointer`.
+      - |
+        [ ] **Step 3: Emit the pointer in both forms**
+
+        In `internal/render/template.go`, replace the `placeholderLine`
+        constant with:
+
+        ```go
+        // decisionLogPointer tells the reader where the full decision log
+        // lives. It renders in BOTH forms of the projection: the placeholder
+        // has always carried it, and a populated constitution.md needs it
+        // just as much — only rule-bearing ADRs project, so every record-only
+        // ADR is otherwise invisible to a reader of this file (issue #24).
+        const decisionLogPointer = "Decision log: constitution/adr/."
+
+        // placeholderLine is the sole body line when no active ADR carries a
+        // rule: the constitution is empty of standing rules, and the reader is
+        // pointed at the decision log.
+        const placeholderLine = "No standing rules yet. " + decisionLogPointer
+        ```
+
+        Then, in `renderTemplate`, replace the `if body == ""` block:
+
+        ```go
+        	body := strings.Join(catChunks, "\n\n")
+        	if body == "" {
+        		// No projected rule from any active ADR: the placeholder line
+        		// already carries the pointer.
+        		body = placeholderLine
+        	} else {
+        		// Populated: the pointer goes directly after the preamble,
+        		// exactly where the placeholder form puts it, so both renders
+        		// share one structure.
+        		body = decisionLogPointer + "\n\n" + body
+        	}
+        	return []byte(header + "\n" + preamble + "\n" + body + "\n"), nil
+        ```
+      - |
+        [ ] **Step 4: Run the render tests and verify**
+
+        Run: `go test ./internal/render -run 'TestRender' -v`
+        Expected: PASS, including `TestRenderEmptyConstitutionPlaceholder`,
+        which is the guard that the empty form is byte-identical to before.
+
+        The golden tests still fail at this point — that is Step 5.
+      - |
+        [ ] **Step 5: Regenerate the render goldens and read the diff**
+
+        Run: `go test ./internal/render -update`
+        Then: `git diff internal/render/testdata/golden`
+
+        Expected: exactly one added line (`Decision log: constitution/adr/.`)
+        plus one blank line, in `fixture1` and `realistic`, immediately after
+        the preamble paragraph. The `empty` golden must be **untouched** — if
+        it changed, Step 3's placeholder branch is wrong.
+
+        Then: `go test ./internal/render`
+        Expected: PASS.
+      - |
+        [ ] **Step 6: Hand-edit the six affected testscripts**
+
+        The cmd/ txtar suite has no `-update`. Re-derive the list first, in
+        case an earlier milestone added another:
+
+        `grep -l '^# Constitution' cmd/constitution/testdata/script/*.txtar`
+
+        Expected: `crash_deprecate`, `init_founding_realistic`, `lifecycle`,
+        `regen_happy_path`, `rules_two_in_category`, `rules_multi_category`.
+
+        In each, find the `-- want-constitution.md --` block and insert the
+        pointer plus a blank line between the preamble paragraph and the first
+        `## <category>` heading, so the block reads:
+
+        ```
+        choices.
+
+        Decision log: constitution/adr/.
+
+        ## architecture
+        ```
+
+        Run: `go test ./cmd/constitution -run TestScripts -v`
+        Expected: PASS. A `cmp` failure names the file and shows the diff —
+        fix the expectation, never the renderer.
+      - |
+        [ ] **Step 7: Confirm this repo's own projection is untouched, then commit**
+
+        Run: `git status --short constitution/`
+        Expected: EMPTY. This repo's constitution has no standing rules, so it
+        renders the empty projection; if it shows as modified, the placeholder
+        branch changed and Step 3 needs revisiting.
+
+        Run: `go build ./... && go vet ./... && golangci-lint run && go test ./...`
+        Expected: PASS.
+
+        ```bash
+        git add internal/render cmd/constitution/testdata/script
+        git commit -m "render: point the populated projection at the decision log (#24)"
+        ```
+
+  - number: 7
+    slug: edit-body-file-hazard-docs
+    goal: "Document that `adr edit --body-file` deletes rules the replacement omits, so a prose edit cannot lose them unknowingly (#31, option 3)"
+    deliverables:
+      modify:
+        - "cmd/constitution/edit.go — the --body-file line of the command Description names the consequence (rules the file does not reproduce are DELETED) and points at --rule as the deliberate surface"
+        - "skills/adr-draft/SKILL.md — a hazard block under \"Phase awareness\" giving the safe extract-patch-diff procedure for a prose-only edit"
+      test:
+        - "skill_doc_test.go — TestAdrDraftSkillWarnsAboutBodyFileRuleReplacement, asserting through the embedded SkillsFS so the warning ships in the binary"
+    contract:
+      check: go build ./... && go vet ./... && golangci-lint run && go test ./...
+      criteria:
+        - name: skill_doc_test.go::TestAdrDraftSkillWarnsAboutBodyFileRuleReplacement
+          given: skills/adr-draft/SKILL.md read through the embedded SkillsFS
+          when: it is searched for the hazard note
+          then: the note is present, names the deletion consequence, points at --rule, and carries a procedure for proving the Rules section survived a prose edit byte-identical
+        - given: "`constitution adr edit --help`"
+          when: a reader looks for what --body-file does to existing rules
+          then: the description states that rules absent from the replacement file are deleted, rather than leaving that to be inferred from "presence or absence"
+      paths:
+        - cmd/constitution/edit.go
+        - skills/adr-draft/SKILL.md
+        - skill_doc_test.go
+    steps:
+      - |
+        [ ] **Step 1: Write the failing test**
+
+        Append to `skill_doc_test.go` (package `constitution`, repo root):
+
+        ```go
+        // TestAdrDraftSkillWarnsAboutBodyFileRuleReplacement is issue #31:
+        // `adr edit --body-file` replaces the ENTIRE body, so any rule the
+        // replacement omits is deleted — silently. The ADR still validates,
+        // guard still reports clean, and regen simply drops the rule from the
+        // projection. The failure is silent at every layer, so the skill that
+        // drives the command has to carry the warning.
+        func TestAdrDraftSkillWarnsAboutBodyFileRuleReplacement(t *testing.T) {
+        	b, err := SkillsFS.ReadFile("skills/adr-draft/SKILL.md")
+        	if err != nil {
+        		t.Fatalf("reading the adr-draft skill from the embedded SkillsFS: %v", err)
+        	}
+        	doc := string(b)
+
+        	for _, want := range []string{"--body-file", "deleted", "--rule"} {
+        		if !strings.Contains(doc, want) {
+        			t.Errorf("adr-draft SKILL.md never mentions %q; the --body-file rule-loss hazard is undocumented", want)
+        		}
+        	}
+        	if !strings.Contains(doc, "byte-identical") {
+        		t.Error("adr-draft SKILL.md gives no procedure for proving a prose-only edit left the Rules section untouched")
+        	}
+        }
+        ```
+      - |
+        [ ] **Step 2: Run it and watch it fail**
+
+        Run: `go test . -run TestAdrDraftSkillWarnsAboutBodyFileRuleReplacement -v`
+        Expected: FAIL — `adr-draft SKILL.md never mentions "deleted"` and
+        `gives no procedure ...`.
+      - |
+        [ ] **Step 3: Add the hazard block to the skill**
+
+        In `skills/adr-draft/SKILL.md`, in the `## Phase awareness — draft vs
+        sealed` section, directly after the `**phase: sealed**` bullet, insert:
+
+        ```markdown
+        **`--body-file` replaces your rules.** `adr edit --body-file` swaps the
+        *entire* body, so any `## Rules` entry the replacement file does not
+        reproduce is **deleted** from the constitution — with no warning at any
+        layer. The ADR still validates, `guard` still reports clean, and the
+        next `regen` simply drops the rule from `constitution.md`.
+
+        For a prose-only fix (a reworded Decision Outcome, a corrected bullet),
+        never regenerate the body from memory:
+
+        1. Extract the stored body verbatim:
+           `sed -n '/^## /,$p' constitution/adr/<file>.md > /tmp/adr-body.md`
+        2. Patch only the section you mean to change.
+        3. Diff the two `## Rules` sections and confirm they are
+           **byte-identical** before running the edit.
+
+        To change rules deliberately, use `--rule`, which replaces only the
+        Rules section and leaves every other section untouched.
+        ```
+      - |
+        [ ] **Step 4: Name the consequence in `--help`**
+
+        In `cmd/constitution/edit.go`, in `editCommand()`'s `Description`,
+        replace the two `--body-file` lines:
+
+        ```go
+        			"  --body-file    replaces the ENTIRE body: any \"## Rules\" entry the file\n" +
+        			"                 does not reproduce is DELETED from the constitution. Use\n" +
+        			"                 --rule to change rules; for a prose-only fix, start from\n" +
+        			"                 the stored body rather than rewriting it\n" +
+        ```
+
+        Leave every other line of that help text exactly as it is.
+      - |
+        [ ] **Step 5: Run the tests, check the help output, and commit**
+
+        Run: `go test . -run TestAdrDraftSkill -v`
+        Expected: PASS.
+
+        Read the help text back through a real binary (never name it
+        `constitution` — it collides with the directory the CLI creates):
+
+        ```bash
+        go build -o /tmp/adrc-test ./cmd/constitution
+        /tmp/adrc-test adr edit --help
+        ```
+
+        Expected: the `--body-file` block names the deletion consequence.
+
+        Run: `go build ./... && go vet ./... && golangci-lint run && go test ./...`
+        Expected: PASS.
+
+        ```bash
+        git add cmd/constitution/edit.go skills/adr-draft/SKILL.md skill_doc_test.go
+        git commit -m "docs: name the --body-file rule-replacement hazard (#31)"
+        ```
+
+  - number: 8
+    slug: skills-cli-version-assertion
+    goal: "Make a bundled skill fail loudly when it is driving a CLI it does not match, and stop this repo shipping stale fanned copies (#32)"
+    deliverables:
+      create:
+        - "skillversion.go — `const SkillsMinCLIVersion`, the one place the bundled skills' minimum CLI version is declared"
+      modify:
+        - "skills/{constitution-init,adr-draft,constitution-gov,plan-gate}/SKILL.md — each opens with a `## Requires` block naming the minimum version and instructing the agent to check `constitution --version` before acting"
+        - ".claude-plugin/plugin.json — version 0.3.1, so `claude plugin update` actually ships the skill edits in M7 and M8"
+        - "skill_doc_test.go — TestSkillsDeclareTheMinimumCLIVersion, TestSkillsInstructAVersionCheck, and lastSkillReleaseVersion bumped to the version that shipped the skills this change rewrites"
+        - "docs/releasing.md — a release-checklist section coupling SkillsMinCLIVersion, plugin.json and the tag"
+        - ".claude/skills/**, .agents/skills/**, .cursor/skills/**, constitution/.state — this repo's own fanned copies, refreshed by regen; they are stale today, so this also clears a pre-existing gap"
+    contract:
+      check: go build ./... && go vet ./... && golangci-lint run && go test ./...
+      criteria:
+        - name: skill_doc_test.go::TestSkillsDeclareTheMinimumCLIVersion
+          given: each of the four SKILL.md files read through the embedded SkillsFS
+          when: its text is searched for the version declaration
+          then: every file names exactly SkillsMinCLIVersion — a skill edited without bumping the const, or a const bumped without the skills, fails the suite
+        - name: skill_doc_test.go::TestSkillsInstructAVersionCheck
+          given: the same four files
+          when: they are searched for the check instruction
+          then: each tells the agent to run `constitution --version` before proceeding and to stop on an older binary — the 0.2.1-plugin / 0.3.0-binary case the issue reports
+        - name: skill_doc_test.go::TestPluginVersionAheadOfLastRelease
+          given: lastSkillReleaseVersion raised to the version that shipped the skills this change rewrites
+          when: the suite runs
+          then: it passes only because .claude-plugin/plugin.json was bumped too, so the bundled-skill edits cannot ship inert
+        - given: this repository's own fanned skill copies under .claude/, .agents/ and .cursor/
+          when: they are compared against skills/ after the regen
+          then: the three governance skills are byte-identical to their sources and constitution/.state records the new hashes
+      paths:
+        - skillversion.go
+        - skill_doc_test.go
+        - skills/**
+        - docs/releasing.md
+        - .claude-plugin/plugin.json
+        - .claude/skills/**
+        - .agents/skills/**
+        - .cursor/skills/**
+        - constitution/.state
+    steps:
+      - |
+        [ ] **Step 1: Write the failing tests**
+
+        Append to `skill_doc_test.go`:
+
+        ```go
+        // bundledSkillPaths is every SKILL.md this binary embeds and fans out
+        // on init/regen.
+        var bundledSkillPaths = []string{
+        	"skills/adr-draft/SKILL.md",
+        	"skills/constitution-gov/SKILL.md",
+        	"skills/constitution-init/SKILL.md",
+        	"skills/plan-gate/SKILL.md",
+        }
+
+        // TestSkillsDeclareTheMinimumCLIVersion is issue #32: the skills ship
+        // through two independent channels — the plugin catalog and this
+        // binary's //go:embed — with no handshake between them. A 0.2.1
+        // plugin copy drove a 0.3.0 binary and told the agent to hand-edit
+        // constitution.yml to do something the CLI by then supported directly,
+        // which the newer skill forbids outright. Every SKILL.md must state
+        // the version it is written for, from the single const, so the two
+        // can never disagree silently.
+        func TestSkillsDeclareTheMinimumCLIVersion(t *testing.T) {
+        	want := "`constitution` " + SkillsMinCLIVersion + " or newer"
+        	for _, path := range bundledSkillPaths {
+        		t.Run(path, func(t *testing.T) {
+        			b, err := SkillsFS.ReadFile(path)
+        			if err != nil {
+        				t.Fatalf("reading %s from the embedded SkillsFS: %v", path, err)
+        			}
+        			if !strings.Contains(string(b), want) {
+        				t.Errorf("%s does not declare its minimum CLI version (expected the literal %q); "+
+        					"bump the skills and SkillsMinCLIVersion together", path, want)
+        			}
+        		})
+        	}
+        }
+
+        // TestSkillsInstructAVersionCheck proves the declaration is an
+        // instruction the agent executes, not a note it reads past: the
+        // dangerous case is confidently following instructions that no longer
+        // match the binary being driven.
+        func TestSkillsInstructAVersionCheck(t *testing.T) {
+        	for _, path := range bundledSkillPaths {
+        		t.Run(path, func(t *testing.T) {
+        			b, err := SkillsFS.ReadFile(path)
+        			if err != nil {
+        				t.Fatalf("reading %s from the embedded SkillsFS: %v", path, err)
+        			}
+        			doc := string(b)
+        			if !strings.Contains(doc, "constitution --version") {
+        				t.Errorf("%s never tells the agent to run `constitution --version`", path)
+        			}
+        			if !strings.Contains(doc, "**stop**") {
+        				t.Errorf("%s does not tell the agent to stop on an older binary", path)
+        			}
+        		})
+        	}
+        }
+        ```
+      - |
+        [ ] **Step 2: Run them and watch them fail**
+
+        Run: `go test . -run 'TestSkills(DeclareTheMinimum|InstructAVersion)' -v`
+        Expected: a COMPILE failure — `undefined: SkillsMinCLIVersion`.
+      - |
+        [ ] **Step 3: Add the version const**
+
+        Create `skillversion.go` at the repo root:
+
+        ```go
+        package constitution
+
+        // SkillsMinCLIVersion is the lowest `constitution` version the
+        // bundled skills in skills/ are written for.
+        //
+        // The skills reach an agent through two independent channels — the
+        // plugin catalog (kentra-agentic-plugins) and this binary's
+        // //go:embed fan-out — and nothing detects when the two disagree
+        // (issue #32). Each SKILL.md states this version and tells the agent
+        // to check `constitution --version` before acting on anything else,
+        // so a stale copy fails loudly instead of quietly driving a binary
+        // whose flags it does not know.
+        //
+        // Bump this, .claude-plugin/plugin.json, and the skills together in
+        // the release commit — docs/releasing.md carries the checklist.
+        const SkillsMinCLIVersion = "0.3.1"
+        ```
+      - |
+        [ ] **Step 4: Add the `## Requires` block to all four skills**
+
+        In each of `skills/constitution-init/SKILL.md`,
+        `skills/adr-draft/SKILL.md`, `skills/constitution-gov/SKILL.md` and
+        `skills/plan-gate/SKILL.md`, insert immediately after the `# <name>`
+        H1 (before the skill's opening prose):
+
+        ```markdown
+        ## Requires
+
+        This skill is written for `constitution` 0.3.1 or newer. Before doing
+        anything else, run `constitution --version`. If the binary is older,
+        **stop** and report the mismatch — an older CLI does not have the
+        flags this skill uses, and the workarounds an older skill taught (such
+        as hand-editing `constitution.yml`) are forbidden here. Do not
+        improvise around the gap.
+        ```
+
+        The literal `0.3.1` must match `SkillsMinCLIVersion` — that pairing is
+        what Step 1's test enforces.
+      - |
+        [ ] **Step 5: Force the plugin bump**
+
+        In `skill_doc_test.go`, raise the existing constant so the version
+        that shipped the skills this change rewrites is the new floor:
+
+        ```go
+        // lastSkillReleaseVersion is the plugin version that shipped the
+        // skills this change rewrites (skills/adr-draft/SKILL.md's #31 hazard
+        // block, and the `## Requires` block added to all four for #32).
+        // `claude plugin update` diffs plugin.json's version field, not skill
+        // content, so an edit that ships without a bump past this never
+        // reaches an installed copy.
+        const lastSkillReleaseVersion = "0.3.0"
+        ```
+
+        Then set `"version": "0.3.1"` in `.claude-plugin/plugin.json`.
+
+        Run: `go test . -v`
+        Expected: PASS — the two new tests plus
+        `TestPluginVersionAheadOfLastRelease`, which now only passes because
+        of the bump.
+      - |
+        [ ] **Step 6: Add the release checklist**
+
+        Append to `docs/releasing.md`:
+
+        ```markdown
+        ## Release checklist: skills and the plugin catalog
+
+        The bundled skills ship through two channels — this binary's
+        `//go:embed` fan-out and the plugin catalog — with no runtime
+        handshake between them (issue #32). Keep them in step:
+
+        1. Bump `SkillsMinCLIVersion` (`skillversion.go`) to the version being
+           released, and update the `## Requires` block in all four
+           `skills/*/SKILL.md` to match. `TestSkillsDeclareTheMinimumCLIVersion`
+           fails if they disagree.
+        2. Bump `.claude-plugin/plugin.json`'s `version` to the same value.
+           `claude plugin update` diffs that field and nothing else, so a skill
+           edit without a bump ships inert.
+        3. Raise `lastSkillReleaseVersion` in `skill_doc_test.go` whenever a
+           release changes bundled skill text, so the NEXT such change is
+           forced to bump again.
+        4. Only then tag the release.
+        ```
+      - |
+        [ ] **Step 7: Refresh this repo's own fanned skill copies**
+
+        The fanned copies under `.claude/`, `.agents/` and `.cursor/` are
+        written by `init`/`regen` from the embedded skills, and they are stale
+        today (nobody ran regen after the skills changed in feb1a0b). Refresh
+        them with a binary built from THIS working tree — the one on PATH is
+        an older release and would re-fan the old text:
+
+        ```bash
+        go build -o /tmp/adrc-test ./cmd/constitution
+        /tmp/adrc-test regen
+        ```
+
+        If regen reports drift on any managed file, **stop and leave it for a
+        human** — do not pass `--force`. Drift means a managed file was
+        hand-edited and forcing would discard that edit.
+
+        Verify the fan-out now matches its source:
+
+        ```bash
+        for s in adr-draft constitution-gov plan-gate; do
+          diff -q skills/$s/SKILL.md .claude/skills/$s/SKILL.md
+        done
+        git diff --stat
+        ```
+
+        Expected: no diff output from the loop, and `git diff --stat` showing
+        only the nine fanned `SKILL.md` copies plus `constitution/.state`
+        beyond this milestone's own edits.
+      - |
+        [ ] **Step 8: Run the full suite and commit**
+
+        Run: `go build ./... && go vet ./... && golangci-lint run && go test ./...`
+        Expected: PASS.
+
+        ```bash
+        git add skillversion.go skill_doc_test.go skills docs/releasing.md \
+                .claude-plugin/plugin.json .claude .agents .cursor constitution/.state
+        git commit -m "skills: assert the minimum CLI version and refresh the fan-out (#32)"
+        ```
+
+  - number: 9
+    slug: docs-and-handoff
+    goal: Sync the shipped documentation with the sweep and hand off a PR that closes exactly the right issues
+    deliverables:
+      modify:
+        - "README.md — the status line, and any behaviour statement this sweep invalidated (the projection's decision-log pointer, init's atomic failure, the sourceTracking.pattern refusals)"
+    contract:
+      check: go build ./... && go vet ./... && golangci-lint run && go test ./...
+      criteria:
+        - given: README.md read against the shipped behaviour after milestones 1-8
+          when: its statements about init, the projection, and config validation are checked one by one
+          then: none of them describes behaviour this sweep changed, and the status line names 0.3.1
+        - given: the working tree at the end of the plan
+          when: "`git status` is read against the nine milestones' declared paths"
+          then: nothing was written outside them — in particular constitution/adr/ is untouched, since this sweep records no ADR
+        - given: this plan's outcome
+          when: the PR body is written
+          then: "it carries `Fixes #22`, `#23`, `#24`, `#25`, `#26`, `#30`, `#32`, and comments (not closes) on #27 and #31 naming the half that shipped and the half left open"
+      paths:
+        - README.md
+    steps:
+      - |
+        [ ] **Step 1: Re-read README.md against what shipped**
+
+        Run: `grep -n 'init\|projection\|constitution.md\|pattern\|sourceTracking' README.md`
+
+        Check each hit against milestones 1-8 and fix any statement that is
+        now false. The three candidates:
+        - init's failure behaviour (now atomic — nothing is written when
+          `--founding-file` is refused);
+        - what a rendered `constitution.md` contains (now carries the
+          decision-log pointer in both forms);
+        - `sourceTracking.pattern` (an uncompilable value is now refused by
+          `init` and `config set` rather than surfacing at first use).
+
+        Update the status line to name 0.3.1.
+      - |
+        [ ] **Step 2: Verify the write-set**
+
+        Run: `git status --short && git log --oneline -8`
+
+        Expected: a clean tree with eight commits, and no file touched outside
+        the paths the nine milestones declare. Specifically:
+        `git log --stat -8 -- constitution/adr` must show **nothing** — this
+        sweep records no ADR.
+      - |
+        [ ] **Step 3: Run the full check one final time**
+
+        Run: `go build ./... && go vet ./... && golangci-lint run && go test ./...`
+        Expected: PASS.
+
+        Then smoke the real binary end to end in a scratch directory, which is
+        the path no unit test covers:
+
+        ```bash
+        go build -o /tmp/adrc-test ./cmd/constitution
+        cd "$(mktemp -d)" && git init -q .
+        printf '## Context and Problem Statement\n\nx\n\n## Considered Options\n\n- a\n\n## Decision Outcome\n\ny\n\n## Rules\n\n### testing\n\n#### t1\nEvery change ships with tests.\n' > founding.md
+        /tmp/adrc-test init --founding-file founding.md --category architecture   # exit 2, writes NOTHING
+        ls -a                                                                     # .git and founding.md only
+        /tmp/adrc-test init --founding-file founding.md --category testing        # exit 0
+        grep -c 'Decision log' constitution/constitution.md                       # 1
+        ```
+      - |
+        [ ] **Step 4: Commit and open the PR**
+
+        ```bash
+        git add README.md
+        git commit -m "docs: sync README with the open-issue sweep"
+        ```
+
+        Open the PR with a body that carries:
+
+        ```
+        Fixes #22
+        Fixes #23
+        Fixes #24
+        Fixes #25
+        Fixes #26
+        Fixes #30
+        Fixes #32
+        ```
+
+        Then comment on — and do NOT close — the two partially-addressed
+        issues:
+        - **#27**: the settable-key half shipped (`config set` now loads
+          leniently). An invalid `phase` or `categories` is still
+          unrepairable, because both are governed keys and the pre-write
+          validation correctly rejects the result; whether `config set`
+          should gain a narrow repair escape hatch for governed keys is an
+          open policy question.
+        - **#31**: option 3 shipped (the hazard is documented in `--help` and
+          in the adr-draft skill). Option 1, the diff-and-confirm guardrail
+          behind `--allow-rule-change`, is still open — it would refuse an
+          edit that succeeds today, which is a UX decision rather than a bug
+          fix.
+
+        Leave the tag, the Homebrew cask, and the harness-side submodule +
+        `CONSTITUTION_VERSION` bump to a human: they are outside this
+        repository.
