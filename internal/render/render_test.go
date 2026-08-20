@@ -30,6 +30,8 @@ func newADR(id string, num int, category string, status adr.Status) adr.ADR {
 // newRecordADR builds a record-only ADR: it has a Decision Outcome but no
 // rules (hence no category anywhere), so it stays in the log and never
 // projects.
+//
+//nolint:unparam // status is a real fixture-builder parameter (mirrors newADR); every call site currently wants an active record, but that's incidental, not a reason to drop the parameter.
 func newRecordADR(id string, num int, status adr.Status) adr.ADR {
 	return adr.ADR{
 		ID: id, Num: num, Title: "Title " + id, Date: "2026-07-01",
@@ -575,5 +577,37 @@ func TestFoldResurrectionSuppressedWhenReRetired(t *testing.T) {
 	}
 	if len(warns) != 0 {
 		t.Errorf("Render() warnings = %q, want none (ref re-retired by accepted ADR-0010)", warns)
+	}
+}
+
+// TestRenderPopulatedPointsAtTheDecisionLog is issue #24: the EMPTY
+// projection tells the reader where the decision log lives, the
+// populated one did not. Since only rule-bearing ADRs project, every
+// record-only ADR — the deliberate deferrals, the "we have not
+// decided X yet" records — was invisible to anyone reading
+// constitution.md, which is the artefact agents @-import.
+func TestRenderPopulatedPointsAtTheDecisionLog(t *testing.T) {
+	cfg := &config.Config{Categories: []string{"architecture"}}
+	adrs := []adr.ADR{
+		newADR("ADR-0001", 1, "architecture", adr.StatusAccepted),
+		newRecordADR("ADR-0002", 2, adr.StatusAccepted), // record-only: never projects
+	}
+
+	out, _, err := render.Render(cfg, adrs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+
+	if !strings.Contains(got, "\nDecision log: constitution/adr/.\n") {
+		t.Errorf("populated projection carries no decision-log pointer:\n%s", got)
+	}
+	// The pointer orients the reader, so it belongs with the preamble,
+	// not trailing a rule list of unbounded length.
+	if strings.Index(got, "Decision log:") > strings.Index(got, "## architecture") {
+		t.Errorf("pointer must precede the first category heading:\n%s", got)
+	}
+	if strings.Contains(got, "No standing rules yet") {
+		t.Errorf("populated projection must not carry the placeholder text:\n%s", got)
 	}
 }
