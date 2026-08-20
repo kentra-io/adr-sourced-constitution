@@ -115,3 +115,21 @@ git tag -d v0.1.0                          # remove the local tag
 git tag v0.1.0
 git push origin v0.1.0
 ```
+
+## Release checklist: skills and the plugin catalog
+
+The bundled skills ship through two channels — this binary's
+`//go:embed` fan-out and the plugin catalog — with no runtime
+handshake between them (issue #32). Keep them in step:
+
+1. Bump `SkillsMinCLIVersion` (`skillversion.go`) to the version being
+   released, and update the `## Requires` block in all four
+   `skills/*/SKILL.md` to match. `TestSkillsDeclareTheMinimumCLIVersion`
+   fails if they disagree.
+2. Bump `.claude-plugin/plugin.json`'s `version` to the same value.
+   `claude plugin update` diffs that field and nothing else, so a skill
+   edit without a bump ships inert.
+3. Raise `lastSkillReleaseVersion` in `skill_doc_test.go` whenever a
+   release changes bundled skill text, so the NEXT such change is
+   forced to bump again.
+4. Only then tag the release.

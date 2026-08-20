@@ -233,14 +233,11 @@ func TestConstitutionInitElicitsPurpose(t *testing.T) {
 const pluginManifestPath = ".claude-plugin/plugin.json"
 
 // lastSkillReleaseVersion is the plugin version that shipped the skills
-// this change (issues #18-#20) rewrites (README.md, adr-sourced-constitution.md,
-// skills/adr-draft/SKILL.md, skills/constitution-gov/SKILL.md) — see
-// tasks/lessons "plugin-version-is-the-update-trigger": `claude plugin
+// this change rewrites (skills/adr-draft/SKILL.md's #31 hazard block, and
+// the `## Requires` block added to all four for #32). `claude plugin
 // update` diffs plugin.json's version field, not skill content, so an edit
-// that ships without a version bump past this never reaches an installed
-// copy (precedent: issue #17's fix shipped only after 2379bde bumped 0.2.0
-// -> 0.2.1).
-const lastSkillReleaseVersion = "0.2.1"
+// that ships without a bump past this never reaches an installed copy.
+const lastSkillReleaseVersion = "0.3.0"
 
 // TestPluginVersionAheadOfLastRelease is milestone 7's criterion 1:
 // .claude-plugin/plugin.json's version must be strictly greater than
@@ -474,12 +471,67 @@ func TestAdrDraftSkillWarnsAboutBodyFileRuleReplacement(t *testing.T) {
 	}
 	doc := string(b)
 
-	for _, want := range []string{"--body-file", "deleted", "--rule"} {
+	for _, want := range []string{"--body-file", "deleted", "To change rules deliberately, use"} {
 		if !strings.Contains(doc, want) {
 			t.Errorf("adr-draft SKILL.md never mentions %q; the --body-file rule-loss hazard is undocumented", want)
 		}
 	}
 	if !strings.Contains(doc, "byte-identical") {
 		t.Error("adr-draft SKILL.md gives no procedure for proving a prose-only edit left the Rules section untouched")
+	}
+}
+
+// bundledSkillPaths is every SKILL.md this binary embeds and fans out
+// on init/regen.
+var bundledSkillPaths = []string{
+	"skills/adr-draft/SKILL.md",
+	"skills/constitution-gov/SKILL.md",
+	"skills/constitution-init/SKILL.md",
+	"skills/plan-gate/SKILL.md",
+}
+
+// TestSkillsDeclareTheMinimumCLIVersion is issue #32: the skills ship
+// through two independent channels — the plugin catalog and this
+// binary's //go:embed — with no handshake between them. A 0.2.1
+// plugin copy drove a 0.3.0 binary and told the agent to hand-edit
+// constitution.yml to do something the CLI by then supported directly,
+// which the newer skill forbids outright. Every SKILL.md must state
+// the version it is written for, from the single const, so the two
+// can never disagree silently.
+func TestSkillsDeclareTheMinimumCLIVersion(t *testing.T) {
+	want := "`constitution` " + SkillsMinCLIVersion + " or newer"
+	for _, path := range bundledSkillPaths {
+		t.Run(path, func(t *testing.T) {
+			b, err := SkillsFS.ReadFile(path)
+			if err != nil {
+				t.Fatalf("reading %s from the embedded SkillsFS: %v", path, err)
+			}
+			if !strings.Contains(string(b), want) {
+				t.Errorf("%s does not declare its minimum CLI version (expected the literal %q); "+
+					"bump the skills and SkillsMinCLIVersion together", path, want)
+			}
+		})
+	}
+}
+
+// TestSkillsInstructAVersionCheck proves the declaration is an
+// instruction the agent executes, not a note it reads past: the
+// dangerous case is confidently following instructions that no longer
+// match the binary being driven.
+func TestSkillsInstructAVersionCheck(t *testing.T) {
+	for _, path := range bundledSkillPaths {
+		t.Run(path, func(t *testing.T) {
+			b, err := SkillsFS.ReadFile(path)
+			if err != nil {
+				t.Fatalf("reading %s from the embedded SkillsFS: %v", path, err)
+			}
+			doc := string(b)
+			if !strings.Contains(doc, "constitution --version") {
+				t.Errorf("%s never tells the agent to run `constitution --version`", path)
+			}
+			if !strings.Contains(doc, "**stop**") {
+				t.Errorf("%s does not tell the agent to stop on an older binary", path)
+			}
+		})
 	}
 }

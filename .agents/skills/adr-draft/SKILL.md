@@ -5,6 +5,15 @@ description: Drafts a MADR decision-record body from the current conversation, d
 
 # adr-draft
 
+## Requires
+
+This skill is written for `constitution` 0.3.1 or newer. Before doing
+anything else, run `constitution --version`. If the binary is older,
+**stop** and report the mismatch — an older CLI does not have the
+flags this skill uses, and the workarounds an older skill taught (such
+as hand-editing `constitution.yml`) are forbidden here. Do not
+improvise around the gap.
+
 Use this when a decision worth governing has emerged in conversation — an
 architectural choice, a convention, a policy — and it should become an ADR in
 this repo's constitution. You draft the record; **the human accepts it; the CLI
@@ -119,7 +128,12 @@ relax it: you still never pre-approve or route around that harness prompt.
    There is no `--category` flag — categories ride on the rules themselves,
    either as `### <category>` subsections in the body's `## Rules` section or as
    the `<category>` segment of a `--rule "<category>/<slug>: <text>"` flag. Pick
-   the category from the project's configured vocabulary (see `constitution.yml`);
+   the category from the project's configured vocabulary — it's per-project
+   data with no fixed enum (unlike, say, `sourceTracking.type`), so read it
+   straight from `constitution.yml` (see `categories:`); reading the file is
+   fine, only a hand-edit of it is not — config changes go through
+   `constitution config set`, though `categories` specifically grows only via
+   `--new-category` below, never `config set`;
    an unknown category is rejected unless you add `--new-category <name>`, which
    you should only do with the human's explicit say-so. If the project's
    `sourceTracking.type` is not `none`, add `--source <ref>`. For a standing
@@ -149,6 +163,27 @@ Check `phase:` in `constitution.yml` before deciding how to fix a wrong ADR.
   supersession chain in draft when an edit is cheaper and just as honest.
 - **`phase: sealed`** — the log is append-only forever; `edit`/`rm` are
   refused. `supersede`/`deprecate` are the only change paths from here on.
+
+**`--body-file` replaces your rules.** `adr edit --body-file` swaps the
+*entire* body, so any `## Rules` entry the replacement file does not
+reproduce is **deleted** from the constitution — with no warning at any
+layer. The ADR still validates, `guard` still reports clean, and the
+next `regen` simply drops the rule from `constitution.md`.
+
+For a prose-only fix (a reworded Decision Outcome, a corrected bullet),
+never regenerate the body from memory:
+
+1. Extract the stored body verbatim into a scratch file in the working
+   directory (never `/tmp` — some agents run this inside a container with a
+   standing rule against writing scratch there), and delete it once the edit
+   is confirmed:
+   `sed -n '/^## /,$p' constitution/adr/<file>.md > adr-body.scratch.md`
+2. Patch only the section you mean to change.
+3. Diff the two `## Rules` sections and confirm they are
+   **byte-identical** before running the edit.
+
+To change rules deliberately, use `--rule`, which replaces only the
+Rules section and leaves every other section untouched.
 
 ## Retiring a specific rule vs. superseding a whole ADR
 

@@ -5,6 +5,15 @@ description: Governs how the constitution is used — append-only log, consult-b
 
 # constitution-gov
 
+## Requires
+
+This skill is written for `constitution` 0.3.1 or newer. Before doing
+anything else, run `constitution --version`. If the binary is older,
+**stop** and report the mismatch — an older CLI does not have the
+flags this skill uses, and the workarounds an older skill taught (such
+as hand-editing `constitution.yml`) are forbidden here. Do not
+improvise around the gap.
+
 The constitution is the source of truth for this project's standing technical
 decisions — the **how** of recurring problems (architecture, mapping, testing,
 process) — so that requirements can stay functional and need not re-explain

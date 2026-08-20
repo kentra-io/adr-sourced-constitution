@@ -5,6 +5,15 @@ description: Drafts a MADR decision-record body from the current conversation, d
 
 # adr-draft
 
+## Requires
+
+This skill is written for `constitution` 0.3.1 or newer. Before doing
+anything else, run `constitution --version`. If the binary is older,
+**stop** and report the mismatch — an older CLI does not have the
+flags this skill uses, and the workarounds an older skill taught (such
+as hand-editing `constitution.yml`) are forbidden here. Do not
+improvise around the gap.
+
 Use this when a decision worth governing has emerged in conversation — an
 architectural choice, a convention, a policy — and it should become an ADR in
 this repo's constitution. You draft the record; **the human accepts it; the CLI
@@ -164,8 +173,11 @@ next `regen` simply drops the rule from `constitution.md`.
 For a prose-only fix (a reworded Decision Outcome, a corrected bullet),
 never regenerate the body from memory:
 
-1. Extract the stored body verbatim:
-   `sed -n '/^## /,$p' constitution/adr/<file>.md > /tmp/adr-body.md`
+1. Extract the stored body verbatim into a scratch file in the working
+   directory (never `/tmp` — some agents run this inside a container with a
+   standing rule against writing scratch there), and delete it once the edit
+   is confirmed:
+   `sed -n '/^## /,$p' constitution/adr/<file>.md > adr-body.scratch.md`
 2. Patch only the section you mean to change.
 3. Diff the two `## Rules` sections and confirm they are
    **byte-identical** before running the edit.
