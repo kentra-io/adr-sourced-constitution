@@ -2,6 +2,11 @@
 # compares against HEAD, which does not exist yet, so it must say so
 # instead of leaking `fatal: bad revision 'HEAD'`. The --no-git escape
 # still works, and one commit restores ordinary git-mode checking.
+#
+# An explicit --base <ref> is a separate case (issue #25 regression):
+# it diffs <ref> against the working tree and never touches HEAD, so it
+# must keep working on an unborn current branch even though bare `guard`
+# and --merge-base (which both resolve against HEAD) correctly refuse.
 
 env CONSTITUTION_TODAY=2026-07-02
 env GIT_AUTHOR_NAME=guard-test
@@ -23,6 +28,25 @@ stderr 'pass --no-git'
 # The escape hatch the message names actually works.
 exec constitution guard --no-git
 stdout 'guard: clean'
+
+# An explicit --base <ref> needs no HEAD (unlike bare `guard` above):
+# give it a real commit to diff against on a side ref while main stays
+# unborn (the `git checkout --orphan` shape a real CI checkout can leave
+# behind), and it must succeed rather than inheriting the no-HEAD refusal.
+exec git checkout -q --orphan base-ref
+exec git add -A
+exec git commit -q -m 'ref commit'
+exec git checkout -q --orphan main
+exec constitution guard --base base-ref
+stdout 'guard: clean \(1 ADR\(s\) checked, git mode vs base-ref\)'
+
+# --merge-base, by contrast, DOES need HEAD (it runs `git merge-base
+# <target> HEAD`), so it still gets the actionable no-commits refusal,
+# not git's own plumbing.
+exitcode 2 constitution guard --merge-base base-ref
+stderr 'has no commits yet'
+! stderr 'bad revision'
+! stderr 'Not a valid object name'
 
 # One commit and git mode is back, unchanged.
 exec git add -A
