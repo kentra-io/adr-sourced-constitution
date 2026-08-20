@@ -286,3 +286,58 @@ func TestConfigSetListKeyCommaSeparated(t *testing.T) {
 		t.Errorf("Skills.Trees = %v, want %v", cfg.Skills.Trees, want)
 	}
 }
+
+// corruptConfigKey rewrites one line of the constitution.yml
+// setupRepo wrote, so a test can start from a config that fails
+// validation exactly the way a hand-edit breaks it.
+func corruptConfigKey(t *testing.T, oldLine, newLine string) {
+	t.Helper()
+	before := mustReadFile(t, "constitution.yml")
+	after := strings.Replace(before, oldLine, newLine, 1)
+	if after == before {
+		t.Fatalf("corruptConfigKey: %q not found in constitution.yml:\n%s", oldLine, before)
+	}
+	mustWriteFile(t, "constitution.yml", after)
+}
+
+// TestConfigSetRepairsInvalidSettableKey is issue #27's core case:
+// config set validated the WHOLE config before applying anything, so
+// it refused to operate on any file that failed validation —
+// including when the invalid value was the very key being set. The
+// skills forbid hand-editing constitution.yml, so that left an agent
+// with no recovery path at all.
+func TestConfigSetRepairsInvalidSettableKey(t *testing.T) {
+	setupRepo(t, "off", "architecture")
+	corruptConfigKey(t, "  policy: off", "  policy: stricter")
+
+	if err := runCLI(t, "config", "set", "consent.policy", "off"); err != nil {
+		t.Fatalf("config set(consent.policy, off) against a config broken in that same key = %v, want nil", err)
+	}
+
+	cfg, err := config.Load("constitution.yml")
+	if err != nil {
+		t.Fatalf("reload after repair: %v", err)
+	}
+	if cfg.Consent.Policy != config.ConsentOff {
+		t.Errorf("Consent.Policy = %q, want %q", cfg.Consent.Policy, config.ConsentOff)
+	}
+}
+
+// TestConfigSetStillRefusesAnInvalidResult is the control: relaxing
+// the pre-READ gate must not relax the pre-WRITE one. An illegal
+// result is still refused, and constitution.yml is untouched.
+func TestConfigSetStillRefusesAnInvalidResult(t *testing.T) {
+	setupRepo(t, "off", "architecture")
+	before := mustReadFile(t, "constitution.yml")
+
+	err := runCLI(t, "config", "set", "consent.policy", "maybe")
+	if err == nil {
+		t.Fatal("config set(consent.policy, maybe) = nil, want the illegal value refused")
+	}
+	if got := exitCode(err); got != 2 {
+		t.Errorf("exitCode = %d, want 2", got)
+	}
+	if after := mustReadFile(t, "constitution.yml"); after != before {
+		t.Errorf("constitution.yml changed despite the refusal:\nbefore: %s\nafter:  %s", before, after)
+	}
+}

@@ -1,0 +1,54 @@
+# A constitution.yml that fails validation is still repairable through
+# the one supported writer (issue #27): config set loads leniently, so
+# the file that needs repair is not frozen against its own repair
+# tool. The pre-WRITE validation is unchanged — the RESULT must be
+# valid — so this relaxes the read gate only.
+
+# The starting config is invalid: consent.policy is "stricter".
+# Ordinary read-path commands refuse it, which is the state issue #27
+# reports as unrecoverable.
+! exec constitution guard
+stderr 'field "consent\.policy"'
+
+exec constitution config set consent.policy off
+stdout 'set consent.policy = off'
+
+# Repaired: the read paths work again.
+exec constitution guard
+stdout 'guard: clean'
+
+# ...and the pre-write gate still refuses an invalid RESULT.
+cp constitution.yml constitution.yml.snapshot
+! exec constitution config set consent.policy maybe
+stderr 'field "consent\.policy": must be "strict" or "off" \(got "maybe"\)'
+cmp constitution.yml constitution.yml.snapshot
+
+-- constitution.yml --
+schemaVersion: 1
+phase: draft
+consent:
+  policy: stricter
+sourceTracking:
+  type: none
+categories:
+  - architecture
+
+-- constitution/adr/ADR-0001-first.md --
+---
+id: ADR-0001
+title: First
+date: 2026-07-01
+status: accepted
+---
+
+## Context and Problem Statement
+
+x
+
+## Considered Options
+
+- a
+
+## Decision Outcome
+
+y

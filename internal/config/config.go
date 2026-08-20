@@ -135,6 +135,38 @@ var validConsentPolicies = map[string]bool{
 
 // Load reads and validates constitution.yml at path.
 func Load(path string) (*Config, error) {
+	cfg, err := loadRaw(path)
+	if err != nil {
+		return nil, err
+	}
+	if err := cfg.validate(path); err != nil {
+		return nil, err
+	}
+	return cfg, nil
+}
+
+// LoadLenient reads constitution.yml at path WITHOUT validating it.
+//
+// It exists for ONE caller — `constitution config set` (issue #27) —
+// and every read path must keep using Load. The guarantee that
+// matters is that an invalid config is never WRITTEN, which config
+// set still enforces by validating the whole result before its
+// atomic write; the guarantee that backfired is that an invalid
+// config could never be EDITED, which froze the one supported writer
+// against exactly the files needing repair.
+//
+// Note the defaulting difference: validate applies the
+// consent.policy/sourceTracking.type defaults as a side effect, so a
+// LoadLenient'd Config carries raw zero values until the caller's own
+// Validate() runs.
+func LoadLenient(path string) (*Config, error) {
+	return loadRaw(path)
+}
+
+// loadRaw reads and unmarshals constitution.yml at path, applying no
+// validation and no defaulting. Shared by Load and LoadLenient so
+// the two cannot drift in how the file is read.
+func loadRaw(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -143,10 +175,6 @@ func Load(path string) (*Config, error) {
 	var cfg Config
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("%s: not valid YAML: %w", path, err)
-	}
-
-	if err := cfg.validate(path); err != nil {
-		return nil, err
 	}
 	return &cfg, nil
 }

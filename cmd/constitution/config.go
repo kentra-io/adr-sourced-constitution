@@ -112,7 +112,7 @@ func runConfigSet(cmd *cli.Command) error {
 	}
 	configPath := filepath.Join(cwd, "constitution.yml")
 
-	cfg, err := config.Load(configPath)
+	cfg, err := config.LoadLenient(configPath)
 	if err != nil {
 		return err
 	}
