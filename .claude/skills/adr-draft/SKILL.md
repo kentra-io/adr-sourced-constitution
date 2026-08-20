@@ -108,21 +108,21 @@ relax it: you still never pre-approve or route around that harness prompt.
    permanently addressable as `ADR-NNNN/<category>/<slug>`. You may instead pass
    rules on the command line, repeatably, as `--rule "<category>/<slug>: <text>"`
    — one per rule — but never mix a `## Rules` section in the body with `--rule`
-   flags; that combination is an error. Write the body to a temp path outside
-   the repo tree, e.g. `/tmp/adr-draft.md`.
+   flags; that combination is an error. Write the body to a scratch file in
+   the working directory, e.g. `adr-draft.scratch.md`.
 
 5. **Show the human the exact bytes that will be written**, then the command
-   you intend to run. Display the temp file's literal contents — `cat
-   /tmp/adr-draft.md` — and show that output verbatim. What you show **MUST**
-   be the exact byte content of the file you pass to `--body-file`: the
-   harness permission prompt shows only the command, not the file bytes, so
-   the shown-draft==written-file property is part of the consent guarantee. If
-   the human requests changes, edit the file and `cat` it again — loop until
-   they accept the shown bytes — before you ever invoke the CLI. Then show the
-   command:
+   you intend to run. Display the scratch file's literal contents — `cat
+   adr-draft.scratch.md` — and show that output verbatim. What you show
+   **MUST** be the exact byte content of the file you pass to `--body-file`:
+   the harness permission prompt shows only the command, not the file bytes,
+   so the shown-draft==written-file property is part of the consent
+   guarantee. If the human requests changes, edit the file and `cat` it
+   again — loop until they accept the shown bytes — before you ever invoke
+   the CLI. Then show the command:
 
    ```
-   constitution adr new --title "<short imperative title>" --body-file /tmp/adr-draft.md
+   constitution adr new --title "<short imperative title>" --body-file adr-draft.scratch.md
    ```
 
    There is no `--category` flag — categories ride on the rules themselves,
@@ -174,9 +174,9 @@ For a prose-only fix (a reworded Decision Outcome, a corrected bullet),
 never regenerate the body from memory:
 
 1. Extract the stored body verbatim into a scratch file in the working
-   directory (never `/tmp` — some agents run this inside a container with a
-   standing rule against writing scratch there), and delete it once the edit
-   is confirmed:
+   directory (keep scratch inside the repo where it's visible, reviewable,
+   and cleaned up — some sandboxes disallow writes outside the working
+   tree), and delete it once the edit is confirmed:
    `sed -n '/^## /,$p' constitution/adr/<file>.md > adr-body.scratch.md`
 2. Patch only the section you mean to change.
 3. Diff the two `## Rules` sections and confirm they are
@@ -220,7 +220,7 @@ phase shortcut). Draft the superseding body the same way — including its
 standing rule — then run:
 
 ```
-constitution supersede <ADR-NNNN> --body-file /tmp/adr-draft.md --title "<title>"
+constitution supersede <ADR-NNNN> --body-file adr-draft.scratch.md --title "<title>"
 ```
 
 The CLI writes the new ADR, marks the old one `superseded`, links them, and
