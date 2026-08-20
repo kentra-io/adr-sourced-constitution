@@ -60,6 +60,26 @@ one-ADR-per-principle grammar with a single MADR body — the same shape
 ADR (`ADR-0001`); it also added a `constitution config` command group
 (`config schema` to introspect the `constitution.yml` vocabulary, `config set`
 to change one key atomically) so no skill ever hand-edits `constitution.yml`.
+A second follow-on — an open-issue sweep — released as `v0.3.1` (plugin
+0.3.1). It closed six issues outright: `config schema`'s `phase` and
+`consent.policy` enums are now derived from the same validator maps that
+enforce them, so the schema cannot drift (#26); `init` is now **atomic** —
+the founding file is read, validated, and composed entirely in memory before
+any byte is written, so a refused `--founding-file` (or an uncompilable
+`--source-pattern`) leaves neither `constitution.yml` nor `constitution/`
+behind (#22, #30); an uncompilable `sourceTracking.pattern` is refused on the
+write path by both `init` and `config set`, instead of surfacing later at
+the first `adr new --source` (#23); `guard` in a git repo with no commits now
+explains the situation and names the `--no-git` escape instead of leaking
+`fatal: bad revision 'HEAD'` (#25); a populated `constitution.md` now carries
+the `Decision log: constitution/adr/.` pointer line right after the
+preamble, matching the empty projection (#24); and the bundled skills now
+assert a minimum CLI version before running (#32). Two more issues were only
+partially addressed and stay open: `config set` loads a config that fails
+validation leniently, so it stays repairable through the one supported
+writer (#27, settable-key half only); and the `--body-file` rule-replacement
+hazard is now named in `--help` and the adr-draft skill, with no behaviour
+change (#31, documentation only).
 The deferred **code-validation** sweep (README use #3) is the remaining
 roadmap item.
 
