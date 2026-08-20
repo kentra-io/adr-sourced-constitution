@@ -18,6 +18,19 @@ stdout 'clean'
 
 grep 'source: bootstrap' constitution/adr/ADR-0001-founding-constitution.md
 
+# An uncompilable --source-pattern is refused at the point of the
+# write (issue #23), not later at the first `adr new --source`.
+# Nothing is left behind: this runs in a fresh subdirectory precisely
+# so the refusal can be checked against an empty tree.
+mkdir badpattern
+cd badpattern
+cp ../founding.md founding.md
+exitcode 2 constitution init --source-tracking generic --source-pattern '[' --founding-file founding.md
+stderr 'sourceTracking\.pattern'
+! exists constitution.yml
+! exists constitution
+cd ..
+
 -- founding.md --
 ## Context and Problem Statement
 

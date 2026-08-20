@@ -6,6 +6,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"regexp"
 
 	yaml "go.yaml.in/yaml/v3"
 )
@@ -191,8 +192,31 @@ func loadRaw(path string) (*Config, error) {
 // defaulted to "strict"/"none" exactly as Load's defaulting does. Error
 // messages use the literal label "constitution.yml" in place of a real
 // path, since there may be none yet.
+//
+// Validate is strictly stronger than validate(path) on one field: it also
+// compiles sourceTracking.pattern (issue #23) and rejects a config whose
+// pattern cannot compile. That check lives HERE, on the exported
+// write-path validator, and deliberately NOT in validate(path), which
+// Load calls on every read. Validate() has exactly two callers, both
+// write paths — runConfigSet (cmd/constitution/config.go) and
+// buildOrLoadConfig (cmd/constitution/init.go) — so this stops a bad
+// pattern reaching disk without changing how any existing config loads.
+// Issue #23 flagged making it fail at Load as a behaviour change needing
+// a deliberate decision; this change does not take it.
 func (c *Config) Validate() error {
-	return c.validate("constitution.yml")
+	if err := c.validate("constitution.yml"); err != nil {
+		return err
+	}
+
+	if c.SourceTracking.Pattern != "" {
+		if _, err := regexp.Compile(WrapSourcePattern(c.SourceTracking.Pattern)); err != nil {
+			return fmt.Errorf(
+				"constitution.yml: field %q: %q is not a valid regexp: %w; repair it with `constitution config set sourceTracking.pattern <regexp>`",
+				"sourceTracking.pattern", c.SourceTracking.Pattern, err,
+			)
+		}
+	}
+	return nil
 }
 
 func (c *Config) validate(path string) error {

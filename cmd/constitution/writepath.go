@@ -347,7 +347,7 @@ func validateSource(st config.SourceTracking, source string) error {
 			return nil // no default shape; any non-empty source is accepted
 		}
 	}
-	re, err := regexp.Compile("^(?:" + pattern + ")$")
+	re, err := regexp.Compile(config.WrapSourcePattern(pattern))
 	if err != nil {
 		return fmt.Errorf("sourceTracking.pattern %q is not a valid regexp: %w", pattern, err)
 	}
