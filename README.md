@@ -61,7 +61,7 @@ ADR (`ADR-0001`); it also added a `constitution config` command group
 (`config schema` to introspect the `constitution.yml` vocabulary, `config set`
 to change one key atomically) so no skill ever hand-edits `constitution.yml`.
 A second follow-on — an open-issue sweep — released as `v0.3.1` (plugin
-0.3.1). It closed six issues outright: `config schema`'s `phase` and
+0.3.1). It closed seven issues outright: `config schema`'s `phase` and
 `consent.policy` enums are now derived from the same validator maps that
 enforce them, so the schema cannot drift (#26); `init` is now **atomic** —
 the founding file is read, validated, and composed entirely in memory before
