@@ -44,7 +44,8 @@ grep 'status: accepted' constitution/adr/ADR-0001-founding-constitution.md
 grep '## Decision Outcome' constitution/adr/ADR-0001-founding-constitution.md
 
 # --- the skill stub has its invocation stance ---
-grep 'disable-model-invocation: true' .claude/skills/plan-gate/SKILL.md
+! grep 'disable-model-invocation' .claude/skills/plan-gate/SKILL.md
+grep 'description: Checks a plan against' .claude/skills/plan-gate/SKILL.md
 
 # --- regen and guard are clean on the fresh scaffold ---
 exec constitution regen

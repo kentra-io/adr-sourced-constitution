@@ -1,7 +1,6 @@
 ---
 name: plan-gate
-description: Reads a plan plus the constitution.md (the curated set of rule-bearing active ADRs), reasons rule-by-rule, runs `constitution guard`, and emits deviation.json citing the ADR ids a plan would violate. Invoke explicitly with /plan-gate before executing a plan.
-disable-model-invocation: true
+description: Checks a plan against the project's constitution rule by rule and reports, in the session, every ADR rule the plan would break. Use before a plan is executed, when a plan or design changes, or when asked whether something conforms to the constitution. Writes deviation.json only when asked.
 ---
 
 # plan-gate
@@ -15,52 +14,53 @@ flags this skill uses, and the workarounds an older skill taught (such
 as hand-editing `constitution.yml`) are forbidden here. Do not
 improvise around the gap.
 
-Check a plan against this repo's constitution *before* it is executed. You read
-every standing rule, reason about the plan rule-by-rule, and emit a
-`deviation.json` report that cites, by `ADR-NNNN`, every rule the plan would
-violate. You do not edit the plan and you do not change the log — this is a
-read-only gate that produces a report.
+Check a plan against this repo's constitution before it is executed. Read
+every standing rule, decide for each one whether the plan conforms, and report
+the verdict in the session, citing each broken rule by `ADR-NNNN`. You change
+nothing: not the plan, not the log, not `constitution.md`.
 
-`constitution.md` is a **curated projection**: it contains only the
-*rule-bearing* active ADRs — the standing rules. Point-in-time records live in
-the log (`constitution/adr/`) but never appear here, and you must not cite them
-(the CLI validator rejects a citation to a record-only ADR). The constitution
-is the complete and exclusive set of rules a plan can deviate from.
+`constitution.md` is a **curated projection**: it holds only the standing
+rules — the `## Rules` of active ADRs. Point-in-time records live in
+`constitution/adr/` and never appear in it, and a plan cannot deviate from
+them. The rules in `constitution.md` are the complete set a plan is checked
+against.
 
 If the `constitution` binary is not on PATH, install the prebuilt release —
 `curl -sSfL https://raw.githubusercontent.com/kentra-io/adr-sourced-constitution/main/install.sh | sh`
 — do **not** build from source or install a Go toolchain.
 
-Where the platform supports it, run this in a **read-only / forked context**
-(a sub-agent with no write tools): the gate should never mutate anything, and
-isolating it keeps that guarantee structural.
-
 ## Inputs
 
-- The plan: a path the human gives you (default to the plan under discussion).
+- The plan: the path you were given, or the plan under discussion. Any format —
+  markdown, YAML, a design document.
 - The constitution: `constitution/constitution.md`.
 
 ## Procedure
 
 1. **Load the rules.** `cat constitution/constitution.md`. Each standing rule is
-   a `#### <slug>` entry under a `### <category>` heading, individually
-   addressable as `ADR-NNNN/<category>/<slug>`, but you cite the whole
-   `adrId` (`ADR-NNNN`) in `deviation.json` — the deviation schema is
-   ADR-scoped, not rule-scoped. (If it reads "No standing rules yet", the
-   constitution is empty of rules and any conforming plan passes trivially.)
-2. **Reason rule-by-rule.** For *every* rule in the projection, decide:
-   does the plan conform, or conflict? Go through all of them — a rule the plan
-   simply ignores can still be violated by it. For each conflict, note the
-   plan location (file + line span if you can), the `ADR-NNNN`, a one-line
-   summary, a severity, and whether the fix is to change the plan (`conform`) or
-   to change the rule via an ADR (`amend`).
-3. **Run guard and fold it in.** `constitution guard --format json`. Any
-   violation it reports is an out-of-band mutation of the log itself — add each
-   as a deviation citing that ADR id (typically `CRITICAL`, recommendation
-   `conform`), so the report is one place the human looks.
-4. **Write `deviation.json`.** Default path `./deviation.json`; honor an `--out`
-   the human specifies (in a harness, write it into the plan's spec folder).
-   The schema is fixed — see `docs/deviation.schema.json`. Shape:
+   a `#### <slug>` entry under a `### <category>` heading, followed by the line
+   naming its ADR. If it reads "No standing rules yet", every plan conforms:
+   say so and stop.
+2. **Decide rule by rule.** For every rule, decide whether the plan conforms or
+   conflicts. Check all of them: a plan can break a rule it never mentions. For
+   each conflict note the plan location (file and line span when you can), the
+   `ADR-NNNN`, a one-line summary, a severity (`CRITICAL | HIGH | MEDIUM |
+   LOW`), and the remedy: `conform` (change the plan) or `amend` (change the
+   rule through a new ADR).
+3. **Run guard.** `constitution guard --format json`. Each violation it reports
+   is an out-of-band edit to the ADR log. Add it as a conflict citing that ADR,
+   normally `CRITICAL` with remedy `conform`.
+4. **Report the verdict in the session.** One line first — **conforms**, or
+   **conflicts with N rules** — then one row per conflict:
+
+   | ADR | Severity | Rule | Remedy | Summary |
+   |---|---|---|---|---|
+   | ADR-0007 | HIGH | guard-is-advisory | amend | The plan makes guard a required merge gate; the rule keeps it advisory. |
+
+   Cite only ADRs whose rules appear in `constitution.md`.
+5. **Write `deviation.json` only when asked** — by the user, or by the skill or
+   tool that invoked you, which also names the path (default
+   `./deviation.json`). Its schema is `docs/deviation.schema.json`:
 
    ```json
    {
@@ -69,63 +69,29 @@ isolating it keeps that guarantee structural.
      "plan": "tasks/plan.md",
      "deviations": [
        {"id": "D-001", "adrId": "ADR-0007", "severity": "HIGH",
-        "rule": "Guard modes and advisory manifest",
+        "rule": "guard-is-advisory",
         "location": {"file": "tasks/plan.md", "lines": "12-40"},
-        "summary": "Plan makes guard a required merge gate; the rule pins it advisory in v1.",
+        "summary": "The plan makes guard a required merge gate; the rule keeps it advisory.",
         "recommendation": "amend",
-        "recommendationDetail": "Propose an ADR to supersede the advisory decision instead."}
+        "recommendationDetail": "Propose an ADR that supersedes the advisory decision."}
      ],
      "summary": {"critical": 0, "high": 1, "medium": 0, "low": 0}
    }
    ```
 
-   A **conforming** plan is the common case: emit an empty `deviations` array
-   and an all-zero summary, and present it as a pass. Still run the validator
-   on it — a clean report is a validated report.
+   Then validate it — the CLI owns the schema:
+   `constitution deviation validate <path>`. Exit 0 is valid; when stderr shows
+   a `constitutionHash mismatch` advisory, copy the `sha256:…` value it prints
+   into `constitutionHash` and validate once more. Exit 1 lists precise errors:
+   fix the report and re-run. Exit 2 means it could not run: report that
+   instead of the file.
 
-   ```json
-   {"deviations": [], "summary": {"critical": 0, "high": 0, "medium": 0, "low": 0}}
-   ```
-
-   Rules for a valid report:
-   - Every deviation **must** cite the `adrId` of a **rule-bearing active**
-     (accepted) ADR — one that actually appears in `constitution.md`. The
-     citation is the whole point; superseded/deprecated ADRs, and record-only
-     ADRs that carry no standing rule, are rejected by the validator.
-   - Severity is one of `CRITICAL | HIGH | MEDIUM | LOW`; `recommendation` is
-     `conform` or `amend`.
-   - `summary` counts must equal the actual per-severity totals.
-   - Leave `constitutionHash` empty for now; the validator fills you in (next
-     step).
-
-5. **Validate via the CLI — this is mandatory.** The CLI owns the schema; do not
-   hand-check it. Run:
-
-   ```
-   constitution deviation validate ./deviation.json
-   ```
-
-   - Exit 0 = valid. If stderr shows a `constitutionHash mismatch [HIGH …]`
-     advisory, copy the **expected `sha256:…` value it prints** into the
-     report's `constitutionHash` field and run validate once more so it is
-     clean. (The validator is the source of truth for that hash — do not compute
-     it by hand.)
-   - Exit 1 = invalid: the errors on stderr are precise (missing/unknown
-     `adrId`, bad severity, mismatched summary counts, schema violations). Fix
-     the report and re-run until it is valid.
-   - Exit 2 = could not run (not a project root, or the log is unreadable);
-     report that to the human rather than presenting a report.
-
-6. **Present the result.** Show the human a short table — one row per deviation:
-   `ADR-NNNN · severity · rule · recommendation · summary` — and the path to the
-   validated `deviation.json`. State the verdict plainly: does the plan conform,
-   or does it need changes / an amendment before it runs.
+You are done when the session shows the verdict line and one row per conflict
+— and, if one was asked for, a `deviation.json` that validates.
 
 ## Never
 
-- Never edit the plan, the ADR log, or `constitution.md` from this skill.
-- Never present a `deviation.json` you have not run through
-  `constitution deviation validate` successfully.
-- Never invent an `adrId`; only cite rule-bearing active ADRs — the ones that
-  appear in `constitution.md`. A record-only ADR is not a rule and cannot be
-  cited.
+- Never edit the plan, the ADR log, or `constitution.md`.
+- Never cite an ADR that does not appear in `constitution.md`.
+- Never present a `deviation.json` that `constitution deviation validate` has
+  not accepted.
