@@ -237,7 +237,7 @@ const pluginManifestPath = ".claude-plugin/plugin.json"
 // the `## Requires` block added to all four for #32). `claude plugin
 // update` diffs plugin.json's version field, not skill content, so an edit
 // that ships without a bump past this never reaches an installed copy.
-const lastSkillReleaseVersion = "0.3.0"
+const lastSkillReleaseVersion = "0.3.1"
 
 // TestPluginVersionAheadOfLastRelease is milestone 7's criterion 1:
 // .claude-plugin/plugin.json's version must be strictly greater than
