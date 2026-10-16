@@ -22,9 +22,9 @@ const StateSchemaVersion = 1
 
 // stateFileName is .state's fixed location under constitution/. It is
 // CLI-owned bookkeeping, never hand-edited: it records the sha256 of the
-// last content the CLI wrote to each managed target (a managed block's
-// interior, or a fanned-out skill file), so interior/file drift from what
-// the CLI last wrote is detectable. It is not the ADR log and carries no
+// last content the CLI wrote to each managed target (a fanned-out skill
+// file; before 0.4.0 also a managed pointer block's interior, whose entries
+// 0.4.0 prunes), so drift from what the CLI last wrote is detectable. It is not the ADR log and carries no
 // tamper-evidence weight — the design's soft check (plan §2.2, §6): the
 // user's own files are not the source of truth.
 //
@@ -33,8 +33,6 @@ const StateSchemaVersion = 1
 //
 //	schemaVersion: 1
 //	managed:
-//	  - path: CLAUDE.md
-//	    hash: <sha256-hex of the last-written block interior>
 //	  - path: .claude/skills/adr-draft/SKILL.md
 //	    hash: <sha256-hex of the last-written file content>
 //
@@ -113,6 +111,11 @@ func (s *State) get(path string) (hash string, ok bool) {
 // set records the hash for a path.
 func (s *State) set(path, hash string) {
 	s.managed[path] = hash
+}
+
+// remove forgets the recorded hash for a path (a no-op when absent).
+func (s *State) remove(path string) {
+	delete(s.managed, path)
 }
 
 // empty reports whether the state records no managed targets.

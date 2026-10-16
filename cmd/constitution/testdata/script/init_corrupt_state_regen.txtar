@@ -6,7 +6,7 @@
 
 env CONSTITUTION_TODAY=2026-07-02
 
-exec constitution init --target claude
+exec constitution init
 
 # poison the CLI's drift bookkeeping
 cp corrupt.state constitution/.state

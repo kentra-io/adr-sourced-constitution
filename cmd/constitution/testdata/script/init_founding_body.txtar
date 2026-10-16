@@ -8,7 +8,7 @@
 
 env CONSTITUTION_TODAY=2026-07-02
 
-exec constitution init --founding-file founding.md --target claude
+exec constitution init --founding-file founding.md
 
 grep 'Deferred bets' constitution/adr/ADR-0001-founding-constitution.md
 grep 'Transport stays an open research bet until stage-2 lands.' constitution/adr/ADR-0001-founding-constitution.md

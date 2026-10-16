@@ -1,21 +1,21 @@
 # The .state self-heal must NOT become a way to silently clobber a hand-edited
-# managed file. With a corrupt .state degraded to empty AND a drifted CLAUDE.md,
-# a non-interactive re-init without --force still refuses (drift detection is
-# content-hash based, so an empty state still catches a drifted interior). The
-# user's edits are preserved.
+# file. With a corrupt .state degraded to empty AND a drifted legacy pointer
+# block in CLAUDE.md, a non-interactive re-init without --force leaves the
+# block untouched (drift detection is content based, so an empty state still
+# catches a drifted interior) and warns. The user's edits are preserved.
 
 env CONSTITUTION_TODAY=2026-07-02
 
-exec constitution init --target claude
+exec constitution init
 
-# drift the managed block AND poison the drift bookkeeping
+# a drifted legacy block AND poisoned drift bookkeeping
 cp drifted-claude.md CLAUDE.md
 cp corrupt.state constitution/.state
 
-! exec constitution init --target claude
+exec constitution init
 stderr 'empty drift state'
-stderr 'refusing to overwrite'
-grep 'HACKED' CLAUDE.md
+stderr 'edited by hand; leaving it'
+cmp CLAUDE.md drifted-claude.md
 
 -- corrupt.state --
 schemaVersion: [1

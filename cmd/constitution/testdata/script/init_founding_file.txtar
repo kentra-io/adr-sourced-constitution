@@ -7,7 +7,7 @@
 
 env CONSTITUTION_TODAY=2026-07-02
 
-exec constitution init --founding-file founding.md --target claude
+exec constitution init --founding-file founding.md
 stdout 'created .*ADR-0001-founding-constitution\.md'
 
 ! grep 'source:' constitution/adr/ADR-0001-founding-constitution.md

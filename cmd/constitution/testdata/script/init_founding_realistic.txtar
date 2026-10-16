@@ -17,7 +17,7 @@
 
 env CONSTITUTION_TODAY=2026-07-02
 
-exec constitution init --founding-file founding.md --category purpose --category architecture --category testing --category tooling --category process --source-tracking none --target claude
+exec constitution init --founding-file founding.md --category purpose --category architecture --category testing --category tooling --category process --source-tracking none
 stdout 'created .*ADR-0001-founding-constitution\.md'
 
 # the deferred bets are durable in the log ...

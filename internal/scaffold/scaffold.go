@@ -15,18 +15,31 @@ import (
 	"github.com/kentra-io/adr-sourced-constitution/internal/config"
 )
 
-// Managed-block interiors (plan §2.1/§5). CLAUDE.md gets Claude Code's
-// direct `@import` (real inlining, resolved relative to the repo root);
-// AGENTS.md gets a short textual pointer, the regime where cross-tool
-// pointers are actually followed.
+// Legacy managed-block interiors: what CLI versions before 0.4.0 wrote
+// into CLAUDE.md (an `@import`, which loaded the constitution into every
+// session) and AGENTS.md (a textual pointer). 0.4.0 writes no blocks; these
+// are kept only so removeLegacyBlocks can recognise an unedited old block.
 const (
-	claudeInterior = "@constitution/constitution.md"
-	agentsInterior = "Before planning, read `constitution/constitution.md`; it is this project's governing constitution and takes precedence over inferred conventions."
+	legacyClaudeInterior = "@constitution/constitution.md"
+	legacyAgentsInterior = "Before planning, read `constitution/constitution.md`; it is this project's governing constitution and takes precedence over inferred conventions."
 )
 
+// legacyBlockFiles are the fixed files an older CLI may have written a
+// managed block into. Removal checks both regardless of the config: the
+// targets that selected them no longer exist in 0.4.0.
+var legacyBlockFiles = []struct {
+	rel      string // repo-root-relative, slash form
+	interior string
+}{
+	{rel: "CLAUDE.md", interior: legacyClaudeInterior},
+	{rel: "AGENTS.md", interior: legacyAgentsInterior},
+}
+
 // Mode selects the drift policy Refresh applies (plan §2.2, §6):
-//   - ModeInit: a drifted target is rewritten only after --force or an
-//     interactive confirm; otherwise Refresh refuses (returns an error).
+//   - ModeInit: a drifted skill file is rewritten only after --force or an
+//     interactive confirm; otherwise Refresh refuses (returns an error). A
+//     hand-edited legacy pointer block is removed only after --force or an
+//     interactive confirm; otherwise Refresh warns and leaves it.
 //   - ModeWarn: a drifted target is never rewritten — Refresh warns and
 //     leaves it, so drift in a user file can never block the mutating verbs
 //     that auto-run regen.
@@ -49,18 +62,16 @@ type Options struct {
 	Stderr  io.Writer                         // warnings
 }
 
-// Refresh writes/updates the managed pointer blocks and fanned-out skill
-// copies named by o.Cfg, drift-protected via constitution/.state. It is the
-// shared engine behind `init` (ModeInit) and `regen` (ModeWarn). It manages
-// only what the config selects: a config with no targets and no skill trees
-// (the pre-M4 shape) is a no-op that never creates a .state file.
+// Refresh removes the managed pointer blocks older CLI versions wrote
+// (removeLegacyBlocks) and writes/updates the fanned-out skill copies named
+// by o.Cfg, drift-protected via constitution/.state. It is the shared engine
+// behind `init` (ModeInit) and `regen` (ModeWarn). A repo that manages
+// nothing and has no .state stays that way: no .state file is created.
 func Refresh(o Options) error {
 	st := loadStateOrEmpty(o.Root, o.Stderr)
 
-	for _, t := range blockTargets(o.Cfg) {
-		if err := o.refreshBlock(st, t); err != nil {
-			return err
-		}
+	if err := o.removeLegacyBlocks(st); err != nil {
+		return err
 	}
 
 	items, err := skillItems(o.Cfg)
@@ -90,7 +101,7 @@ func Refresh(o Options) error {
 // would propagate out of Refresh and make `adr new` exit non-zero AFTER the
 // ADR already landed, lying via the exit code. Degrading is safe because
 // drift detection is content-hash based: against an empty state a matching
-// interior is still a no-op, and a drifted one still triggers the
+// file is still a no-op, and a drifted one still triggers the
 // refuse/--force path (init) or the warn path (regen). The .state is rebuilt
 // on the next successful write.
 func loadStateOrEmpty(root string, stderr io.Writer) *State {
@@ -102,96 +113,140 @@ func loadStateOrEmpty(root string, stderr io.Writer) *State {
 	return st
 }
 
-// PreflightBlocks checks every managed block target for a malformed marker
-// pair without writing anything, so `init` can refuse a structurally
-// ambiguous file (exit 2) before it seeds or renders. A clean, absent, or
-// simply drifted block is fine here — only a broken marker pair is an error.
-func PreflightBlocks(repoRoot string, cfg *config.Config) error {
-	for _, t := range blockTargets(cfg) {
-		content, _, err := readFileIfExists(filepath.Join(repoRoot, filepath.FromSlash(t.rel)))
+// removeLegacyBlocks removes the always-loaded constitution block that CLI
+// versions before 0.4.0 wrote into CLAUDE.md and AGENTS.md. It never
+// returns an error for a file it decides to leave alone — it warns instead —
+// so a stale block can never block a mutating verb's auto-regen.
+//
+// Regular files are handled first and symlinks last: a symlink is never
+// rewritten (an atomic rename would replace the link with a plain file), and
+// checking it after its target was cleaned (the common CLAUDE.md ->
+// AGENTS.md setup) avoids a spurious warning.
+func (o Options) removeLegacyBlocks(st *State) error {
+	var links []string
+	removed := map[string]string{} // absolute path -> rel, of files deleted below
+	for _, f := range legacyBlockFiles {
+		stored, hasStored := st.get(f.rel)
+		// No managed blocks exist any more: never leave stale bookkeeping.
+		st.remove(f.rel)
+
+		fpath := filepath.Join(o.Root, filepath.FromSlash(f.rel))
+		info, err := os.Lstat(fpath)
+		if err != nil {
+			if errors.Is(err, fs.ErrNotExist) {
+				continue
+			}
+			return err
+		}
+		if info.Mode()&fs.ModeSymlink != 0 {
+			links = append(links, f.rel)
+			continue
+		}
+		if !info.Mode().IsRegular() {
+			continue
+		}
+		gone, err := o.removeLegacyBlock(fpath, f.rel, f.interior, stored, hasStored)
 		if err != nil {
 			return err
 		}
-		if _, _, _, _, lerr := LocateBlock(content); lerr != nil {
-			var me *MarkerError
-			if errors.As(lerr, &me) {
-				me.Path = t.rel
+		if gone {
+			removed[fpath] = f.rel
+		}
+	}
+
+	for _, rel := range links {
+		// Follows the link; a dangling one reads as absent.
+		lpath := filepath.Join(o.Root, filepath.FromSlash(rel))
+		content, existed, err := readFileIfExists(lpath)
+		if err != nil {
+			warnf(o.Stderr, "constitution: cannot read %s through its symlink (%s); leaving it untouched", rel, err.Error())
+			continue
+		}
+		if !existed {
+			if dest, rerr := os.Readlink(lpath); rerr == nil {
+				if !filepath.IsAbs(dest) {
+					dest = filepath.Join(filepath.Dir(lpath), dest)
+				}
+				if target, ok := removed[filepath.Clean(dest)]; ok {
+					warnf(o.Stderr, "constitution: %s is a symlink to %s, which held only the always-loaded constitution block and was removed; delete the link or point it elsewhere", rel, target)
+				}
 			}
-			return lerr
+			continue
+		}
+		if found, _, _, _, lerr := LocateBlock(content); found || lerr != nil {
+			warnf(o.Stderr, "constitution: %s is a symlink and still holds the always-loaded constitution block; leaving it untouched — remove the block by hand from the file it points to", rel)
 		}
 	}
 	return nil
 }
 
-type blockTarget struct {
-	rel      string // repo-root-relative, slash form
-	interior string
-}
-
-func blockTargets(cfg *config.Config) []blockTarget {
-	var ts []blockTarget
-	for _, t := range cfg.AgentInstructions.Targets {
-		switch t {
-		case config.TargetClaude:
-			ts = append(ts, blockTarget{rel: "CLAUDE.md", interior: claudeInterior})
-		case config.TargetAgents:
-			ts = append(ts, blockTarget{rel: "AGENTS.md", interior: agentsInterior})
-		}
-	}
-	return ts
-}
-
-func (o Options) refreshBlock(st *State, t blockTarget) error {
-	fpath := filepath.Join(o.Root, filepath.FromSlash(t.rel))
+// removeLegacyBlock removes the managed block from one regular file when it
+// is safe to: the interior is exactly what an older CLI wrote, or matches
+// the hash .state recorded for it. A hand-edited interior is removed only by
+// `init` under --force or an interactive yes; otherwise, and always for a
+// malformed marker pair, the file is left untouched with a warning.
+func (o Options) removeLegacyBlock(fpath, rel, legacyInterior, stored string, hasStored bool) (removed bool, err error) {
 	content, _, err := readFileIfExists(fpath)
 	if err != nil {
-		return err
+		return false, err
 	}
 
-	found, _, _, curInterior, lerr := LocateBlock(content)
+	found, _, _, interior, lerr := LocateBlock(content)
 	if lerr != nil {
 		var me *MarkerError
 		if errors.As(lerr, &me) {
-			me.Path = t.rel
+			me.Path = rel
 		}
-		if o.Mode == ModeWarn {
-			warnf(o.Stderr, "regen: %s; leaving it untouched", lerr.Error())
-			return nil
-		}
-		return lerr
+		warnf(o.Stderr, "constitution: %s; leaving it untouched — remove the always-loaded constitution block by hand", lerr.Error())
+		return false, nil
+	}
+	if !found {
+		return false, nil
 	}
 
-	desiredHash := hashContent([]byte(t.interior))
-	write := func() error {
-		out, err := ApplyBlock(content, t.interior)
+	known := interior == legacyInterior || (hasStored && stored == hashContent([]byte(interior)))
+	if !known {
+		ok, err := o.confirmDriftedRemoval(rel)
 		if err != nil {
-			return err
+			return false, err
 		}
-		if err := writeAtomic(fpath, out); err != nil {
-			return err
+		if !ok {
+			warnf(o.Stderr, "constitution: the always-loaded constitution block in %s was edited by hand; leaving it — remove it by hand or run `constitution init --force`", rel)
+			return false, nil
 		}
-		st.set(t.rel, desiredHash)
-		o.progressf("wrote managed block in %s", t.rel)
-		return nil
 	}
 
-	switch {
-	case found && curInterior == t.interior:
-		// Already exactly what we want: record the hash, write nothing.
-		st.set(t.rel, desiredHash)
-		return nil
-	case !found:
-		// No block yet — create or append. Not drift.
-		return write()
+	out, _, err := RemoveBlock(content)
+	if err != nil {
+		return false, err
 	}
+	if len(bytes.TrimSpace(out)) == 0 {
+		if err := os.Remove(fpath); err != nil {
+			return false, err
+		}
+		o.progressf("constitution: removed %s, which held only the always-loaded constitution block", rel)
+		return true, nil
+	}
+	if err := writeAtomic(fpath, out); err != nil {
+		return false, err
+	}
+	o.progressf("constitution: removed the always-loaded constitution block from %s", rel)
+	return false, nil
+}
 
-	stored, hasStored := st.get(t.rel)
-	if hasStored && stored == hashContent([]byte(curInterior)) {
-		// Our own previous interior; the CLI's desired content changed
-		// (a version bump) — safe to update without a drift prompt.
-		return write()
+// confirmDriftedRemoval decides whether a hand-edited legacy block may be
+// removed: only in ModeInit, under --force or an interactive yes.
+func (o Options) confirmDriftedRemoval(rel string) (bool, error) {
+	if o.Mode != ModeInit {
+		return false, nil
 	}
-	return o.handleDrift(st, t.rel, write, stored, hasStored)
+	if o.Force {
+		return true, nil
+	}
+	if o.Confirm == nil {
+		return false, nil
+	}
+	return o.Confirm(fmt.Sprintf("the always-loaded constitution block in %s was edited by hand; remove it anyway?", rel))
 }
 
 type skillItem struct {
@@ -247,7 +302,7 @@ func (o Options) handleDrift(st *State, rel string, write func() error, stored s
 		return write()
 	}
 	if o.Confirm != nil {
-		ok, err := o.Confirm(fmt.Sprintf("%s drifted from what `constitution init` last wrote; overwrite the managed content?", rel))
+		ok, err := o.Confirm(fmt.Sprintf("%s drifted from what `constitution init` last wrote; overwrite it with the bundled copy?", rel))
 		if err != nil {
 			return err
 		}
@@ -256,7 +311,7 @@ func (o Options) handleDrift(st *State, rel string, write func() error, stored s
 		}
 	}
 	return fmt.Errorf(
-		"%s drifted from what `constitution init` last wrote; refusing to overwrite it. Re-run with --force to overwrite the managed content (any edits outside the managed region are preserved), or reconcile the file by hand",
+		"%s drifted from what `constitution init` last wrote; refusing to overwrite it. Re-run with --force to overwrite the skill file with the bundled copy, or reconcile the file by hand",
 		rel,
 	)
 }

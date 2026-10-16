@@ -9,13 +9,13 @@
 
 env CONSTITUTION_TODAY=2026-07-02
 
-exec constitution init --founding-file first.md --target claude
+exec constitution init --founding-file first.md
 exists constitution/adr/ADR-0001-founding-constitution.md
 grep 'The first statement.' constitution/adr/ADR-0001-founding-constitution.md
 cp constitution/adr/ADR-0001-founding-constitution.md snap.adr
 
 # re-init with a totally different founding file
-exec constitution init --founding-file second.md --target claude
+exec constitution init --founding-file second.md
 stdout 'init: constitution ready'
 
 # the log is unchanged: the second file's content never landed, and no

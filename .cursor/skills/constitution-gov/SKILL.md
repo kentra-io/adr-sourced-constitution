@@ -1,13 +1,13 @@
 ---
 name: constitution-gov
-description: Governs how the constitution is used — append-only log, consult-before-planning, amendments only via an ADR under the consent policy. Force-inlines the active constitution into context so governance does not depend on pointer compliance. Applies whenever planning or proposing changes in a governed repo.
+description: Use when writing or revising a spec, a plan or an ADR in a repo with `constitution/constitution.md`: loads it for that task and governs amendments — append-only log, amendments only via an ADR under the consent policy. Not for implementation, review or general questions.
 ---
 
 # constitution-gov
 
 ## Requires
 
-This skill is written for `constitution` 0.3.1 or newer. Before doing
+This skill is written for `constitution` 0.4.0 or newer. Before doing
 anything else, run `constitution --version`. If the binary is older,
 **stop** and report the mismatch — an older CLI does not have the
 flags this skill uses, and the workarounds an older skill taught (such
@@ -25,21 +25,20 @@ only the ADRs that carry a standing rule, and each rule lives in a per-category
 as `ADR-NNNN/<category>/<slug>`. Point-in-time records stay in the log as
 history but are deliberately absent from the constitution, so the ruling
 document reads as a concise rulebook, not a decision archive. That projection
-is the ruling authority for how work here is planned and built. Load it into
-context now:
+is the ruling authority for how work here is specified and planned.
 
 ```
 cat constitution/constitution.md
 ```
 
+Read it when you start writing or revising a spec, a plan or an ADR (writing
+an ADR counts as spec time). Do not read it for implementation, review or
+general questions. Skip the read if you already read the file in this task.
+
 If the `constitution` binary is not on PATH (some steps below shell out to it),
 install the prebuilt release —
 `curl -sSfL https://raw.githubusercontent.com/kentra-io/adr-sourced-constitution/main/install.sh | sh`
 — do **not** build from source or install a Go toolchain.
-
-Do this at the start of every planning or architectural task, even if a pointer
-already imported it — reading it directly is how you stay governed regardless of
-which agent framework you are running under.
 
 ## Priority hierarchy (highest wins)
 
@@ -60,9 +59,9 @@ which agent framework you are running under.
   `status:` / `superseded-by:` line and, while `phase: draft`, a per-facet
   revision, and only the `constitution` CLI may make any of it. Editing these
   files directly corrupts the log; a `constitution guard` run will flag it.
-- **Consult before deciding.** Before proposing a plan, an architecture, or a
-  design change, check the constitution for a rule that already governs it. Cite
-  the `ADR-NNNN` you are relying on when you do.
+- **Consult before deciding.** When writing a spec, a plan or an ADR, check
+  the constitution for a rule that already governs it. Cite the `ADR-NNNN`
+  you are relying on when you do.
 - **Amend only through the flow.** If a rule is wrong or in the way, you do not
   override it and you do not edit it by hand. You propose a change through the
   CLI (the `adr-draft` skill) — a whole-ADR supersession, or a targeted
@@ -99,7 +98,7 @@ hold in **both** phases without exception — draft is a looser change
 surface, not a suspension of governance.
 
 Every other config key (`consent.policy`, `sourceTracking.type`,
-`sourceTracking.pattern`, `agentInstructions.targets`, `skills.trees`) is
+`sourceTracking.pattern`, `skills.trees`) is
 settable in either phase via `constitution config set <key> <value>` —
 validated and written atomically, never a hand-edit; `categories` grows only
 via `adr new --new-category`, never `config set`. Config changes are not

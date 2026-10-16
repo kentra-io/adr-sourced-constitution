@@ -1,16 +1,19 @@
-# A malformed marker pair (BEGIN with no END) is never guessed: init refuses
-# with a clear error and exit code 2 (could-not-run), and — because the check
-# is a pre-flight — nothing is scaffolded (M4 DoD broken-marker case).
+# A malformed marker pair (BEGIN with no END) is never guessed: init warns,
+# leaves the file byte-identical, and still scaffolds and exits 0 — the
+# broken block can no longer block init (0.4.0 only removes blocks), and
+# even --force does not touch it.
 
 env CONSTITUTION_TODAY=2026-07-02
 
-exitcode 2 constitution init --target claude
-stderr 'BEGIN marker present without a matching END'
+cp CLAUDE.md want-claude.md
+exec constitution init --force
+stderr 'managed block in CLAUDE.md: BEGIN marker present without a matching END'
+stderr 'leaving it untouched'
+cmp CLAUDE.md want-claude.md
 
-# pre-flight refused before any writes
-! exists constitution.yml
-! exists constitution/constitution.md
-! exists constitution/adr/ADR-0001-p1.md
+# scaffolded normally
+exists constitution.yml
+exists constitution/constitution.md
 
 -- CLAUDE.md --
 # Project

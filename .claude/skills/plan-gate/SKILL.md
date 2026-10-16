@@ -1,20 +1,20 @@
 ---
 name: plan-gate
-description: Checks a plan against the project's constitution rule by rule and reports, in the session, every ADR rule the plan would break. Use before a plan is executed, when a plan or design changes, or when asked whether something conforms to the constitution. Writes deviation.json only when asked.
+description: Checks a plan against the project's constitution rule by rule and reports, in the session, every ADR rule the plan would break. Use when a spec or plan is written, before a plan is executed, when a plan or design changes, or when asked whether something conforms to the constitution. Writes deviation.json only when asked.
 ---
 
 # plan-gate
 
 ## Requires
 
-This skill is written for `constitution` 0.3.1 or newer. Before doing
+This skill is written for `constitution` 0.4.0 or newer. Before doing
 anything else, run `constitution --version`. If the binary is older,
 **stop** and report the mismatch — an older CLI does not have the
 flags this skill uses, and the workarounds an older skill taught (such
 as hand-editing `constitution.yml`) are forbidden here. Do not
 improvise around the gap.
 
-Check a plan against this repo's constitution before it is executed. Read
+Check a spec or plan against this repo's constitution before it is executed. Read
 every standing rule, decide for each one whether the plan conforms, and report
 the verdict in the session, citing each broken rule by `ADR-NNNN`. You change
 nothing: not the plan, not the log, not `constitution.md`.

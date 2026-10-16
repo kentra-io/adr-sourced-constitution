@@ -63,6 +63,13 @@ var configSetOwners = map[string]string{
 	"schemaVersion": "",
 }
 
+// configSetRemovedKeys names keys earlier versions could set but this build
+// no longer has, with the reason — so a script written against an older
+// CLI gets an explanation rather than "unknown key".
+var configSetRemovedKeys = map[string]string{
+	"agentInstructions.targets": "removed in 0.4.0: the CLI no longer writes agent-instruction pointers; skills load the constitution when a spec, plan or ADR is written",
+}
+
 // configSetCommand implements `constitution config set <key> <value>`
 // (issue #18): load the config, apply one dotted key from the settable
 // vocabulary, re-validate the WHOLE resulting Config in memory, and only
@@ -74,15 +81,16 @@ func configSetCommand() *cli.Command {
 		Usage:     "set one constitution.yml key (validated, atomic write)",
 		ArgsUsage: "<key> <value>",
 		Description: "Settable keys: consent.policy, sourceTracking.type,\n" +
-			"sourceTracking.pattern, agentInstructions.targets, skills.trees (the\n" +
-			"last two take a comma-separated list in <value> — config set has one\n" +
-			"positional value, not a repeatable flag). <value> must be non-empty:\n" +
+			"sourceTracking.pattern, skills.trees (the last takes a comma-separated\n" +
+			"list in <value> — config set has one positional value, not a\n" +
+			"repeatable flag). <value> must be non-empty:\n" +
 			"config set is for explicit values, not silently resetting a key to\n" +
 			"its default.\n\n" +
 			"Governed keys refuse and name their owning verb instead: phase belongs\n" +
 			"to `constitution seal`, categories grow via `adr new --new-category`,\n" +
 			"and schemaVersion has no writer at all in this build (no migration\n" +
-			"machinery).\n\n" +
+			"machinery). agentInstructions.targets was removed in 0.4.0 and is\n" +
+			"refused with that reason.\n\n" +
 			"The whole resulting config is re-validated before anything is written:\n" +
 			"an illegal value leaves constitution.yml byte-identical to before —\n" +
 			"the failure is at the point of the write, not on some later command.\n\n" +
@@ -130,6 +138,10 @@ func runConfigSet(cmd *cli.Command) error {
 		}
 	}
 
+	if reason, removed := configSetRemovedKeys[key]; removed {
+		return &exitError{err: fmt.Errorf("config set: %q is not settable — %s", key, reason), code: 2}
+	}
+
 	if err := applyConfigKey(cfg, key, value); err != nil {
 		return &exitError{err: fmt.Errorf("config set: %w", err), code: 2}
 	}
@@ -166,8 +178,8 @@ var errEmptyValue = errors.New(
 // applyConfigKey mutates cfg's one settable field named by key. A key not
 // in this switch is refused here as unknown — configSetOwners has already
 // handled the governed keys (phase, categories, schemaVersion) before this
-// is reached, so anything left over is either one of the five settable
-// keys or a typo.
+// is reached, and configSetRemovedKeys the removed ones, so anything left
+// over is either one of the four settable keys or a typo.
 func applyConfigKey(cfg *config.Config, key, value string) error {
 	switch key {
 	case "consent.policy":
@@ -176,12 +188,6 @@ func applyConfigKey(cfg *config.Config, key, value string) error {
 		cfg.SourceTracking.Type = value
 	case "sourceTracking.pattern":
 		cfg.SourceTracking.Pattern = value
-	case "agentInstructions.targets":
-		list := splitConfigList(value)
-		if len(list) == 0 {
-			return errEmptyValue
-		}
-		cfg.AgentInstructions.Targets = list
 	case "skills.trees":
 		list := splitConfigList(value)
 		if len(list) == 0 {
@@ -190,7 +196,7 @@ func applyConfigKey(cfg *config.Config, key, value string) error {
 		cfg.Skills.Trees = list
 	default:
 		return fmt.Errorf(
-			"unknown key %q (settable: consent.policy, sourceTracking.type, sourceTracking.pattern, agentInstructions.targets, skills.trees)",
+			"unknown key %q (settable: consent.policy, sourceTracking.type, sourceTracking.pattern, skills.trees)",
 			key)
 	}
 	return nil
@@ -208,8 +214,6 @@ func storedConfigValue(cfg *config.Config, key string) string {
 		return cfg.SourceTracking.Type
 	case "sourceTracking.pattern":
 		return cfg.SourceTracking.Pattern
-	case "agentInstructions.targets":
-		return strings.Join(cfg.AgentInstructions.Targets, ",")
 	case "skills.trees":
 		return strings.Join(cfg.Skills.Trees, ",")
 	default:
@@ -218,7 +222,7 @@ func storedConfigValue(cfg *config.Config, key string) string {
 }
 
 // splitConfigList turns config set's single positional <value> into
-// constitution.yml's []string shape for the two list-typed settable keys:
+// constitution.yml's []string shape for the list-typed settable key:
 // comma-separated, trimmed, empty entries dropped.
 func splitConfigList(value string) []string {
 	parts := strings.Split(value, ",")

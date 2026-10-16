@@ -1,24 +1,20 @@
 schemaVersion: 1
 managed:
     - path: .agents/skills/adr-draft/SKILL.md
-      hash: ccb3c67382cdb83ceee62bb273e965f58eb78175fd88911394f2799c68a04267
+      hash: 42e4a5301917636444f71a2079ee67b0f7a868f8b66813d5b4f4672a0362eda2
     - path: .agents/skills/constitution-gov/SKILL.md
-      hash: 7c836f4312b87fd0a515b55d5de6d0282ceea01d331ac4951696c7f175d774a1
+      hash: f5c7e476f4791c8589c80fb1a296464dbbedda47aaf217a160f553847c9f05db
     - path: .agents/skills/plan-gate/SKILL.md
-      hash: 18449b1e2f9a647d24e417d41347e30c38aa7bd57cf7d0c052172da8b4072c5b
+      hash: d01d6258ff0926b392eab4c5c567d4d998e41446cb58dcd291efe5bd082c74b3
     - path: .claude/skills/adr-draft/SKILL.md
-      hash: ccb3c67382cdb83ceee62bb273e965f58eb78175fd88911394f2799c68a04267
+      hash: 42e4a5301917636444f71a2079ee67b0f7a868f8b66813d5b4f4672a0362eda2
     - path: .claude/skills/constitution-gov/SKILL.md
-      hash: 7c836f4312b87fd0a515b55d5de6d0282ceea01d331ac4951696c7f175d774a1
+      hash: f5c7e476f4791c8589c80fb1a296464dbbedda47aaf217a160f553847c9f05db
     - path: .claude/skills/plan-gate/SKILL.md
-      hash: 18449b1e2f9a647d24e417d41347e30c38aa7bd57cf7d0c052172da8b4072c5b
+      hash: d01d6258ff0926b392eab4c5c567d4d998e41446cb58dcd291efe5bd082c74b3
     - path: .cursor/skills/adr-draft/SKILL.md
-      hash: ccb3c67382cdb83ceee62bb273e965f58eb78175fd88911394f2799c68a04267
+      hash: 42e4a5301917636444f71a2079ee67b0f7a868f8b66813d5b4f4672a0362eda2
     - path: .cursor/skills/constitution-gov/SKILL.md
-      hash: 7c836f4312b87fd0a515b55d5de6d0282ceea01d331ac4951696c7f175d774a1
+      hash: f5c7e476f4791c8589c80fb1a296464dbbedda47aaf217a160f553847c9f05db
     - path: .cursor/skills/plan-gate/SKILL.md
-      hash: 18449b1e2f9a647d24e417d41347e30c38aa7bd57cf7d0c052172da8b4072c5b
-    - path: AGENTS.md
-      hash: 7f39bbdc0f1f4a893ce0ec93d115b48c04cabad60cdd5615076e53a66ca96e30
-    - path: CLAUDE.md
-      hash: a0462f2be00630a7976f33e83120d4de0aad6c6a3af4bfc1e934bdb458d4f40e
+      hash: d01d6258ff0926b392eab4c5c567d4d998e41446cb58dcd291efe5bd082c74b3

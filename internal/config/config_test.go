@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	yaml "go.yaml.in/yaml/v3"
 )
 
 func write(t *testing.T, content string) string {
@@ -128,11 +130,6 @@ func TestLoadInvalid(t *testing.T) {
 			wantErr: `field "sourceTracking.type": must be one of "none", "generic", "github-issue", "jira" (got "trello")`,
 		},
 		{
-			name:    "unknown agentInstructions target",
-			content: "schemaVersion: 1\nphase: sealed\ncategories: [architecture]\nagentInstructions:\n  targets: [claude, claude-md]\n",
-			wantErr: `field "agentInstructions.targets": unknown target "claude-md" (allowed: "claude", "agents")`,
-		},
-		{
 			name:    "unknown skills tree",
 			content: "schemaVersion: 1\nphase: sealed\ncategories: [architecture]\nskills:\n  trees: [claude, vscode]\n",
 			wantErr: `field "skills.trees": unknown skills tree "vscode" (allowed: "claude", "agents", "cursor")`,
@@ -239,5 +236,41 @@ func TestLoadStaysLenientAboutPatterns(t *testing.T) {
 func TestWrapSourcePatternAnchors(t *testing.T) {
 	if got, want := WrapSourcePattern("a|b"), "^(?:a|b)$"; got != want {
 		t.Errorf("WrapSourcePattern(%q) = %q, want %q", "a|b", got, want)
+	}
+}
+
+// TestLoadCapturesLegacyAgentInstructions pins the 0.4.0 migration hook:
+// a pre-0.4.0 config still carrying `agentInstructions` (any shape, even
+// a target value 0.3.x would have rejected) loads cleanly, the key is
+// captured so init/regen can see it, and marshaling a Config whose
+// capture was cleared omits the key entirely — so a persisted config
+// carries nothing a 0.3.x binary would turn back into pointer blocks.
+func TestLoadCapturesLegacyAgentInstructions(t *testing.T) {
+	path := write(t, "schemaVersion: 1\nphase: draft\ncategories: [architecture]\n"+
+		"agentInstructions:\n  targets: [claude, bogus]\n")
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v, want a legacy agentInstructions key to load", err)
+	}
+	if cfg.LegacyAgentInstructions == nil {
+		t.Fatal("LegacyAgentInstructions = nil, want the legacy key captured")
+	}
+
+	cfg.LegacyAgentInstructions = nil
+	out, err := yaml.Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(out), "agentInstructions") {
+		t.Errorf("marshaled config still carries agentInstructions:\n%s", out)
+	}
+
+	clean, err := Load(write(t, "schemaVersion: 1\nphase: draft\ncategories: [architecture]\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if clean.LegacyAgentInstructions != nil {
+		t.Error("LegacyAgentInstructions set on a config without the key")
 	}
 }

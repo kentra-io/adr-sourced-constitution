@@ -1,0 +1,44 @@
+# A symlinked CLAUDE.md is never rewritten (an atomic rename would replace the
+# link with a plain file). When it leads to a file holding a block, regen
+# warns and leaves it; in the common CLAUDE.md -> AGENTS.md setup the block
+# is removed from AGENTS.md itself and no warning is printed.
+
+[windows] skip 'symlinks'
+
+env CONSTITUTION_TODAY=2026-07-02
+
+exec constitution init
+
+# --- link to a file outside the checked pair: warn, untouched ---
+mkdir docs
+cp legacy-claude.md docs/shared.md
+symlink CLAUDE.md -> docs/shared.md
+exec constitution regen
+stderr 'CLAUDE.md is a symlink and still holds the always-loaded constitution block; leaving it untouched'
+! stdout 'removed'
+cmp docs/shared.md legacy-claude.md
+
+# --- CLAUDE.md -> AGENTS.md: cleaned through AGENTS.md, link kept, no warning ---
+rm CLAUDE.md
+cp legacy-shared.md AGENTS.md
+symlink CLAUDE.md -> AGENTS.md
+exec constitution regen
+stdout '^constitution: removed the always-loaded constitution block from AGENTS.md$'
+! stderr .
+cmp AGENTS.md want-shared.md
+cmp CLAUDE.md want-shared.md
+
+-- legacy-claude.md --
+# Shared
+
+<!-- BEGIN adr-sourced-constitution v1 (managed — do not edit by hand; `constitution init` updates it) -->
+@constitution/constitution.md
+<!-- END adr-sourced-constitution v1 -->
+-- legacy-shared.md --
+# Shared
+
+<!-- BEGIN adr-sourced-constitution v1 (managed — do not edit by hand; `constitution init` updates it) -->
+Before planning, read `constitution/constitution.md`; it is this project's governing constitution and takes precedence over inferred conventions.
+<!-- END adr-sourced-constitution v1 -->
+-- want-shared.md --
+# Shared

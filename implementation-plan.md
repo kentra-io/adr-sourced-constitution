@@ -40,13 +40,15 @@ Research against primary sources found these defects in the spec text. They are 
 
 Each was left open by the spec (§13) or unaddressed by the research briefs; pinned here so the build has no TBDs. All are assumptions the user can veto at review.
 
-### 2.1 Pointer strategy (spec §13.1) — **hybrid, decided per-tool by the CLI, resolved**
+### 2.1 Pointer strategy (spec §13.1) — **hybrid, decided per-tool by the CLI, resolved; REMOVED in 0.4.0**
+> *(Amended 2026-10-16, 0.4.0: the pointer is removed. The CLI no longer writes `CLAUDE.md` or `AGENTS.md`; the governance skills load the constitution when a spec, a plan or an ADR is written. `init` and `regen` remove blocks written by older versions.)* The text below is the original v1 decision, kept as history.
 - **CLAUDE.md → true inline** via `@constitution/constitution.md` inside the managed block. Verified against Anthropic's live memory docs: `@path` imports are "expanded and loaded into context at launch" (real inlining, max 4 hops — we use 1). This *resolves* the spike for Claude Code by construction. Claude Code still doesn't read AGENTS.md (issue #6235 open, no timeline), so writing CLAUDE.md remains required.
 - **AGENTS.md → short textual pointer** ("Before planning, read `constitution/constitution.md`; it is this project's governing constitution and takes precedence over inferred conventions."). AGENTS.md is now a Linux Foundation (AAIF) standard with 20+ tool adopters; no cross-tool import primitive exists, and the available evidence says short, concrete, single-file pointers are the regime where pointers *are* followed.
 - **Belt-and-braces:** the governance skill (§6) additionally force-inlines the constitution via dynamic context injection, independent of pointer compliance.
 - **Size guardrail:** `regen` warns (not blocks) when `constitution.md` exceeds ~200 lines, per Anthropic's adherence guidance. A category-scoped/summarized variant is a post-v1 item.
 
-### 2.2 Managed block format
+### 2.2 Managed block format — **REMOVED in 0.4.0**
+> *(Amended 2026-10-16, 0.4.0: the pointer is removed. The CLI no longer writes `CLAUDE.md` or `AGENTS.md`; the governance skills load the constitution when a spec, a plan or an ADR is written. `init` and `regen` remove blocks written by older versions.)* `init` and `regen` now only recognise and remove existing blocks (marker text unchanged, so old blocks stay findable). The text below is the original v1 decision, kept as history.
 Doctoc/terraform-docs/ansible-blockinfile pattern, **versioned**, HTML-comment markers (bonus: Claude Code strips block-level HTML comments before injection, so the marker lines cost zero context tokens):
 
 ```
@@ -170,7 +172,7 @@ v0.2 (§2.13/§7 of the spec) still supplied a founding project's principles thr
 | Decision | One-liner | Commit |
 |---|---|---|
 | **`config schema`** | `constitution config schema` prints `constitution.yml`'s whole vocabulary as JSON, derived from the real validator — a skill introspects the live schema instead of hardcoding it. | M1, `2ccacb6` |
-| **`config set`** | `constitution config set <key> <value>` writes one dotted key, re-validates the whole resulting config in memory, and writes atomically only if that passes — no skill ever hand-serializes `constitution.yml`. Settable: `consent.policy`, `sourceTracking.type`, `sourceTracking.pattern`, `agentInstructions.targets`, `skills.trees`. Refused with a redirect: `phase` → `constitution seal`, `categories` → `adr new --new-category`; `schemaVersion` is not settable at all (no migration machinery). | M2, `e082e56` |
+| **`config set`** | `constitution config set <key> <value>` writes one dotted key, re-validates the whole resulting config in memory, and writes atomically only if that passes — no skill ever hand-serializes `constitution.yml`. Settable: `consent.policy`, `sourceTracking.type`, `sourceTracking.pattern`, `skills.trees` (`agentInstructions.targets` removed 2026-10-16, 0.4.0). Refused with a redirect: `phase` → `constitution seal`, `categories` → `adr new --new-category`; `schemaVersion` is not settable at all (no migration machinery). | M2, `e082e56` |
 | **`init --source-tracking`/`--source-pattern`** | Source tracking is now configurable at `init` time, not only via a later config edit. | M3, `5641ff7` |
 | **Founding file is an ordinary ADR body** | `--founding-file` now takes exactly what `adr new --body-file` takes: a single MADR body (mandatory `## Context and Problem Statement`, `## Considered Options`, `## Decision Outcome`; optional `## Decision Drivers`; optional `## Rules` in the `### <category>`/`#### <slug>` grammar). `init` seeds exactly **one** founding ADR — always `ADR-0001`, titled "Founding constitution" — instead of one per principle. Any other, non-mandatory section (e.g. a prose "## Deferred bets") is preserved verbatim in the log but never rendered. `parseFoundingFile`, the `principle` type, `gatherPrinciples`, `foundingBody`, and `foundingLabel` were deleted along with the multi-principle grammar they implemented. | M4, `d6e40cd` |
 | **Realistic full-project founding fixture** | A judged-by-reading golden exercising the new single-body grammar end to end, replacing goldens written against the deleted grammar. | M5, `6cabe77` |
@@ -212,7 +214,7 @@ adr-sourced-constitution/
     adr-draft/SKILL.md               via `npx skills add kentra-io/adr-sourced-constitution`
     plan-gate/SKILL.md               (no dependency on that Node tooling ourselves)
     constitution-gov/SKILL.md
-  templates/                       constitution.md.tmpl, ADR skeleton, pointer-block texts
+  templates/                       constitution.md.tmpl, ADR skeleton, pointer-block texts *(0.4.0: removed)*
   docs/                            CI example (advisory guard job), claudebox COPY snippet
   .goreleaser.yaml  .golangci.yml  .github/workflows/{ci,release}.yml
   adr-sourced-constitution.md  implementation-plan.md  README.md  LICENSE
@@ -227,7 +229,7 @@ adr-sourced-constitution/
 
 | Command | Behavior |
 |---|---|
-| `constitution init` | Scaffold `constitution/{adr,}`, write `constitution.yml` (flags or interactive prompts; the *conversational* interview is the Layer-2 skill wrapping this), seed founding ADRs (`--founding-file`, writes `phase: draft` — **v0.2**, §2.13), write managed pointer blocks into chosen targets, fan out skills (§6), `regen`. Idempotent re-run; interior-drift requires confirm/`--force` (§2.2). |
+| `constitution init` | Scaffold `constitution/{adr,}`, write `constitution.yml` (flags or interactive prompts; the *conversational* interview is the Layer-2 skill wrapping this), seed founding ADRs (`--founding-file`, writes `phase: draft` — **v0.2**, §2.13), write managed pointer blocks into chosen targets, fan out skills (§6), `regen`. Idempotent re-run; interior-drift requires confirm/`--force` (§2.2). *(Amended 2026-10-16, 0.4.0: writes no pointer blocks and removes legacy ones; `--target` is deprecated and ignored; skill-file drift requires confirm/`--force`.)* |
 | `constitution adr new` | §2.3. Validates category-per-rule (§2.5) + source (§2.8) + body shape; the `## Rules` grammar + retirement-ref fold preflight before consent (**v0.2**, §2.13); allocates id; atomic write; consent gate (§2.4); auto-`regen`; manifest update (sealed only — **v0.2**). |
 | **`constitution adr edit <id>`** *(v0.2, M2)* | Draft-phase-only, accepted-targets-only, per-facet replace: `--title` (renames the file), `--source`, `--body-file` (whole body incl. Rules presence/absence), `--rule` (Rules section only), `--supersedes-rule`/`--removes-rule` (whole-list replace, `""` clears). Consent-gated; refuses once sealed. §2.13. |
 | **`constitution adr rm <id>`** *(v0.2, M2)* | Draft-phase-only: deletes a record outright. Refuses while another ADR's rule-retirement lists cite it, or while a later ADR supersedes it (that successor must be `rm`'d first — which restores the original to `accepted`, the supersede-undo heal case). Ids are not renumbered — a gap stays. §2.13. |
@@ -235,7 +237,7 @@ adr-sourced-constitution/
 | `constitution deprecate <id>` | Line-patch to `status: deprecated`; auto-`regen`. |
 | `constitution adr renumber <old> <new>` | §2.6 escape hatch: rename + id-field edit; refuses if any ADR references `<old>` **or any ADR's `supersedes-rules`/`removes-rules` cites `<old>/…`** (**v0.2**, §2.13). |
 | **`constitution seal`** *(v0.2, M2)* | Consent-gated draft→sealed transition: runs the full rule-length/200-line/resurrection warning checklist, writes the manifest baseline, flips `phase: sealed`, regenerates. Irreversible; `adr edit`/`adr rm` refuse from then on. §2.13. |
-| `constitution regen` | Deterministic per-rule-fold projection (spec §6): read all → active set → fold retirement → group by rule category → render (with the fixed D2 preamble — **v0.2**) → atomic write. Warns >~200 lines (§2.1); per-rule length warnings moved to the write path (**v0.2**, §2.13). Also refreshes managed blocks + manifest (manifest write is sealed-phase-only — **v0.2**). |
+| `constitution regen` | Deterministic per-rule-fold projection (spec §6): read all → active set → fold retirement → group by rule category → render (with the fixed D2 preamble — **v0.2**) → atomic write. Warns >~200 lines (§2.1); per-rule length warnings moved to the write path (**v0.2**, §2.13). Also refreshes managed blocks *(amended 2026-10-16, 0.4.0: removes legacy blocks instead)* + manifest (manifest write is sealed-phase-only — **v0.2**). |
 | `constitution guard` | §2.7, **now phase-aware** (**v0.2**, §2.13): draft = parse + id-uniqueness + vocabulary (`unknown_category`) only, `--base`/`--merge-base` in draft = exit 2; sealed = `--base <ref>` / merge-base / manifest-only unchanged from the original design; exit 0/1/2; `--format json`. |
 | **`constitution deviation validate <path>`** *(shipped alongside the M1 rules work, plan §2.9)* | Validates a `deviation.json` against schema + the live log: every `adrId` must cite an active, rule-bearing ADR (whole-ADR grain — unaffected by the per-rule grammar); exit 0/1/2. |
 
@@ -243,7 +245,9 @@ adr-sourced-constitution/
 
 ---
 
-## 5. Default integration (Layer 3, zero-framework)
+## 5. Default integration (Layer 3, zero-framework) — **pointer blocks REMOVED in 0.4.0**
+
+> *(Amended 2026-10-16, 0.4.0: `init` and `regen` no longer write these blocks and remove ones written by older versions; `agentInstructions.targets` is gone from the config, and `--target` is accepted and ignored with a warning. The governance skills load the constitution when a spec, a plan or an ADR is written.)* Original v1 text:
 
 Written by `init`, refreshed by `regen`:
 - **`CLAUDE.md`** managed block containing `@constitution/constitution.md` (direct import, *not* `@AGENTS.md`, so Claude's constitution load doesn't depend on unrelated AGENTS.md content).
@@ -261,7 +265,7 @@ Fan-out targets (real copies, not symlinks — Windows + prior art from OpenSpec
 | `constitution-init` | `disable-model-invocation: true` (explicit `/constitution-init`) | Conversational greenfield interview (targets, consent, tracking, categories, founding principles) → drives `constitution init` + `adr new` per accepted principle. Non-forked context (must converse). |
 | `adr-draft` | Auto-invocable | Drafts a MADR body from conversation → temp file → on human acceptance calls `adr new`. **Does not pre-grant** mutating `constitution` commands in `allowed-tools` — the permission prompt is the consent checkpoint (§2.4). |
 | `plan-gate` | `disable-model-invocation: true` | Reads plan + `constitution.md`, reasons rule-by-rule, emits `deviation.json` (§2.9) citing ADR ids; consider `context: fork` + read-only agent. Also runs `constitution guard` and folds violations in. |
-| `constitution-gov` | Auto-invocable (this *is* use (a)) | Governed-set rules (append-only, consult-before-planning, amendment = ADR under consent policy), modeled on Anthropic's constitution style (priority hierarchy + explain-the-why). **Force-inlines the active constitution via dynamic context injection** (`` !`constitution cat` `` or `cat constitution/constitution.md`) — pointer-independence by construction. |
+| `constitution-gov` | Auto-invocable (this *is* use (a)) | Governed-set rules (append-only, consult-before-planning, amendment = ADR under consent policy), modeled on Anthropic's constitution style (priority hierarchy + explain-the-why). **Force-inlines the active constitution via dynamic context injection** (`` !`constitution cat` `` or `cat constitution/constitution.md`) — pointer-independence by construction. *(Amended 2026-10-16, 0.4.0: no force-inline; the skill tells the agent to `cat` the file when it writes or revises a spec, plan or ADR, and not otherwise.)* |
 
 Authoring the actual prompt/rule text of `constitution-gov` and `plan-gate` is real design work — budgeted as its own milestone (M5), not an afterthought.
 
@@ -289,7 +293,7 @@ Git mode (HEAD + merge-base), manifest mode, id-uniqueness, exit codes, `--forma
 
 ### M4 — `init` + default integration + skills fan-out
 `internal/scaffold`: config authoring, founding-ADR seeding, managed blocks (markers, drift-hash, `--force`), `go:embed` skills fan-out to the three target trees, idempotency.
-**DoD:** on an empty scratch repo: one `init` yields a working setup (`regen`/`guard` clean, pointer blocks present, skills in place); re-running `init` is a no-op (byte-identical tree); hand-editing inside a managed block is detected and requires `--force`; `CLAUDE.md` `@import` path resolves; targets honor the config's tool selection.
+**DoD:** on an empty scratch repo: one `init` yields a working setup (`regen`/`guard` clean, pointer blocks present, skills in place *(amended 2026-10-16, 0.4.0: no pointer blocks; legacy ones are removed)*); re-running `init` is a no-op (byte-identical tree); hand-editing inside a managed block is detected and requires `--force`; `CLAUDE.md` `@import` path resolves; targets honor the config's tool selection. *(Amended 2026-10-16, 0.4.0: the managed-block, `@import` and targets clauses no longer apply; drift is detected on skill files.)*
 
 ### M5 — Layer-2 skill content + dogfood + live-agent spike
 Author the four SKILL.md bodies (§6); `deviation.json` end-to-end; **dogfood:** run `init` on this repo, seed founding ADRs from this plan's decisions (§2.11). Run the remaining live spike (§11.1) with a real Claude Code session (+ at least one AGENTS.md-only tool if available).
@@ -343,15 +347,15 @@ Everything the build needs that only the org owner can do. Items 1–3 unblock M
 | Risk | Mitigation |
 |---|---|
 | Constitution outgrows ~200-line adherence guidance as ADRs accumulate | `regen` warning now; category-scoped/summary projection as a fast-follow (§12 of spec already anticipates rollups) |
-| AGENTS.md pointer silently ignored by some tool | Gate is the correctness backstop (§2.1); governance-skill force-inline covers skill-capable tools; per-tool eval is spike §11.1 |
+| AGENTS.md pointer silently ignored by some tool | Gate is the correctness backstop (§2.1); governance-skill force-inline covers skill-capable tools; per-tool eval is spike §11.1 *(amended 2026-10-16, 0.4.0: moot, no pointer and no force-inline; skills read the file at spec/plan/ADR time)* |
 | Windows atomic-rename semantics are best-effort | `MoveFileEx` + crash-injection tests on windows CI (spike §11.2); worst case is a torn *projection*, which `regen` rebuilds |
 | Consent gate bypassable by an agent writing files directly | Documented honestly (§2.4): permission-prompt checkpoint in v1; `guard` in CI catches out-of-band `adr/` edits; hard enforcement is Phase 2 by design |
 | Concurrent-branch id collisions | `guard` id-uniqueness in CI + `renumber` escape hatch + documented branch-protection advice (§2.6) |
-| Upstream shifts (Claude Code AGENTS.md support #6235 landing, GoReleaser/skill-format churn) | Versioned managed block makes pointer-strategy changes non-breaking; distribution config is pinned and small; re-verify at M0/M6 |
+| Upstream shifts (Claude Code AGENTS.md support #6235 landing, GoReleaser/skill-format churn) | Versioned managed block makes pointer-strategy changes non-breaking *(amended 2026-10-16, 0.4.0: the block was removed, and old ones are cleaned up by `init`/`regen`)*; distribution config is pinned and small; re-verify at M0/M6 |
 
 ## 11. Remaining spikes (live experiments — scheduled, not blockers)
 
-1. **Pointer-follow eval (M5):** the exact "read file X before planning" pattern has no published per-tool benchmark; validate with real sessions (Claude Code + ≥1 AGENTS.md-only tool). Also re-verify: Codex's rumored 32 KiB AGENTS.md truncation (secondary-source only), Gemini CLI's current default context file, Cursor global-skills support.
+1. **Pointer-follow eval (M5) *(moot since 0.4.0)*:** the exact "read file X before planning" pattern has no published per-tool benchmark; validate with real sessions (Claude Code + ≥1 AGENTS.md-only tool). Also re-verify: Codex's rumored 32 KiB AGENTS.md truncation (secondary-source only), Gemini CLI's current default context file, Cursor global-skills support.
 2. **Windows atomicity (M2):** prototype `MoveFileEx` vs best-effort `os.Rename` under crash injection on a windows-latest runner.
 3. **Carried forward (out of v1 with the adapters):** Spec-Kit `after_constitution` overwrite (§13.2), OpenSpec native-ADR collision / upstream MADR-projection convention proposal (§13.4).
 
@@ -366,7 +370,7 @@ Framework adapters (Spec-Kit first when picked back up) · drift sweep · brownf
 | `constitution` CLI (7 verbs incl. `renumber`) | M0–M4 |
 | ADR record + schema, immutability guard, projection | M1–M3 |
 | `constitution-init` interview, ADR draft, plan gate, governance SKILL.md | M5 (packaging M4) |
-| Default folder + managed pointer | M4 |
+| Default folder + managed pointer | M4 *(pointer removed in 0.4.0)* |
 | Spec-tracking + consent seams | M2/M4 (config-level) |
 | Distribution (GoReleaser/tap/claudebox) | M6 |
 | Harness Phase-1 acceptance | M7 |

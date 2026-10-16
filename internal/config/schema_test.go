@@ -40,7 +40,6 @@ func TestSchemaEnumsAcceptedByValidator(t *testing.T) {
 		{"sourceTracking.type", func(cfg *Config, v string) { cfg.SourceTracking.Type = v }},
 		{"consent.policy", func(cfg *Config, v string) { cfg.Consent.Policy = v }},
 		{"phase", func(cfg *Config, v string) { cfg.Phase = v }},
-		{"agentInstructions.targets", func(cfg *Config, v string) { cfg.AgentInstructions.Targets = []string{v} }},
 		{"skills.trees", func(cfg *Config, v string) { cfg.Skills.Trees = []string{v} }},
 	}
 
@@ -97,7 +96,6 @@ func TestSchemaEnumValuesAreDerivedFromValidators(t *testing.T) {
 		key   string
 		vocab map[string]bool
 	}{
-		{"agentInstructions.targets", validTargets},
 		{"consent.policy", validConsentPolicies},
 		{"sourceTracking.type", validSourceTrackingTypes},
 		{"phase", validPhases},

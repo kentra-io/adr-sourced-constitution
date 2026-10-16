@@ -29,13 +29,6 @@ func Schema() []Field {
 			Doc:      "The only schemaVersion this build understands; every other value is refused (no migration machinery in v1).",
 		},
 		{
-			Key:      "agentInstructions.targets",
-			Type:     "[]string",
-			Required: false,
-			Values:   sortedKeys(validTargets),
-			Doc:      "Which agent-instruction file(s) get the managed pointer block: \"claude\" writes an @import pointer to CLAUDE.md, \"agents\" a short textual pointer to AGENTS.md.",
-		},
-		{
 			Key:      "consent.policy",
 			Type:     "string",
 			Required: false,

@@ -19,10 +19,9 @@ const SchemaVersion = 1
 // Config is the constitution.yml schema (plan §2.10, §2.5, §2.8; v0.2
 // proposal §3 for phase).
 type Config struct {
-	SchemaVersion     int               `yaml:"schemaVersion"`
-	AgentInstructions AgentInstructions `yaml:"agentInstructions"`
-	Consent           Consent           `yaml:"consent"`
-	SourceTracking    SourceTracking    `yaml:"sourceTracking"`
+	SchemaVersion  int            `yaml:"schemaVersion"`
+	Consent        Consent        `yaml:"consent"`
+	SourceTracking SourceTracking `yaml:"sourceTracking"`
 	// Phase is the founding phase (v0.2 proposal D1/A3): "draft" means the
 	// log is a fully mutable working set (edit/rm allowed, no manifest
 	// baseline, guard checks parse + vocabulary only); "sealed" means
@@ -40,16 +39,18 @@ type Config struct {
 	// Layer-2 skills out to and `regen` keeps refreshed (plan §6). Optional:
 	// absent/empty means no fan-out (the pre-M4 config shape still parses).
 	Skills Skills `yaml:"skills,omitempty"`
-}
-
-// AgentInstructions records which agent-instruction file(s) get the
-// managed pointer block (spec §7 item 1, §9.1, plan §2.1/§5). The values
-// are the target keys "claude" (→ CLAUDE.md, an `@import` pointer) and
-// "agents" (→ AGENTS.md, a short textual pointer). Written by `init`,
-// honored (not overridden by flags) on re-runs; `regen` refreshes the
-// blocks named here.
-type AgentInstructions struct {
-	Targets []string `yaml:"targets"` // "claude", "agents"
+	// LegacyAgentInstructions captures the removed `agentInstructions` key
+	// (pointer-block targets, dropped in 0.4.0) so `init` and `regen` can
+	// see it and drop it from constitution.yml: a 0.3.x binary reading a
+	// leftover `agentInstructions.targets` would write the always-loaded
+	// pointer blocks back. It is never validated or interpreted. Exported
+	// only because the YAML decoder ignores unexported fields.
+	//
+	// `agentInstructions: null` (or a bare key) decodes to nil, so it is left
+	// in place; that is harmless, since 0.3.x treats it as no targets.
+	// Dropping the key re-marshals constitution.yml, so its comments and key
+	// order are not preserved.
+	LegacyAgentInstructions *yaml.Node `yaml:"agentInstructions,omitempty"`
 }
 
 // Skills records the agent-skill fan-out trees (plan §6). Values are the
@@ -60,11 +61,8 @@ type Skills struct {
 	Trees []string `yaml:"trees,omitempty"`
 }
 
-// Target-key and skills-tree vocabularies (plan §2.1/§5/§6).
+// Skills-tree vocabulary (plan §6).
 const (
-	TargetClaude = "claude"
-	TargetAgents = "agents"
-
 	SkillTreeClaude = "claude"
 	SkillTreeAgents = "agents"
 	SkillTreeCursor = "cursor"
@@ -111,11 +109,6 @@ var validSourceTrackingTypes = map[string]bool{
 	SourceTrackingGeneric:     true,
 	SourceTrackingGitHubIssue: true,
 	SourceTrackingJira:        true,
-}
-
-var validTargets = map[string]bool{
-	TargetClaude: true,
-	TargetAgents: true,
 }
 
 var validSkillTrees = map[string]bool{
@@ -273,15 +266,6 @@ func (c *Config) validate(path string) error {
 			SourceTrackingNone, SourceTrackingGeneric, SourceTrackingGitHubIssue, SourceTrackingJira,
 			c.SourceTracking.Type,
 		)
-	}
-
-	for _, t := range c.AgentInstructions.Targets {
-		if !validTargets[t] {
-			return fmt.Errorf(
-				"%s: field %q: unknown target %q (allowed: %q, %q)",
-				path, "agentInstructions.targets", t, TargetClaude, TargetAgents,
-			)
-		}
 	}
 
 	for _, tr := range c.Skills.Trees {

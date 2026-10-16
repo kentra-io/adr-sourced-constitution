@@ -1,0 +1,18 @@
+# agentInstructions.targets was removed in 0.4.0: config set refuses it with
+# the reason (exit 2), leaves constitution.yml byte-identical, and config
+# schema no longer lists it.
+
+env CONSTITUTION_TODAY=2026-07-02
+
+exec constitution init
+cp constitution.yml before.yml
+
+exitcode 2 constitution config set agentInstructions.targets claude
+stderr 'removed in 0.4.0: the CLI no longer writes agent-instruction pointers; skills load the constitution when a spec, plan or ADR is written'
+cmp constitution.yml before.yml
+
+exitcode 2 constitution config set bogus.key x
+! stderr 'agentInstructions'
+
+exec constitution config schema
+! stdout 'agentInstructions'
