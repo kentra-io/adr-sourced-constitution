@@ -9,10 +9,6 @@ env CONSTITUTION_TODAY=2026-07-02
 exitcode 2 constitution init --consent advisory
 stderr '--consent must be "strict" or "off" \(got "advisory"\)'
 
-# --- --target: unknown value ---
-exitcode 2 constitution init --target bogus
-stderr '--target: unknown value "bogus"'
-
 # --- --skills-tree: unknown value ---
 exitcode 2 constitution init --skills-tree bogus
 stderr '--skills-tree: unknown value "bogus"'

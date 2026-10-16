@@ -9,7 +9,7 @@
 
 env CONSTITUTION_TODAY=2026-07-02
 
-exitcode 2 constitution init --founding-file founding.md --target claude
+exitcode 2 constitution init --founding-file founding.md
 stderr 'required section "## Considered Options" is missing'
 
 ! exists constitution/adr/ADR-0001-founding-constitution.md

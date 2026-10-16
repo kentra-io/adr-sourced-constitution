@@ -1,7 +1,8 @@
 # `constitution init` on an empty scratch repo (M4 DoD happy path): one init
 # yields config, a founding ADR (seeded from --founding-file), a rendered
-# projection, pointer blocks in both default targets, and skill copies in all
-# three trees; regen and guard both exit 0 afterward.
+# projection and skill copies in all three trees — and nothing in CLAUDE.md or
+# AGENTS.md (0.4.0: the skills load the constitution at spec, plan and ADR
+# time); regen and guard both exit 0 afterward.
 
 env CONSTITUTION_TODAY=2026-07-02
 
@@ -17,9 +18,11 @@ exists constitution/.state
 ! exists constitution/adr/.manifest.sha256
 stdout 'phase is draft'
 
-# --- both agent-instruction targets by default ---
-exists CLAUDE.md
-exists AGENTS.md
+# --- no agent-instruction files are written ---
+! exists CLAUDE.md
+! exists AGENTS.md
+! grep 'path: CLAUDE.md' constitution/.state
+! grep 'agentInstructions' constitution.yml
 
 # --- ongoing-governance skills fanned out to all three trees (real copies);
 #     the bootstrap-only constitution-init skill is NOT fanned — it ships via
@@ -30,12 +33,6 @@ exists .claude/skills/plan-gate/SKILL.md
 exists .claude/skills/constitution-gov/SKILL.md
 exists .agents/skills/adr-draft/SKILL.md
 exists .cursor/skills/plan-gate/SKILL.md
-
-# --- CLAUDE.md carries the @import (path resolves: constitution/constitution.md exists) ---
-grep '<!-- BEGIN adr-sourced-constitution v1' CLAUDE.md
-grep '@constitution/constitution.md' CLAUDE.md
-# --- AGENTS.md carries the textual pointer ---
-grep 'governing constitution and takes precedence' AGENTS.md
 
 # --- founding ADR is a real MADR record; under default sourceTracking.type
 #     (none) it carries NO source field (plan §2.8: none ⇒ no source allowed) ---

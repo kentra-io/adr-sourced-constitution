@@ -7,7 +7,7 @@ description: Drafts a MADR decision-record body from the current conversation, d
 
 ## Requires
 
-This skill is written for `constitution` 0.3.1 or newer. Before doing
+This skill is written for `constitution` 0.4.0 or newer. Before doing
 anything else, run `constitution --version`. If the binary is older,
 **stop** and report the mismatch — an older CLI does not have the
 flags this skill uses, and the workarounds an older skill taught (such

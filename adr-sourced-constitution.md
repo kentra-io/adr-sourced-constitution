@@ -2,7 +2,7 @@
 
 *Generated: 2026-07-01. Reframed 2026-07-02 as a **standalone, general-purpose SDD primitive** (was: a Spec-Kit-bound harness module). Status: **IMPLEMENTED — v0.1 shipped, v0.2 M1–M4 shipped 2026-07-23.** Kept as the original design document. Companion to [planning.md](./planning.md) (§6b, §7, §8), [mvp-plan.md](./mvp-plan.md) (Phase 1), [observability.md](./observability.md).*
 
-> **What this document is.** The buildable design of **`adr-sourced-constitution`** — a standalone primitive that models a project's governing "constitution" (its principles + accumulated architectural decisions — the *HOW* of the project) as an **event-sourced projection of an immutable ADR log**, deterministically rendered to a plain `constitution.md` that **any** SDD tool can consume. It ships as a **Go CLI + agent-agnostic skills + thin per-framework adapters**, integrating by default via a dedicated folder + an agent-instructions pointer. Produced through a structured grill/brainstorm + a cross-framework deep-research run (2026-07-01/02). Every decision carries its rationale; deferred items are flagged, not dropped.
+> **What this document is.** The buildable design of **`adr-sourced-constitution`** — a standalone primitive that models a project's governing "constitution" (its principles + accumulated architectural decisions — the *HOW* of the project) as an **event-sourced projection of an immutable ADR log**, deterministically rendered to a plain `constitution.md` that **any** SDD tool can consume. It ships as a **Go CLI + agent-agnostic skills + thin per-framework adapters**, integrating by default via a dedicated folder (the agent-instructions pointer was removed in 0.4.0, see §9.1). Produced through a structured grill/brainstorm + a cross-framework deep-research run (2026-07-01/02). Every decision carries its rationale; deferred items are flagged, not dropped.
 
 ---
 
@@ -25,7 +25,7 @@
 
 **Purpose.** The constitution is the **"HOW" of a project** — how we build things: its principles and accumulated architectural decisions. It is the artifact that warrants the **most human attention** in planning. It is a **tool-neutral governance artifact**: `constitution.md` is a plain Markdown file (crisp MUST/SHOULD rules preferred, descriptive prose allowed) consultable by *any* planning tool. Used three ways (§8): **(a) planning support** — loaded into a planning agent's context to shape technical design and how functional/non-functional requirements are met (the primary, proactive use); **(b) a plan-validation gate**; **(c) code validation** (a deferred background drift sweep).
 
-> **v0.2 (landed M1, 2026-07-21):** this goal statement is no longer just prose in this spec — it is rendered **verbatim as a fixed preamble** under `# Constitution` at the top of every generated `constitution.md` (proposal D2), so any agent opening the file (pointer-followed or not) sees what the document is for before it sees a single rule. See §6.
+> **v0.2 (landed M1, 2026-07-21):** this goal statement is no longer just prose in this spec — it is rendered **verbatim as a fixed preamble** under `# Constitution` at the top of every generated `constitution.md` (proposal D2), so any agent opening the file (pointer-followed or not; *amended 2026-10-16, 0.4.0: no pointer is written any more*) sees what the document is for before it sees a single rule. See §6.
 
 **This is a STANDALONE, general-purpose primitive** — not a harness-internal module and not bound to any one SDD framework. The research (§14) confirmed the gap is real: **none** of Spec-Kit, OpenSpec, or superpowers stores governance as an immutable append-only ADR log that deterministically projects the rules file, and **none has a native ADR/decision-log concept at all**. It has **no hard dependency** on the harness's feature-spec pipeline, engine, or observability plane; the only couplings (spec-tracking, planning tool, consent policy) are *configured* at adoption (§7).
 
@@ -73,8 +73,8 @@ The primitive is deliberately layered so the core is reusable and the framework 
    constitution-init interview · propose/draft ADR · the plan-validation gate (emits deviation.json)
         ▲
  Layer 3 — INTEGRATIONS
-   • DEFAULT (zero-framework): a dedicated  constitution/  folder + a managed pointer in the
-     project's agent-instructions file(s) (AGENTS.md and/or CLAUDE.md) → any agent loads it
+   • DEFAULT (zero-framework): a dedicated  constitution/  folder; the governance skills load
+     it when a spec, plan or ADR is written (the 0.4.0 amendment removed the AGENTS.md/CLAUDE.md pointer)
    • FRAMEWORK ADAPTERS (thin): Spec-Kit hook · OpenSpec context/schema · superpowers skill
    • PLUGGABLE SEAMS: spec-tracking source-ref format · consent policy
 ```
@@ -219,7 +219,7 @@ Local git hooks are **not** enforcement — same trust domain as the editing age
 Adoption is **one command**. `constitution init` runs a greenfield interview (wrapping the familiar "agent interviews you, drafts for approval" pattern) that both **configures the integration** and **seeds the founding principles**. Brownfield extraction is **deferred** (§12).
 
 It gathers and records (into a project config file):
-1. **Agent-instructions target(s)** — which file(s) get the managed pointer: `AGENTS.md` (cross-tool standard) and/or `CLAUDE.md` (**required for Claude Code, which does not natively read AGENTS.md** — §9.1).
+1. **Agent-instructions target(s)** *(removed in 0.4.0, see §9.1)* — which file(s) get the managed pointer: `AGENTS.md` (cross-tool standard) and/or `CLAUDE.md` (**required for Claude Code, which does not natively read AGENTS.md** — §9.1).
 2. **Planning-tool integration** — `none` (default folder only) | `spec-kit` | `openspec` | `superpowers` → selects the Layer-3 adapter (§9).
 3. **Spec-tracking system** — configures the `source-ref` format: `none` (no `source` field) | the harness feature-spec | GitHub Issues | Jira | … (e.g. `FS-0042`, `#123`, `PROJ-45`). Founding ADRs use the reserved `bootstrap` source.
 4. **Consent policy** (§7.1).
@@ -231,7 +231,7 @@ Then it **seeds founding-principle ADRs** into `adr/` (not a hand-written `const
 >
 > `init` also frames founding as **staged, not one-shot** (the `constitution-init` skill, Layer 2): (1) purpose + very-high-level design ADRs now, (2) research the technology bets before they harden into rule-bearing architecture ADRs, (3) technical-architecture ADRs informed by that research, then `constitution seal` once the bets are validated. The skill's elicitation contract runs a **rules-vs-bets triage** per candidate principle — standing rule / point-in-time record / **unvalidated bet** — so an assumption research could still kill never gets welded into a rule-bearing structural ADR; bets land as record-only ADRs or a parked list instead. `init` ends the interview **in draft**, explicitly: the log stays a cheap, `adr edit`/`adr rm`-able working set until the human runs `constitution seal` (§5).
 >
-> **M4–M6 (issues #18–#20, supersedes the multi-principle grammar above):** `--founding-file` now takes exactly what `adr new --body-file` takes — a single MADR body (mandatory `## Context and Problem Statement`, `## Considered Options`, `## Decision Outcome`; optional `## Decision Drivers`; optional `## Rules` in the same `### <category>` / `#### <slug>` grammar as `adr new --rule`, §4.1). `init` seeds exactly **one** founding ADR from it, always `ADR-0001`, titled "Founding constitution"; omitting `## Rules` seeds a catalog-only record. Any other, non-mandatory section in the founding file (e.g. a prose "## Deferred bets") is preserved verbatim in the log but never rendered into `constitution.md`. The staged Found/Validate/Settle framing above is unchanged by this — it now plays out across the sections of one founding ADR rather than across several separate ADRs. `init` also gained `--source-tracking`/`--source-pattern` (source tracking is configurable at init time, not only via a later config edit), and a new `constitution config` command group: `config schema` prints the whole `constitution.yml` vocabulary as JSON, derived from the real validator; `config set <key> <value>` writes one settable key atomically (`consent.policy`, `sourceTracking.type`, `sourceTracking.pattern`, `agentInstructions.targets`, `skills.trees`) — `phase` and `categories` are refused with a redirect to `constitution seal` / `adr new --new-category`. `constitution.yml` is never hand-edited for any of it.
+> **M4–M6 (issues #18–#20, supersedes the multi-principle grammar above):** `--founding-file` now takes exactly what `adr new --body-file` takes — a single MADR body (mandatory `## Context and Problem Statement`, `## Considered Options`, `## Decision Outcome`; optional `## Decision Drivers`; optional `## Rules` in the same `### <category>` / `#### <slug>` grammar as `adr new --rule`, §4.1). `init` seeds exactly **one** founding ADR from it, always `ADR-0001`, titled "Founding constitution"; omitting `## Rules` seeds a catalog-only record. Any other, non-mandatory section in the founding file (e.g. a prose "## Deferred bets") is preserved verbatim in the log but never rendered into `constitution.md`. The staged Found/Validate/Settle framing above is unchanged by this — it now plays out across the sections of one founding ADR rather than across several separate ADRs. `init` also gained `--source-tracking`/`--source-pattern` (source tracking is configurable at init time, not only via a later config edit), and a new `constitution config` command group: `config schema` prints the whole `constitution.yml` vocabulary as JSON, derived from the real validator; `config set <key> <value>` writes one settable key atomically (`consent.policy`, `sourceTracking.type`, `sourceTracking.pattern`, `agentInstructions.targets` *(removed in 0.4.0)*, `skills.trees`) — `phase` and `categories` are refused with a redirect to `constitution seal` / `adr new --new-category`. `constitution.yml` is never hand-edited for any of it.
 
 ### 7.1 Consent policy (configured, not hardcoded)
 Whether/how strictly ADR acceptance requires human consent is a **project-owner decision at init**, not a law baked into the primitive (it is standalone and publishable). Recorded in config; applies to every acceptance.
@@ -241,7 +241,7 @@ Whether/how strictly ADR acceptance requires human consent is a **project-owner 
 > **As built:** every mutating verb (`adr new`, `adr edit`, `adr rm`, `supersede`, `deprecate`, `renumber`, `seal`) takes `--approve`, the documented non-interactive path when `strict` (the shipped default) and stdin is not a TTY — the human still approves, just at the harness's own Bash-permission prompt rather than an interactive `[y/N]` (implementation-plan §2.4). Skills never pre-grant these commands in `allowed-tools`, so that prompt is the actual checkpoint regardless of consent policy.
 
 ### 7.2 The governance skill
-A `SKILL.md` (Layer 2) every planning/execution agent loads. It codifies the governed-set rules: what the constitution/ADRs are, that they are append-only, how an agent must consult the constitution before proposing a plan, and that amendments follow the configured consent policy. Modeled on Anthropic's own constitution style (priority hierarchy + explain-the-why, CC0). It *prompts*; it does not *enforce* (enforcement is the hook/engine/CI). This skill is also the mechanism for use (a), planning support (§8).
+A `SKILL.md` (Layer 2) that planning agents load when a spec, plan or ADR is written. *(Amended 2026-10-16, 0.4.0: not every planning/execution agent, and not every session; the skill is not loaded for implementation, review or general questions.)* It codifies the governed-set rules: what the constitution/ADRs are, that they are append-only, how an agent must consult the constitution before proposing a plan, and that amendments follow the configured consent policy. Modeled on Anthropic's own constitution style (priority hierarchy + explain-the-why, CC0). It *prompts*; it does not *enforce* (enforcement is the hook/engine/CI). This skill is also the mechanism for use (a), planning support (§8).
 
 ---
 
@@ -249,7 +249,7 @@ A `SKILL.md` (Layer 2) every planning/execution agent loads. It codifies the gov
 
 Tool-neutral: `constitution.md` is a plain file; every consumer reads the same file, only the *mechanism* differs. Three uses:
 
-**(a) Planning support — input to design (primary, proactive).** The planning agent has the constitution **on hand** as it designs; it shapes the technical design and how functional/non-functional requirements are met — informing the design as it is created, not merely checking it after. *Mechanism:* loaded into context via the governance skill (§7.2) / the agent-instructions pointer (§9.1).
+**(a) Planning support — input to design (primary, proactive).** The planning agent has the constitution **on hand** as it designs; it shapes the technical design and how functional/non-functional requirements are met — informing the design as it is created, not merely checking it after. *Mechanism:* loaded into context via the governance skill (§7.2) when a spec, plan or ADR is written. *(Amended 2026-10-16: the agent-instructions pointer is removed, §9.1.)*
 
 **(b) Plan-validation gate.** A plan (from any planning tool) is validated against the constitution **before code exists**.
 - *Mechanism:* a Layer-2 skill/adapter reasons about the plan vs the constitution and serializes findings to a machine-readable **`deviation.json`**, each **citing the specific violated `ADR-id`**. Because `constitution.md` now carries only rule-bearing active ADRs (§6, plan §2.12), a citation must name a **rule-bearing active** ADR — the CLI validator rejects a citation to a record-only ADR (it never appears in the constitution). In our harness the Spec-Kit adapter builds on `/speckit.analyze`; other tools consume `constitution.md` their own way.
@@ -272,6 +272,9 @@ Tool-neutral: `constitution.md` is a plain file; every consumer reads the same f
 
 ### 9.1 Default — zero-framework (the general-purpose adapter)
 The baseline needs **no SDD framework**: the `constitution/` folder (§4.3) + a **managed pointer** the CLI writes/maintains in the project's agent-instructions file(s) — a block instructing the agent to read `constitution/constitution.md` before planning. Covers use (a) universally.
+
+> *(Amended 2026-10-16, 0.4.0: the pointer is removed. The CLI no longer writes `CLAUDE.md` or `AGENTS.md`; the governance skills load the constitution when a spec, a plan or an ADR is written. `init` and `regen` remove blocks written by older versions.)* The paragraph above and the two bullets below describe the pre-0.4.0 design and are kept as history.
+
 - **AGENTS.md** = the emerging cross-tool standard (Cursor, Codex, …). **CLAUDE.md** is also written because **Claude Code does not natively read AGENTS.md** (issue #6235). `init` asks which target(s) apply.
 - **Spike:** do agents reliably *follow* a pointer, or must the constitution be *inlined*? (§13).
 
@@ -294,7 +297,7 @@ Domain logic (ADR log, supersede/deprecate, deterministic projection, guard, `de
 - **One primitive, one repo** — `adr-sourced-constitution` (public). The ADR log is the core's storage, **not** a separate product. (Supersedes the earlier two-extension `kentra-adr` + `…-constitution` split.)
 - **Layer 1: a Go single static binary** (`constitution`), `CGO_ENABLED=0`, cross-compiled linux/macos/windows × amd64/arm64. Distributed via **GoReleaser → Homebrew tap + GitHub Releases** (+ `go install`); **baked into claudebox** via `COPY` (no runtime). Version-pinned (no Docker wrapper — a containerized CLI would add nested-container + bind-mount friction for a hot-path tool).
 - **Layer 2:** agent-agnostic skills (no separate slash-command files — a skill *is* the command, §3) shipped in the same repo.
-- **Layer 3:** the default folder/pointer integration + per-framework adapters (each thin).
+- **Layer 3:** the default folder/pointer integration + per-framework adapters (each thin). *(Amended 2026-10-16, 0.4.0: the pointer is removed; the default is the folder plus skills that read it at spec/plan/ADR time.)*
 - **License: MIT** — matches the broad-adoption goal and MADR/Spec-Kit precedent.
 - **Standalone-first rollout:** ship the primitive; prove value harness-internal (Spec-Kit adapter first); then offer the OpenSpec + superpowers adapters as thin glue. Consider proposing a MADR-v4 + projection **convention** upstream before OpenSpec ships native ADRs (§13).
 
@@ -313,7 +316,7 @@ Domain logic (ADR log, supersede/deprecate, deterministic projection, guard, `de
 | ADR draft/propose | 2 (skill) | draft an ADR from conversation for human acceptance; settledness gate; rule-vs-record-vs-bet triage |
 | plan-validation gate | 2 (skill/adapter) | reason about plan vs constitution → emit `deviation.json` citing `ADR-id` |
 | governance `SKILL.md` | 2 | governed-set rules; loads constitution into planning context (use a) |
-| default folder + pointer | 3 | `constitution/` + managed AGENTS.md/CLAUDE.md block |
+| default folder + pointer | 3 | `constitution/` + managed AGENTS.md/CLAUDE.md block *(amended 2026-10-16, 0.4.0: block removed; folder only)* |
 | Spec-Kit / OpenSpec / superpowers adapters | 3 | thin per-framework glue (§9.2) |
 | spec-tracking + consent seams | 3 | configured at `init` (§7) |
 
@@ -336,7 +339,7 @@ Domain logic (ADR log, supersede/deprecate, deterministic projection, guard, `de
 
 ## 13. Open items — build-time spikes (not blockers)
 
-1. **Pointer reliability** — do agents reliably *follow* an AGENTS.md/CLAUDE.md pointer to `constitution.md`, or must it be *inlined*? *(Errata, 2026-07-02: softened per implementation-plan §1.5 — pointer reliability is load-bearing for the **UX quality** of use (a), not a correctness guarantee; Anthropic's own docs state CLAUDE.md content is context, not enforcement. The correctness backstop is the plan-validation gate (§8b), which re-reads `constitution.md` regardless of whether the agent followed the pointer.)* Still open as of v0.2 — unaffected by the rules-grammar/phase work.
+1. **Pointer reliability** *(moot since 0.4.0: no pointer is written, 2026-10-16)* — do agents reliably *follow* an AGENTS.md/CLAUDE.md pointer to `constitution.md`, or must it be *inlined*? *(Errata, 2026-07-02: softened per implementation-plan §1.5 — pointer reliability is load-bearing for the **UX quality** of use (a), not a correctness guarantee; Anthropic's own docs state CLAUDE.md content is context, not enforcement. The correctness backstop is the plan-validation gate (§8b), which re-reads `constitution.md` regardless of whether the agent followed the pointer.)* Still open as of v0.2 — unaffected by the rules-grammar/phase work.
 2. **Spec-Kit `after_constitution` overwrite** — can the hook deterministically overwrite `constitution.md` without the agent re-injecting placeholder tokens, given the overwrite bugs (#1541/#1229)? Still open; framework adapters remain out of scope (implementation-plan §0 P1).
 3. **source-ref pluggable contract** — concrete schema mapping across Spec-Kit specs / OpenSpec changes / GitHub issues / none. Still open; unaffected by v0.2.
 4. **OpenSpec native-ADR collision** — #557/#721 may land native ADRs; first-mover case to propose a MADR-v4 + projection convention upstream? Still open; unaffected by v0.2.

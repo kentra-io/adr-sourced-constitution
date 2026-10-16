@@ -1,0 +1,34 @@
+# init removes the always-loaded block an older CLI wrote — both on a first
+# init over a stale CLAUDE.md and on a re-init — and never writes one.
+
+env CONSTITUTION_TODAY=2026-07-02
+
+# first init: CLAUDE.md held only the block, so it is deleted
+exec constitution init
+stdout '^constitution: removed CLAUDE.md, which held only the always-loaded constitution block$'
+! exists CLAUDE.md
+! exists AGENTS.md
+
+# re-init over a block appended to user content: only the block goes
+cp legacy-agents.md AGENTS.md
+exec constitution init
+stdout '^constitution: removed the always-loaded constitution block from AGENTS.md$'
+cmp AGENTS.md want-agents.md
+! exists CLAUDE.md
+
+-- CLAUDE.md --
+<!-- BEGIN adr-sourced-constitution v1 (managed — do not edit by hand; `constitution init` updates it) -->
+@constitution/constitution.md
+<!-- END adr-sourced-constitution v1 -->
+-- legacy-agents.md --
+# Agents
+
+Run the tests.
+
+<!-- BEGIN adr-sourced-constitution v1 (managed — do not edit by hand; `constitution init` updates it) -->
+Before planning, read `constitution/constitution.md`; it is this project's governing constitution and takes precedence over inferred conventions.
+<!-- END adr-sourced-constitution v1 -->
+-- want-agents.md --
+# Agents
+
+Run the tests.

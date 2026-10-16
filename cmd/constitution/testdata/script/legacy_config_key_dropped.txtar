@@ -1,0 +1,58 @@
+# A 0.3.x constitution.yml still carries agentInstructions.targets. 0.4.0
+# loads it, and init and every regen path drop the key, so an older binary
+# reading the config later finds no targets and writes no blocks back.
+# Nothing else in the config changes meaning.
+
+env CONSTITUTION_TODAY=2026-07-02
+
+mkdir constitution/adr
+
+# --- regen drops it ---
+cp legacy.yml constitution.yml
+exec constitution regen
+stdout '^constitution: dropped obsolete agentInstructions from constitution.yml$'
+! grep 'agentInstructions' constitution.yml
+grep 'phase: draft' constitution.yml
+grep '- architecture' constitution.yml
+exec constitution regen
+! stdout 'dropped obsolete'
+
+# --- adr new (auto-regen) drops it ---
+cp legacy.yml constitution.yml
+exec constitution adr new --title 'New rule' --body-file body.md --approve
+stdout '^constitution: dropped obsolete agentInstructions from constitution.yml$'
+! grep 'agentInstructions' constitution.yml
+
+# --- init drops it ---
+cp legacy.yml constitution.yml
+exec constitution init
+stdout '^constitution: dropped obsolete agentInstructions from constitution.yml$'
+! grep 'agentInstructions' constitution.yml
+! exists CLAUDE.md
+! exists AGENTS.md
+
+-- legacy.yml --
+schemaVersion: 1
+agentInstructions:
+    targets:
+        - claude
+        - agents
+consent:
+    policy: strict
+sourceTracking:
+    type: none
+phase: draft
+categories:
+    - architecture
+-- body.md --
+## Context and Problem Statement
+
+x
+
+## Considered Options
+
+- a
+
+## Decision Outcome
+
+y

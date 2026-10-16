@@ -19,8 +19,9 @@ consume it. It is used three ways:
 3. **Code validation** — a background sweep flags codebase drift *(deferred)*.
 
 It ships as a Go CLI + agent-agnostic skills/commands + thin per-framework
-adapters, integrating by default via a dedicated folder and an agent-instructions
-pointer.
+adapters, integrating by default via a dedicated folder. Since 0.4.0 there is
+no agent-instructions pointer: the skills load the constitution when a spec, a
+plan or an ADR is written.
 
 ## Install
 
@@ -82,6 +83,13 @@ hazard is now named in `--help` and the adr-draft skill, with no behaviour
 change (#31, documentation only).
 The deferred **code-validation** sweep (README use #3) is the remaining
 roadmap item.
+
+**v0.4.0** removes the always-loaded pointer: `init` and `regen` no longer write
+a block into `CLAUDE.md` or `AGENTS.md`. Blocks written by older versions are
+removed automatically on the next `regen` or mutating verb, and the
+`agentInstructions` key is dropped from `constitution.yml`. `--target` is
+deprecated and ignored. The skills now read the constitution when a spec, a plan
+or an ADR is written.
 
 ## License
 

@@ -4,12 +4,10 @@
 
 env CONSTITUTION_TODAY=2026-07-02
 
-exec constitution init --founding-file founding.md --target claude --target agents
+exec constitution init --founding-file founding.md
 
 # snapshot every generated file
 cp constitution.yml snap.yml
-cp CLAUDE.md snap.claude
-cp AGENTS.md snap.agents
 cp constitution/.state snap.state
 cp constitution/constitution.md snap.md
 cp constitution/adr/ADR-0001-founding-constitution.md snap.adr
@@ -17,16 +15,16 @@ cp .claude/skills/adr-draft/SKILL.md snap.skill.claude
 cp .agents/skills/plan-gate/SKILL.md snap.skill.agents
 cp .cursor/skills/constitution-gov/SKILL.md snap.skill.cursor
 
-# second run: identical flags. The existing config wins on a re-run, so the
-# config-shaping --target flags are ignored — init says so on stderr (flag
-# honesty), while still producing a byte-identical tree.
-exec constitution init --founding-file founding.md --target claude --target agents
-stderr 'existing constitution.yml wins; ignoring --target'
+# second run. The existing config wins on a re-run, so config-shaping flags
+# (here --skills-tree) are ignored — init says so on stderr (flag honesty),
+# while still producing a byte-identical tree.
+exec constitution init --founding-file founding.md --skills-tree claude
+stderr 'existing constitution.yml wins; ignoring --skills-tree'
 
 # every file byte-identical
 cmp constitution.yml snap.yml
-cmp CLAUDE.md snap.claude
-cmp AGENTS.md snap.agents
+! exists CLAUDE.md
+! exists AGENTS.md
 cmp constitution/.state snap.state
 cmp constitution/constitution.md snap.md
 cmp constitution/adr/ADR-0001-founding-constitution.md snap.adr

@@ -8,7 +8,7 @@ disable-model-invocation: true
 
 ## Requires
 
-This skill is written for `constitution` 0.3.1 or newer. Before doing
+This skill is written for `constitution` 0.4.0 or newer. Before doing
 anything else, run `constitution --version`. If the binary is older,
 **stop** and report the mismatch — an older CLI does not have the
 flags this skill uses, and the workarounds an older skill taught (such
@@ -143,10 +143,7 @@ founding constitution.
    convention. Any type other than `none` makes `--source` **mandatory** on
    every future `adr new`/`supersede`, and under `none` passing `--source` is
    **rejected**. There is no "optional citation" setting.
-2. **Agent targets.** What agents/tools do you build for — Claude Code,
-   other agent frameworks, both? → `--target claude`, `--target agents`, or
-   both (the default).
-3. **Spec process.** Do you practice spec-driven development? With what
+2. **Spec process.** Do you practice spec-driven development? With what
    framework, and how do you manage the spec (e.g. adopting a lifecycle
    tool)? → usually a `process` rule.
 
@@ -310,7 +307,6 @@ command.
 
 ```
 constitution init \
-  --target claude --target agents \
   --consent strict \
   --source-tracking github-issue \
   --founding-file /tmp/founding.md
@@ -327,8 +323,10 @@ show it in the command unless it carries a real overriding value. Add
 the starter list. Show the human this exact command before running it. Run
 it **exactly once**. `init` writes
 `constitution.yml` (`phase: draft`), seeds the one founding ADR, renders
-`constitution/constitution.md`, writes the managed pointer blocks, and fans
-the Layer-2 skills out to `.claude/`, `.agents/`, `.cursor/`. Do not run it a
+`constitution/constitution.md`, and fans the Layer-2 skills out to
+`.claude/`, `.agents/`, `.cursor/`. It does not touch `CLAUDE.md` or
+`AGENTS.md`: the skills load the constitution when a spec, a plan or an ADR is
+written. Do not run it a
 second time to "fix" something — if a flag was wrong, tell the human what
 happened and adjust deliberately.
 
@@ -347,7 +345,7 @@ is not the ADR log), so no `--approve` flag exists for it.
 ## Verify and hand off
 
 1. If a later config change is needed — the human changes their mind about
-   `sourceTracking`, `consent.policy`, `agentInstructions.targets`, or
+   `sourceTracking`, `consent.policy`, or
    `skills.trees` after init — use `constitution config set <key> <value>`,
    never a hand-edit of `constitution.yml`. It validates the whole resulting
    config before writing and refuses cleanly on an illegal value, so there

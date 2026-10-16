@@ -34,21 +34,24 @@ const foundingTitle = "Founding constitution"
 // constitution/adr/, writes constitution.yml at the repo root, seeds a
 // founding ADR (source: bootstrap only when source tracking is enabled) via
 // the same internal write path as
-// `adr new`, renders the projection, and writes the managed pointer blocks +
-// fanned-out skills, all drift-protected via constitution/.state. A re-run is
-// idempotent (byte-identical tree); interior/file drift requires --force or
+// `adr new`, renders the projection, and fans out the skills, drift-protected
+// via constitution/.state. It writes nothing into CLAUDE.md or AGENTS.md —
+// skills load the constitution when a spec, plan or ADR is written — and
+// removes the pointer blocks CLI versions before 0.4.0 wrote there. A re-run
+// is idempotent (byte-identical tree); skill-file drift requires --force or
 // an interactive confirm. init is deliberately NOT consent-gated — the
 // consent gate covers adr new/supersede/deprecate; bootstrap is different.
 func initCommand() *cli.Command {
 	return &cli.Command{
 		Name:  "init",
-		Usage: "scaffold a constitution: config, a founding ADR, pointer blocks, skills",
+		Usage: "scaffold a constitution: config, a founding ADR, skills",
 		Description: "Creates constitution/adr/ and constitution.yml (repo root), seeds a\n" +
 			"single founding ADR (ADR-0001) from --founding-file, renders\n" +
-			"constitution/constitution.md, writes managed pointer blocks into the chosen\n" +
-			"agent-instruction targets (CLAUDE.md, AGENTS.md) and fans the Layer-2 skills\n" +
-			"out to .claude/, .agents/, .cursor/. Re-running is a no-op on a clean tree;\n" +
-			"a target hand-edited since init last wrote it requires --force.\n\n" +
+			"constitution/constitution.md and fans the Layer-2 skills out to .claude/,\n" +
+			".agents/, .cursor/. Re-running is a no-op on a clean tree; a skill file\n" +
+			"hand-edited since init last wrote it requires --force.\n\n" +
+			"init writes nothing into CLAUDE.md or AGENTS.md: the skills load the\n" +
+			"constitution when a spec, plan or ADR is written.\n\n" +
 			"--founding-file takes exactly what `adr new --body-file` takes: a MADR\n" +
 			"body (the '## ' sections), or - for stdin. It must carry every mandatory\n" +
 			"section (Context and Problem Statement, Considered Options, Decision\n" +
@@ -61,7 +64,7 @@ func initCommand() *cli.Command {
 		ArgsUsage: " ", // no positional args
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: "founding-file", Usage: "path to a MADR body (the ## sections) to seed as the founding ADR (ADR-0001), or - for stdin"},
-			&cli.StringSliceFlag{Name: "target", Usage: "agent-instruction target for the pointer block: claude|agents (repeatable; default: both)"},
+			&cli.StringSliceFlag{Name: "target", Usage: "deprecated and ignored: init no longer writes agent-instruction pointers"},
 			&cli.StringSliceFlag{Name: "skills-tree", Usage: "skills fan-out tree: claude|agents|cursor (repeatable; default: all three)"},
 			&cli.StringSliceFlag{Name: "category", Usage: "category vocabulary entry (repeatable; default: the starter list)"},
 			&cli.StringFlag{Name: "consent", Value: config.ConsentStrict, Usage: "consent policy written to config: strict|off"},
@@ -69,7 +72,7 @@ func initCommand() *cli.Command {
 				Usage: "sourceTracking.type written to config: none|generic|github-issue|jira"},
 			&cli.StringFlag{Name: "source-pattern",
 				Usage: "sourceTracking.pattern written to config (only meaningful with --source-tracking other than \"none\")"},
-			&cli.BoolFlag{Name: "force", Usage: "overwrite a managed target that drifted from what init last wrote"},
+			&cli.BoolFlag{Name: "force", Usage: "overwrite managed content that drifted from what init last wrote"},
 		},
 		Action: func(_ context.Context, cmd *cli.Command) error {
 			return runInit(cmd)
@@ -85,6 +88,11 @@ func runInit(cmd *cli.Command) error {
 	stdout := cmd.Root().Writer
 	stderr := cmd.Root().ErrWriter
 
+	if cmd.IsSet("target") {
+		_, _ = fmt.Fprintln(stderr,
+			"init: --target is deprecated and ignored: the CLI no longer writes agent-instruction pointers; skills load the constitution when a spec, plan or ADR is written")
+	}
+
 	// --- 1. resolve config: honor an existing one, else author it from flags
 	// (in memory — not yet written, so pre-flight can refuse before any bytes
 	// hit disk) ---
@@ -93,17 +101,7 @@ func runInit(cmd *cli.Command) error {
 		return err
 	}
 
-	// --- 2. pre-flight: refuse a structurally ambiguous target before any
-	// writes, so a broken marker pair (exit 2) never leaves a half-scaffold ---
-	if err := scaffold.PreflightBlocks(cwd, cfg); err != nil {
-		var me *scaffold.MarkerError
-		if errors.As(err, &me) {
-			return &exitError{err: fmt.Errorf("init: %w", err), code: 2}
-		}
-		return err
-	}
-
-	// --- 2b. pre-flight --founding-file: read, validate and compose it
+	// --- 2. pre-flight --founding-file: read, validate and compose it
 	// entirely in memory BEFORE any byte is written, so a bad founding
 	// file leaves the working tree untouched (issues #22/#30). The
 	// vocabulary it is checked against is the in-memory config; the
@@ -114,18 +112,21 @@ func runInit(cmd *cli.Command) error {
 		return err
 	}
 
-	// --- 2c. persist a freshly authored config (a re-run leaves the
+	// --- 2b. persist a freshly authored config (a re-run leaves the
 	// existing one untouched, so the tree stays byte-identical), then
 	// reload it so the config used downstream is the validated, on-disk
-	// verbatim ---
+	// verbatim. An existing config only loses the obsolete key 0.4.0
+	// removed. ---
+	configPath := filepath.Join(cwd, "constitution.yml")
 	if isNew {
-		configPath := filepath.Join(cwd, "constitution.yml")
 		if err := persistConfig(configPath, cfg); err != nil {
 			return err
 		}
 		if cfg, err = config.Load(configPath); err != nil {
 			return err
 		}
+	} else if err := dropLegacyConfigKeys(configPath, cfg, stdout); err != nil {
+		return err
 	}
 
 	// --- 3. seed the founding ADR (only on a fresh log, so re-runs
@@ -142,7 +143,8 @@ func runInit(cmd *cli.Command) error {
 		return err
 	}
 
-	// --- 5. write pointer blocks + fan out skills (confirm/force on drift) ---
+	// --- 5. remove legacy pointer blocks + fan out skills (confirm/force on
+	// drift) ---
 	opts := scaffold.Options{
 		Root:   cwd,
 		Cfg:    cfg,
@@ -155,10 +157,6 @@ func runInit(cmd *cli.Command) error {
 		opts.Confirm = interactiveConfirm(os.Stdin, stderr)
 	}
 	if err := scaffold.Refresh(opts); err != nil {
-		var me *scaffold.MarkerError
-		if errors.As(err, &me) {
-			return &exitError{err: fmt.Errorf("init: %w", err), code: 2}
-		}
 		return err
 	}
 
@@ -172,8 +170,8 @@ func runInit(cmd *cli.Command) error {
 	return err
 }
 
-// buildOrLoadConfig loads an existing constitution.yml (its target/category/
-// skills selections win over flags on a re-run, plan §4) or authors a new one
+// buildOrLoadConfig loads an existing constitution.yml (its category/skills
+// selections win over flags on a re-run, plan §4) or authors a new one
 // in memory from flags and defaults. isNew reports whether the caller must
 // persist it; the config is not written here, so a pre-flight failure leaves
 // the tree untouched.
@@ -189,12 +187,6 @@ func buildOrLoadConfig(cmd *cli.Command, root string, stderr io.Writer) (cfg *co
 		return nil, false, statErr
 	}
 
-	targets, err := normalizeChoices("target", cmd.StringSlice("target"),
-		[]string{config.TargetClaude, config.TargetAgents},
-		map[string]bool{config.TargetClaude: true, config.TargetAgents: true})
-	if err != nil {
-		return nil, false, err
-	}
 	trees, err := normalizeChoices("skills-tree", cmd.StringSlice("skills-tree"),
 		[]string{config.SkillTreeClaude, config.SkillTreeAgents, config.SkillTreeCursor},
 		map[string]bool{config.SkillTreeClaude: true, config.SkillTreeAgents: true, config.SkillTreeCursor: true})
@@ -227,10 +219,9 @@ func buildOrLoadConfig(cmd *cli.Command, root string, stderr io.Writer) (cfg *co
 	}
 
 	cfg = &config.Config{
-		SchemaVersion:     config.SchemaVersion,
-		AgentInstructions: config.AgentInstructions{Targets: targets},
-		Consent:           config.Consent{Policy: consent},
-		SourceTracking:    config.SourceTracking{Type: sourceTrackingType, Pattern: sourcePattern},
+		SchemaVersion:  config.SchemaVersion,
+		Consent:        config.Consent{Policy: consent},
+		SourceTracking: config.SourceTracking{Type: sourceTrackingType, Pattern: sourcePattern},
 		// A fresh constitution starts in draft (v0.2 proposal A3): founding
 		// is a staged process, and sealing is always an explicit,
 		// human-approved act — init never sells finality.
@@ -254,7 +245,7 @@ func buildOrLoadConfig(cmd *cli.Command, root string, stderr io.Writer) (cfg *co
 // it just makes the "existing config wins" contract honest rather than silent.
 func noticeIgnoredReinitFlags(cmd *cli.Command, stderr io.Writer) {
 	var ignored []string
-	for _, f := range []string{"target", "skills-tree", "category", "consent", "source-tracking", "source-pattern"} {
+	for _, f := range []string{"skills-tree", "category", "consent", "source-tracking", "source-pattern"} {
 		if cmd.IsSet(f) {
 			ignored = append(ignored, "--"+f)
 		}

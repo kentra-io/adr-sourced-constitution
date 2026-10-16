@@ -1,0 +1,42 @@
+# A legacy block whose interior was edited by hand is never removed by regen,
+# by a mutating verb's auto-regen, or by init without --force: each warns,
+# leaves the file byte-identical and exits 0.
+
+env CONSTITUTION_TODAY=2026-07-02
+
+exec constitution init
+cp drifted-claude.md CLAUDE.md
+
+exec constitution regen
+stderr 'edited by hand; leaving it — remove it by hand or run `constitution init --force`'
+cmp CLAUDE.md drifted-claude.md
+
+exec constitution adr new --title 'New rule' --body-file body.md --approve
+stdout 'created .*ADR-0001-new-rule\.md'
+stderr 'edited by hand; leaving it'
+cmp CLAUDE.md drifted-claude.md
+
+exec constitution init
+stderr 'edited by hand; leaving it'
+cmp CLAUDE.md drifted-claude.md
+
+-- drifted-claude.md --
+# MY CUSTOM HEADER
+
+<!-- BEGIN adr-sourced-constitution v1 (managed — do not edit by hand; `constitution init` updates it) -->
+@constitution/HACKED.md
+<!-- END adr-sourced-constitution v1 -->
+
+Trailing user note.
+-- body.md --
+## Context and Problem Statement
+
+x
+
+## Considered Options
+
+- a
+
+## Decision Outcome
+
+y

@@ -13,4 +13,4 @@ package constitution
 //
 // Bump this, .claude-plugin/plugin.json, and the skills together in
 // the release commit — docs/releasing.md carries the checklist.
-const SkillsMinCLIVersion = "0.3.1"
+const SkillsMinCLIVersion = "0.4.0"

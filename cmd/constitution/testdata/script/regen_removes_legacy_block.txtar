@@ -1,0 +1,51 @@
+# A repo a 0.3.x CLI set up carries the always-loaded pointer blocks and
+# their .state entries. regen removes both unedited blocks: CLAUDE.md keeps
+# the user's content (the block and the blank line init added before it are
+# cut), AGENTS.md held only the block and is deleted, and the stale .state
+# entries are pruned. A second regen is a no-op.
+
+env CONSTITUTION_TODAY=2026-07-02
+
+exec constitution init
+cp legacy-claude.md CLAUDE.md
+cp legacy-agents.md AGENTS.md
+cp legacy.state constitution/.state
+
+exec constitution regen
+stdout '^constitution: removed the always-loaded constitution block from CLAUDE.md$'
+stdout '^constitution: removed AGENTS.md, which held only the always-loaded constitution block$'
+! stderr .
+cmp CLAUDE.md want-claude.md
+! exists AGENTS.md
+! grep 'path: CLAUDE.md' constitution/.state
+! grep 'path: AGENTS.md' constitution/.state
+grep 'path: .claude/skills/adr-draft/SKILL.md' constitution/.state
+
+exec constitution regen
+! stdout 'removed'
+! stderr .
+cmp CLAUDE.md want-claude.md
+
+-- legacy-claude.md --
+# My project
+
+Existing user guidance.
+
+<!-- BEGIN adr-sourced-constitution v1 (managed — do not edit by hand; `constitution init` updates it) -->
+@constitution/constitution.md
+<!-- END adr-sourced-constitution v1 -->
+-- want-claude.md --
+# My project
+
+Existing user guidance.
+-- legacy-agents.md --
+<!-- BEGIN adr-sourced-constitution v1 (managed — do not edit by hand; `constitution init` updates it) -->
+Before planning, read `constitution/constitution.md`; it is this project's governing constitution and takes precedence over inferred conventions.
+<!-- END adr-sourced-constitution v1 -->
+-- legacy.state --
+schemaVersion: 1
+managed:
+    - path: AGENTS.md
+      hash: 0000000000000000000000000000000000000000000000000000000000000000
+    - path: CLAUDE.md
+      hash: 0000000000000000000000000000000000000000000000000000000000000000

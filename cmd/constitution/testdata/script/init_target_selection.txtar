@@ -1,21 +1,25 @@
-# Target selection honors flags (M4 DoD): init with only --target agents
-# writes AGENTS.md and never touches CLAUDE.md, and the written config records
-# only the agents target (so re-runs honor it too).
+# --target is deprecated in 0.4.0: init accepts it (old scripts keep
+# working), warns once that it is ignored, and writes neither CLAUDE.md nor
+# AGENTS.md nor an agentInstructions key — any value, even one 0.3.x
+# rejected, is accepted and ignored.
 
 env CONSTITUTION_TODAY=2026-07-02
 
-exec constitution init --target agents
+exec constitution init --target agents --target bogus
+stderr '^init: --target is deprecated and ignored'
+! stderr 'existing constitution.yml wins'
+! exists AGENTS.md
+! exists CLAUDE.md
+! grep 'agentInstructions' constitution.yml
 
-exists AGENTS.md
-grep 'governing constitution and takes precedence' AGENTS.md
+# on a re-run it is still only the deprecation warning, not a "config wins"
+# notice (there is nothing in the config for it to be overridden by)
+exec constitution init --target claude
+stderr '^init: --target is deprecated and ignored'
+! stderr 'existing constitution.yml wins'
 ! exists CLAUDE.md
 
-# the config's instruction targets are honored on re-runs: a second init (no
-# --target flags) reads the config and still touches only AGENTS.md
-exec constitution init
-! exists CLAUDE.md
-
-# skills fan-out is independent of instruction targets: default is all trees
+# skills fan-out is unaffected: default is all trees
 exists .claude/skills/adr-draft/SKILL.md
 exists .agents/skills/adr-draft/SKILL.md
 exists .cursor/skills/adr-draft/SKILL.md

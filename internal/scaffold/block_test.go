@@ -136,3 +136,123 @@ func TestApplyBlock_MalformedIsError(t *testing.T) {
 		t.Fatalf("expected *MarkerError, got %v", err)
 	}
 }
+
+func TestRemoveBlock(t *testing.T) {
+	const in = "@constitution/constitution.md"
+	block := mkBlock(in)
+	cases := []struct {
+		name    string
+		content string
+		want    string
+	}{
+		{
+			name:    "appended at EOF",
+			content: "# Project\n\nSome guidance.\n\n" + block + "\n",
+			want:    "# Project\n\nSome guidance.\n",
+		},
+		{
+			name:    "sole content of the file",
+			content: block + "\n",
+			want:    "",
+		},
+		{
+			name:    "sole content, no trailing newline",
+			content: block,
+			want:    "",
+		},
+		{
+			name:    "mid-file block",
+			content: "# Header\n\n" + block + "\n\ntrailer\n",
+			want:    "# Header\n\n\ntrailer\n",
+		},
+		{
+			name:    "mid-file block with CRLF endings",
+			content: "# Header\r\n" + block + "\r\ntrailer\r\n",
+			want:    "# Header\r\ntrailer\r\n",
+		},
+		{
+			name:    "CRLF body with LF separators (ApplyBlock onto a CRLF file)",
+			content: "# Project\r\nline two\r\n\n" + block + "\n",
+			want:    "# Project\r\nline two\r\n",
+		},
+		{
+			name:    "EOF block with no blank-line separator keeps the line ending",
+			content: "# Project\n" + block + "\n",
+			want:    "# Project\n",
+		},
+		{
+			name:    "no block",
+			content: "# Just a file\n",
+			want:    "# Just a file\n",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			out, removed, err := RemoveBlock([]byte(tc.content))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if wantRemoved := tc.content != tc.want; removed != wantRemoved {
+				t.Fatalf("removed = %v, want %v", removed, wantRemoved)
+			}
+			if string(out) != tc.want {
+				t.Fatalf("got %q, want %q", out, tc.want)
+			}
+		})
+	}
+}
+
+// TestRemoveBlock_UndoesApplyBlock checks RemoveBlock against what
+// ApplyBlock actually appended, including a file that had no trailing
+// newline before the append (restored newline-terminated: exact bytes are
+// not recoverable).
+func TestRemoveBlock_UndoesApplyBlock(t *testing.T) {
+	cases := map[string]string{
+		"terminated":           "# Project\n\nGuidance.\n",
+		"no trailing newline":  "# Project\n\nGuidance.",
+		"empty":                "",
+		"crlf":                 "# Project\r\nGuidance.\r\n",
+		"ends with blank line": "# Project\n\n",
+	}
+	want := map[string]string{
+		"terminated":           "# Project\n\nGuidance.\n",
+		"no trailing newline":  "# Project\n\nGuidance.\n",
+		"empty":                "",
+		"crlf":                 "# Project\r\nGuidance.\r\n",
+		"ends with blank line": "# Project\n\n",
+	}
+	for name, orig := range cases {
+		t.Run(name, func(t *testing.T) {
+			applied, err := ApplyBlock([]byte(orig), "@constitution/constitution.md")
+			if err != nil {
+				t.Fatal(err)
+			}
+			out, removed, err := RemoveBlock(applied)
+			if err != nil || !removed {
+				t.Fatalf("removed = %v, err = %v", removed, err)
+			}
+			if string(out) != want[name] {
+				t.Fatalf("got %q, want %q", out, want[name])
+			}
+		})
+	}
+}
+
+func TestRemoveBlock_MalformedIsError(t *testing.T) {
+	for name, content := range map[string]string{
+		"begin only": "x\n" + BlockBegin + "\ninterior\n",
+		"end only":   "interior\n" + BlockEnd + "\n",
+		"two blocks": mkBlock("a") + "\n" + mkBlock("b") + "\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, removed, err := RemoveBlock([]byte(content))
+			var me *MarkerError
+			if !errors.As(err, &me) {
+				t.Fatalf("expected *MarkerError, got %v", err)
+			}
+			if removed {
+				t.Fatal("removed must be false on a malformed pair")
+			}
+		})
+	}
+}

@@ -13,3 +13,4 @@ bddb96a2996c48870b324498915622be4117b1d9716c0bc78ab828bc98268909  ADR-0012-reset
 9ab0f65a36a1e224e71dcd0072e7877aaff3f80cafbbd667620ac7fa76bba4b3  ADR-0013-founding-phase-draft-until-sealed.md
 aad57bff978e6d9038bc6fe5623a662641a3faf28ffc711e0b458e2d29e34485  ADR-0014-purposeful-projection-the-constitution-states-its-own-goal.md
 520538753749403eae6cf5fb3ac216be7589b55fc91f4cffd99dfc9c68b741c5  ADR-0015-the-rule-is-the-unit-of-change.md
+44a459720c807ffa47c75f8ffbb2a6dcb09070375c81b6846f766a6655970bfe  ADR-0016-stop-writing-agent-instruction-pointers-load-the-constitution-at-spec-plan-and.md

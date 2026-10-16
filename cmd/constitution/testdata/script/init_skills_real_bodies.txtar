@@ -4,7 +4,7 @@
 
 env CONSTITUTION_TODAY=2026-07-01
 
-exec constitution init --target claude --consent off
+exec constitution init --consent off
 stdout 'constitution ready'
 
 # Fanned into all three trees by default.
@@ -15,7 +15,7 @@ exists .cursor/skills/plan-gate/SKILL.md
 # Real bodies present (distinctive phrase per skill), stubs gone.
 grep 'Priority hierarchy \(highest wins\)' .claude/skills/constitution-gov/SKILL.md
 grep 'The consent checkpoint' .claude/skills/adr-draft/SKILL.md
-grep 'Check a plan against this repo' .claude/skills/plan-gate/SKILL.md
+grep 'against this repo.s constitution' .claude/skills/plan-gate/SKILL.md
 # constitution-init is bootstrap-only: it ships via the plugin and is never
 # fanned into the governed repo.
 ! exists .claude/skills/constitution-init/SKILL.md
@@ -23,5 +23,5 @@ grep 'Check a plan against this repo' .claude/skills/plan-gate/SKILL.md
 ! grep 'Placeholder skill body' .agents/skills/adr-draft/SKILL.md
 ! grep 'Placeholder skill body' .cursor/skills/plan-gate/SKILL.md
 
-# The always-on governance skill force-inlines the constitution generically.
+# The governance skill reads the constitution generically.
 grep 'cat constitution/constitution.md' .cursor/skills/constitution-gov/SKILL.md
